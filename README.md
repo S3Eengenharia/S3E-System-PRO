@@ -234,15 +234,15 @@ Para contribuir com o projeto:
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+Este projeto está sob a licença privativa. Veja o arquivo `LICENSE` para mais detalhes.
 
 ## 📞 Suporte
 
 Para suporte técnico ou dúvidas sobre o sistema, entre em contato:
 
-- **Email**: suporte@s3e.com.br
-- **Telefone**: (11) 9999-9999
-- **Website**: https://s3e.com.br
+- **Email**: antoniojrtech@gmail.com
+- **Telefone**: (47) 99636-2471
+- **Website**: https://antonio-jdev.github.io/portfolio-01
 
 ## 🏢 Sobre a S3E
 
@@ -250,4 +250,4 @@ A S3E é uma empresa especializada em engenharia elétrica, oferecendo soluçõe
 
 ---
 
-**Desenvolvido com ❤️ pela equipe S3E**
+**Desenvolvido com carinho pelo @Antonio-jdev**
