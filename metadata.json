@@ -1,0 +1,5 @@
+{
+  "name": "S3E Engenharia Dashboard",
+  "description": "A comprehensive management system for an electrical engineering company, featuring stock control, project management, client relations, and quoting. The dashboard provides a real-time overview of key business metrics.",
+  "requestFramePermissions": []
+}

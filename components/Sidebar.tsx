@@ -1,0 +1,102 @@
+
+import React from 'react';
+import { navLinks, CubeIcon } from '../constants';
+
+interface SidebarProps {
+    isOpen: boolean;
+    toggleSidebar: () => void;
+    activeView: string;
+    onNavigate: (view: string) => void;
+    onOpenSettings: () => void;
+}
+
+const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+);
+
+const Cog6ToothIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+        <circle cx="12" cy="12" r="3"/>
+    </svg>
+);
+
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, onNavigate, onOpenSettings }) => {
+
+    return (
+        <aside className={`w-64 flex flex-col bg-white border-r border-brand-gray-200 fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="p-4 border-b border-brand-gray-200 flex justify-between items-center">
+                <div className="flex items-center space-x-3">
+                    <div className="bg-brand-blue rounded-lg p-2">
+                        <CubeIcon className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="font-bold text-lg text-brand-gray-800">S3E Engenharia</h1>
+                        <p className="text-xs text-brand-gray-500">Gestão de Estoque & Vendas</p>
+                    </div>
+                </div>
+                <button onClick={toggleSidebar} className="lg:hidden p-1 -mr-2 text-brand-gray-500 rounded-md hover:bg-brand-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue" aria-label="Close sidebar">
+                    <XMarkIcon className="w-6 h-6" />
+                </button>
+            </div>
+
+            <nav className="flex-1 px-2 py-4 overflow-y-auto">
+                <span className="px-2 text-xs font-semibold text-brand-gray-400 uppercase tracking-wider">Módulos Principais</span>
+                <ul className="mt-2 space-y-1">
+                    {navLinks.map((link) => (
+                        <li key={link.name}>
+                            <a
+                                href="#"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    onNavigate(link.name);
+                                }}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                    ${activeView === link.name
+                                        ? 'bg-brand-blue text-white'
+                                        : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                    }`}
+                            >
+                                <link.icon className="w-5 h-5 mr-3" />
+                                {link.name}
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+            </nav>
+
+            <div className="p-4 border-t border-brand-gray-200">
+                <span className="px-2 text-xs font-semibold text-brand-gray-400 uppercase tracking-wider">Status do Sistema</span>
+                <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between text-sm text-brand-gray-600">
+                        <div className="flex items-center">
+                            <span className="w-2 h-2 rounded-full bg-brand-green mr-2"></span>
+                            Sistema Online
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="p-4 border-t border-brand-gray-200">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                        <img className="w-10 h-10 rounded-full object-cover" src="https://picsum.photos/100" alt="User Avatar" />
+                        <div>
+                            <p className="font-semibold text-sm text-brand-gray-800">Usuário</p>
+                            <p className="text-xs text-brand-gray-500">Admin</p>
+                        </div>
+                    </div>
+                    <button onClick={onOpenSettings} className="p-2 rounded-full text-brand-gray-400 hover:bg-brand-gray-100 hover:text-brand-gray-600" title="Configurações da Conta">
+                        <Cog6ToothIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+        </aside>
+    );
+};
+
+export default Sidebar;
