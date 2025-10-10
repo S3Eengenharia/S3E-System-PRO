@@ -5,7 +5,7 @@ import {
     type ProjectStage, ProjectStageStatus
 } from '../types';
 import { obrasTeamData } from '../data/mockData';
-import { UsersIcon } from '../constants';
+import { ClientsIcon } from '../constants';
 
 
 // Icons
@@ -320,7 +320,7 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                         <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray-400" />
                     </div>
                     <button onClick={openTeamModal} className="flex items-center justify-center bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-brand-gray-50 transition-colors">
-                        <UsersIcon className="w-5 h-5 mr-2" />
+                        <ClientsIcon className="w-5 h-5 mr-2" />
                         Equipe
                     </button>
                 </div>

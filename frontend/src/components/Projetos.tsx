@@ -12,7 +12,7 @@ import {
     BudgetStatus,
     type ProjectAttachment,
 } from '../types';
-import { UsersIcon, CubeIcon } from '../constants';
+import { ClientsIcon, CubeIcon } from '../constants';
 import { 
     materialsData, 
     clientsData, 
@@ -450,7 +450,7 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={openTeamModal} className="flex items-center justify-center bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-brand-gray-50 transition-colors">
-                        <UsersIcon className="w-5 h-5 mr-2" />
+                        <ClientsIcon className="w-5 h-5 mr-2" />
                         Gerenciar Equipe
                     </button>
                     <button onClick={() => handleOpenModal()} className="flex items-center justify-center bg-brand-blue text-white font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-brand-blue/90 transition-colors">
@@ -659,7 +659,7 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                            {viewModalActiveTab === 'overview' && (
                                 <div className="space-y-6">
                                     <div className="bg-white p-6 rounded-lg shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                                        <div className="flex items-start gap-3"><UsersIcon className="w-5 h-5 text-brand-gray-400 mt-0.5"/><div><strong className="block text-brand-gray-500">CLIENTE</strong><span className="font-semibold text-brand-gray-800">{projectToView.clientName}</span></div></div>
+                                        <div className="flex items-start gap-3"><ClientsIcon className="w-5 h-5 text-brand-gray-400 mt-0.5"/><div><strong className="block text-brand-gray-500">CLIENTE</strong><span className="font-semibold text-brand-gray-800">{projectToView.clientName}</span></div></div>
                                         <div className="flex items-start gap-3"><UserIcon className="w-5 h-5 text-brand-gray-400 mt-0.5"/><div><strong className="block text-brand-gray-500">RESPONSÁVEL</strong><span className="font-semibold text-brand-gray-800">{projectToView.responsibleUserName}</span></div></div>
                                         <div className="flex items-start gap-3"><CalendarDaysIcon className="w-5 h-5 text-brand-gray-400 mt-0.5"/><div><strong className="block text-brand-gray-500">PRAZO</strong><span className="font-semibold text-brand-gray-800">{new Date(projectToView.startDate + 'T00:00').toLocaleDateString('pt-BR')} - {new Date(projectToView.endDate + 'T00:00').toLocaleDateString('pt-BR')}</span></div></div>
                                         <div className="flex items-start gap-3"><DocumentTextIcon className="w-5 h-5 text-brand-gray-400 mt-0.5"/><div><strong className="block text-brand-gray-500">DOCUMENTO</strong><span className="font-semibold text-brand-gray-800">{projectToView.documentNumber || 'N/A'}</span></div></div>

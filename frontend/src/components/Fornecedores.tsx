@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type Supplier, SupplierCategory } from '../types';
-import { TruckIcon } from '../constants';
+import { SupplierIcon } from '../constants';
 import { suppliersData } from '../data/mockData';
 
 // Icons
@@ -414,7 +414,7 @@ const Fornecedores: React.FC<FornecedoresProps> = ({ toggleSidebar }) => {
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-full flex flex-col">
                         <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-brand-gray-800 flex items-center gap-3">
-                                <TruckIcon className="w-6 h-6 text-brand-gray-500" />
+                                <SupplierIcon className="w-6 h-6 text-brand-gray-500" />
                                 Detalhes do Fornecedor
                             </h2>
                             <button onClick={handleCloseViewModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6"/></button>
@@ -422,7 +422,7 @@ const Fornecedores: React.FC<FornecedoresProps> = ({ toggleSidebar }) => {
                         <div className="p-6 space-y-6 overflow-y-auto">
                             <div className="flex items-center gap-4 pb-4 border-b border-brand-gray-100">
                                 <div className="w-16 h-16 bg-brand-gray-100 rounded-lg flex items-center justify-center">
-                                    <TruckIcon className="w-8 h-8 text-brand-gray-500" />
+                                    <SupplierIcon className="w-8 h-8 text-brand-gray-500" />
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-bold text-brand-gray-900">{supplierToView.name}</h3>

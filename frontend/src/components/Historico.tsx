@@ -2,9 +2,9 @@
 import React, { useState, useMemo } from 'react';
 import { type HistoryLog, ModuleType, ActionType } from '../types';
 import { 
-    ShoppingCartIcon,
-    BookOpenIcon,
-    ArrowPathIcon as StockIcon,
+    BudgetIcon,
+    CatalogIcon,
+    MovementIcon as StockIcon,
 } from '../constants';
 import { historyData } from '../data/mockData';
 
@@ -42,13 +42,13 @@ const UserCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const getModuleStyle = (module: ModuleType) => {
     switch (module) {
         case ModuleType.Orçamentos: return { 
-            Icon: ShoppingCartIcon, 
+            Icon: BudgetIcon, 
             dotColor: 'bg-blue-500', 
             borderColor: 'border-blue-500',
             tagClasses: 'bg-blue-100 text-blue-800'
         };
         case ModuleType.Catálogo: return { 
-            Icon: BookOpenIcon, 
+            Icon: CatalogIcon, 
             dotColor: 'bg-purple-500',
             borderColor: 'border-purple-500',
             tagClasses: 'bg-purple-100 text-purple-800'
