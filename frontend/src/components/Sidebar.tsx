@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { navLinks, CubeIcon } from '../constants';
+import { navLinks, S3ELogoIcon } from '../constants';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -31,12 +31,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
         <aside className={`w-64 flex flex-col bg-white border-r border-brand-gray-200 fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-4 border-b border-brand-gray-200 flex justify-between items-center">
                 <div className="flex items-center space-x-3">
-                    <div className="bg-brand-blue rounded-lg p-2">
-                        <CubeIcon className="w-8 h-8 text-white" />
+                    <div className="bg-gradient-to-br from-brand-blue to-blue-600 rounded-lg p-2 shadow-md">
+                        <S3ELogoIcon className="w-8 h-8 text-white" />
                     </div>
                     <div>
                         <h1 className="font-bold text-lg text-brand-gray-800">S3E Engenharia</h1>
-                        <p className="text-xs text-brand-gray-500">Gestão de Estoque & Vendas</p>
+                        <p className="text-xs text-brand-gray-500">Gestão Empresarial Elétrica</p>
                     </div>
                 </div>
                 <button onClick={toggleSidebar} className="lg:hidden p-1 -mr-2 text-brand-gray-500 rounded-md hover:bg-brand-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue" aria-label="Close sidebar">

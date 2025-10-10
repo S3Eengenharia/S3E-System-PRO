@@ -8,6 +8,16 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 5173,
         host: '0.0.0.0',
+        // HMR Configuration para Docker
+        hmr: {
+          // Configura o HMR para funcionar através do host
+          clientPort: 5173,
+        },
+        // Watch options para melhor performance
+        watch: {
+          usePolling: true, // Necessário para Docker no Windows
+          interval: 100,    // Intervalo de verificação em ms
+        },
       },
       plugins: [react()],
       define: {

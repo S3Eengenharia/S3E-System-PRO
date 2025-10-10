@@ -5,15 +5,16 @@ import CriticalAlerts from './CriticalAlerts';
 import QuickActions from './QuickActions';
 import OngoingProjects from './OngoingProjects';
 import { ProjectStatus, type StatCardData, type Project } from '../types';
-import { CubeIcon, FolderIcon, CurrencyDollarIcon, ExclamationTriangleIcon } from '../constants';
+import { 
+    CubeIcon, 
+    BlueprintIcon, 
+    CurrencyDollarIcon, 
+    ExclamationTriangleIcon, 
+    TrendingUpIcon,
+    CatalogIcon,
+    BoltIcon
+} from '../constants';
 import { catalogData, materialsData, movementsData } from '../data/mockData';
-
-const ChartTrendingUpIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-        <polyline points="16 7 22 7 22 13" />
-    </svg>
-);
 
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -41,10 +42,38 @@ const Dashboard: React.FC<DashboardProps> = ({ toggleSidebar, onNavigate, projec
 
 
     const statCardsData: StatCardData[] = [
-        { title: 'Itens no Catálogo', value: totalCatalogItems.toString(), subtitle: 'Produtos e Kits', color: 'bg-blue-500', subtitleIcon: <CubeIcon className="w-4 h-4" />, icon: <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center"><CubeIcon className="w-7 h-7 text-blue-500" /></div> },
-        { title: 'Projetos Ativos', value: activeProjectsCount.toString(), subtitle: 'Em andamento/planejamento', color: 'bg-green-500', subtitleIcon: <ChartTrendingUpIcon className="w-4 h-4" />, icon: <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center"><FolderIcon className="w-7 h-7 text-green-500" /></div> },
-        { title: 'Valor do Estoque', value: `R$ ${totalStockValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, subtitle: 'Total em materiais', color: 'bg-purple-500', subtitleIcon: <ChartTrendingUpIcon className="w-4 h-4" />, icon: <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center"><CurrencyDollarIcon className="w-7 h-7 text-purple-500" /></div> },
-        { title: 'Alertas Críticos', value: criticalAlertsCount.toString(), subtitle: 'Estoque abaixo do mínimo', color: 'bg-orange-500', subtitleIcon: <ExclamationTriangleIcon className="w-4 h-4" />, icon: <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center"><ExclamationTriangleIcon className="w-7 h-7 text-orange-500" /></div> },
+        { 
+            title: 'Itens no Catálogo', 
+            value: totalCatalogItems.toString(), 
+            subtitle: 'Produtos e Kits Elétricos', 
+            color: 'bg-blue-500', 
+            subtitleIcon: <CatalogIcon className="w-4 h-4" />, 
+            icon: <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center"><CatalogIcon className="w-7 h-7 text-blue-500" /></div> 
+        },
+        { 
+            title: 'Projetos Ativos', 
+            value: activeProjectsCount.toString(), 
+            subtitle: 'Em execução e planejamento', 
+            color: 'bg-green-500', 
+            subtitleIcon: <BoltIcon className="w-4 h-4" />, 
+            icon: <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center"><BlueprintIcon className="w-7 h-7 text-green-500" /></div> 
+        },
+        { 
+            title: 'Valor do Estoque', 
+            value: `R$ ${totalStockValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
+            subtitle: 'Total em materiais', 
+            color: 'bg-purple-500', 
+            subtitleIcon: <TrendingUpIcon className="w-4 h-4" />, 
+            icon: <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center"><CurrencyDollarIcon className="w-7 h-7 text-purple-500" /></div> 
+        },
+        { 
+            title: 'Alertas Críticos', 
+            value: criticalAlertsCount.toString(), 
+            subtitle: 'Estoque abaixo do mínimo', 
+            color: 'bg-orange-500', 
+            subtitleIcon: <ExclamationTriangleIcon className="w-4 h-4" />, 
+            icon: <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center"><ExclamationTriangleIcon className="w-7 h-7 text-orange-500" /></div> 
+        },
     ];
     const lastUpdate = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium'});
 

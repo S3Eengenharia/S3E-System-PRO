@@ -1,9 +1,11 @@
 import React from 'react';
 import { type Project, ProjectStatus } from '../types';
+import { BlueprintIcon, BoltIcon } from '../constants';
 
-const FolderOpenIcon = (props: React.SVGProps<SVGSVGElement>) => (
+const StatusIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v1" />
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
     </svg>
 );
 
@@ -36,10 +38,12 @@ const OngoingProjects: React.FC<OngoingProjectsProps> = ({ projects }) => {
         .slice(0, 3);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-gray-200">
             <div className="flex items-center text-brand-gray-800 mb-4">
-                <FolderOpenIcon className="w-6 h-6 mr-3" />
-                <h2 className="text-lg font-bold">Projetos Ativos</h2>
+                <div className="bg-gradient-to-br from-brand-blue to-blue-600 p-2 rounded-lg mr-3">
+                    <BlueprintIcon className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-lg font-bold">Projetos em Andamento</h2>
             </div>
             <div className="divide-y divide-brand-gray-100">
                 {ongoingProjects.map((project) => (

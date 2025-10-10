@@ -1,5 +1,18 @@
 import React from 'react';
 
+// ============================================
+// ÍCONES PRINCIPAIS - ENGENHARIA ELÉTRICA S3E
+// ============================================
+
+// Logo S3E - Raio dentro de hexágono (Energia Elétrica)
+export const S3ELogoIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polygon points="13 7 8.5 13 11 13 10 17 14.5 11 12 11 13 7" fill="currentColor"/>
+  </svg>
+);
+
+// Ícone de Materiais/Estoque (Caixa 3D)
 export const CubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -8,30 +21,40 @@ export const CubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export const ChartBarIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Dashboard Executivo (Painel/Gauge)
+export const DashboardIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="12" x2="12" y1="20" y2="10" />
-        <line x1="18" x2="18" y1="20" y2="4" />
-        <line x1="6" x2="6" y1="20" y2="16" />
+        <path d="M3 3v18h18"/>
+        <path d="m19 9-5 5-4-4-3 3"/>
+        <circle cx="9" cy="9" r="1"/>
+        <circle cx="14" cy="14" r="1"/>
+        <circle cx="19" cy="9" r="1"/>
     </svg>
 );
 
-export const ShoppingCartIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Orçamentos (Documento com Cifrão/Calculadora)
+export const BudgetIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="9" cy="21" r="1" />
-        <circle cx="20" cy="21" r="1" />
-        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6"/>
+        <path d="M12 18v-6"/>
+        <path d="M9.5 14.5a2.5 2.5 0 0 1 0-3"/>
+        <path d="M14.5 14.5a2.5 2.5 0 0 0 0-3"/>
     </svg>
 );
 
-export const BookOpenIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Catálogo (Grid de Produtos)
+export const CatalogIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+        <rect x="3" y="3" width="7" height="7"/>
+        <rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/>
     </svg>
 );
 
-export const ArrowPathIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Movimentações (Setas de Transferência)
+export const MovementIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 2.1l4 4-4 4" />
         <path d="M3 12.2v-2a4 4 0 0 1 4-4h12.8" />
@@ -40,7 +63,8 @@ export const ArrowPathIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-export const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Histórico (Relógio com Histórico)
+export const HistoryIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
         <path d="M3 3v5h5" />
@@ -48,31 +72,38 @@ export const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-export const TagIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Compras (Sacola de Compras)
+export const ShoppingBagIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12.586 2.586a2 2 0 0 0-2.828 0L2.172 10.172a2 2 0 0 0 0 2.828l9.192 9.192a2 2 0 0 0 2.828 0l7.586-7.586a2 2 0 0 0 0-2.828L12.586 2.586z" />
-        <circle cx="8.5" cy="8.5" r=".5" fill="currentColor" />
+        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
     </svg>
 );
 
-export const FolderIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Projetos (Blueprint/Planta)
+export const BlueprintIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <path d="M8 13h2"/>
+        <path d="M8 17h2"/>
+        <path d="M14 13h2"/>
+        <path d="M14 17h2"/>
     </svg>
 );
 
-export const BuildingOfficeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Obras (Capacete de Segurança/Construção)
+export const ConstructionIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14" />
-        <path d="M12 20V4" />
-        <path d="M6 12H2" />
-        <path d="M12 12H8" />
-        <path d="M18 12h-2" />
-        <path d="M22 12h-2" />
+        <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2Z"/>
+        <path d="M9 21V8"/>
+        <path d="M15 21V8"/>
     </svg>
 );
 
-export const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Clientes (Pessoas/Usuários)
+export const ClientsIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
@@ -81,7 +112,8 @@ export const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-export const TruckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Fornecedores (Caminhão de Entrega)
+export const SupplierIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11" />
         <path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2" />
@@ -90,12 +122,20 @@ export const TruckIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-export const WrenchScrewdriverIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.83-5.83M11.42 15.17l2.47-2.47M11.42 15.17L10.5 16.5m2.47-2.47l-5.83-5.83a2.652 2.652 0 00-3.75 0L3 10.5a2.652 2.652 0 000 3.75l5.83 5.83m2.47-2.47l.586-.586a2.652 2.652 0 000-3.75l-4.5-4.5a2.652 2.652 0 00-3.75 0l-.586.586m3.193 12.313a2.652 2.652 0 003.75 0l5.83-5.83a2.652 2.652 0 000-3.75l-4.5-4.5a2.652 2.652 0 00-3.75 0l-5.83 5.83a2.652 2.652 0 000 3.75l4.5 4.5a2.652 2.652 0 003.75 0l.586-.586z" />
+// Ícone de Serviços de Engenharia Elétrica (Raio dentro de engrenagem)
+export const ElectricalServiceIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" opacity="0.3"/>
     </svg>
 );
 
+// ============================================
+// ÍCONES AUXILIARES E DE STATUS
+// ============================================
+
+// Ícone de Alerta/Aviso
 export const ExclamationTriangleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
@@ -104,6 +144,7 @@ export const ExclamationTriangleIcon = (props: React.SVGProps<SVGSVGElement>) =>
     </svg>
 );
 
+// Ícone de Moeda (Valores Financeiros)
 export const CurrencyDollarIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="1" x2="12" y2="23" />
@@ -111,18 +152,63 @@ export const CurrencyDollarIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+// Ícone de Raio Elétrico (Energia)
+export const BoltIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+);
+
+// Ícone de Pasta Padrão (uso geral)
+export const FolderIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+    </svg>
+);
+
+// Ícone de Gráfico de Tendência (Crescimento)
+export const TrendingUpIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+        <polyline points="16 7 22 7 22 13" />
+    </svg>
+);
+
+// Ícone de Adicionar (Plus)
+export const PlusCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="16"/>
+        <line x1="8" y1="12" x2="16" y2="12"/>
+    </svg>
+);
+
+// Ícone de Documento/Arquivo
+export const DocumentIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+    </svg>
+);
+
+// ============================================
+// NAVEGAÇÃO PRINCIPAL DO SISTEMA
+// ============================================
 
 export const navLinks = [
-    { name: 'Dashboard', icon: ChartBarIcon },
-    { name: 'Orçamentos', icon: ShoppingCartIcon },
-    { name: 'Catálogo', icon: BookOpenIcon },
-    { name: 'Serviços', icon: WrenchScrewdriverIcon },
-    { name: 'Movimentações', icon: ArrowPathIcon },
-    { name: 'Histórico', icon: ClockIcon },
-    { name: 'Compras', icon: TagIcon },
+    { name: 'Dashboard', icon: DashboardIcon },
+    { name: 'Orçamentos', icon: BudgetIcon },
+    { name: 'Catálogo', icon: CatalogIcon },
+    { name: 'Serviços', icon: ElectricalServiceIcon },
+    { name: 'Movimentações', icon: MovementIcon },
+    { name: 'Histórico', icon: HistoryIcon },
+    { name: 'Compras', icon: ShoppingBagIcon },
     { name: 'Materiais', icon: CubeIcon },
-    { name: 'Projetos', icon: FolderIcon },
-    { name: 'Obras', icon: BuildingOfficeIcon },
-    { name: 'Clientes', icon: UsersIcon },
-    { name: 'Fornecedores', icon: TruckIcon },
+    { name: 'Projetos', icon: BlueprintIcon },
+    { name: 'Obras', icon: ConstructionIcon },
+    { name: 'Clientes', icon: ClientsIcon },
+    { name: 'Fornecedores', icon: SupplierIcon },
 ];
