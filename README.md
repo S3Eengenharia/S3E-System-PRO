@@ -4,7 +4,7 @@ Sistema profissional de gestão para empresas de engenharia elétrica.
 
 ## 📁 Estrutura do Projeto
 
-```
+```text
 S3E-System-PRO/
 ├── frontend/          # Aplicação React + TypeScript
 │   ├── public/        # Arquivos estáticos
@@ -46,9 +46,10 @@ make dev
 ```
 
 **Acessar:**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3000
-- PgAdmin: http://localhost:5050
+
+- Frontend: <http://localhost:5173>
+- Backend API: <http://localhost:3000>
+- PgAdmin: <http://localhost:5050>
 
 📖 [Guia completo do Docker](DOCKER_GUIDE.md)
 
@@ -72,13 +73,15 @@ npm run dev
 
 ## 🛠️ Tecnologias
 
-### Frontend
+### Frontend (Planejado)
+
 - **React 18** - Biblioteca UI
 - **TypeScript** - Tipagem estática
 - **Vite** - Build tool
 - **TailwindCSS** - Estilização
 
 ### Backend (Planejado)
+
 - **Node.js** - Runtime
 - **Express** - Framework web
 - **TypeScript** - Tipagem estática

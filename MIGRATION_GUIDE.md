@@ -5,6 +5,7 @@ Este documento descreve a nova estrutura do projeto e os passos para completar a
 ## ✅ Concluído
 
 ### Estrutura de Pastas Criada
+
 - ✅ `frontend/` - Aplicação React
   - ✅ `src/components/` - Componentes (Catalogo.tsx movido)
   - ✅ `src/types/` - Tipos TypeScript
@@ -25,6 +26,7 @@ Este documento descreve a nova estrutura do projeto e os passos para completar a
   - ✅ `src/types/`
 
 ### Arquivos Criados/Movidos
+
 - ✅ `frontend/src/App.tsx`
 - ✅ `frontend/src/index.tsx`
 - ✅ `frontend/src/types/index.ts`
@@ -42,6 +44,7 @@ Este documento descreve a nova estrutura do projeto e os passos para completar a
 - ✅ `backend/.gitignore`
 
 ### Documentação
+
 - ✅ `README.md` (raiz)
 - ✅ `frontend/README.md`
 - ✅ `backend/README.md`
@@ -58,6 +61,7 @@ Copy-Item -Path ".\components\*.tsx" -Destination ".\frontend\src\components\" -
 ```
 
 Ou manualmente copie cada arquivo:
+
 - `Sidebar.tsx`
 - `Dashboard.tsx`
 - `Orcamentos.tsx`
@@ -81,21 +85,25 @@ Ou manualmente copie cada arquivo:
 
 Após mover os componentes, atualize os imports em TODOS eles:
 
-**DE:**
+DE:
+
 ```typescript
+
 import { ... } from '../types';
 import { ... } from '../data/mockData';
 import { ... } from '../constants';
 ```
 
-**PARA:**
+PARA:
+
 ```typescript
+
 import { ... } from '../types';
 import { ... } from '../data/mockData';
 import { ... } from '../constants';
 ```
 
-*(Os paths relativos já estão corretos)*
+(Os paths relativos já estão corretos)
 
 ### 3. Limpar Arquivos Antigos (APÓS CONFIRMAR QUE TUDO FUNCIONA)
 
@@ -152,7 +160,8 @@ import { navLinks } from './constants';
 
 ## 📦 Scripts Disponíveis
 
-### Frontend
+### Front
+
 ```bash
 npm run dev      # Desenvolvimento
 npm run build    # Build para produção
@@ -160,6 +169,7 @@ npm run preview  # Preview da build
 ```
 
 ### Backend
+
 ```bash
 npm run dev      # Desenvolvimento com hot reload
 npm run build    # Compilar TypeScript
@@ -169,6 +179,7 @@ npm start        # Executar versão compilada
 ## 🔧 Configuração do Backend
 
 1. Copie `.env.example` para `.env` no backend:
+
 ```bash
 cd backend
 cp .env.example .env
@@ -190,15 +201,18 @@ cp .env.example .env
 ## 🐛 Troubleshooting
 
 ### Erro: Cannot find module
+
 - Verifique se todos os arquivos foram movidos corretamente
 - Verifique os imports relativos
 - Rode `npm install` novamente
 
 ### Erro: ENOENT index.html
+
 - Certifique-se que `index.html` está em `frontend/index.html`
 - Verifique o `vite.config.ts`
 
 ### Imports não funcionam
+
 - Verifique os `paths` no `tsconfig.json`
 - Reinicie o servidor de desenvolvimento
 

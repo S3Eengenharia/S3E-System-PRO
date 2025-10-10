@@ -5,23 +5,27 @@ Guia rápido para começar a desenvolver no S3E System PRO.
 ## Opção 1: Docker (Recomendado) 🐳
 
 ### Pré-requisitos
+
 - Docker Desktop instalado
 - Make (opcional, mas útil)
 
 ### Passos
 
 1. **Clone o repositório**
+
 ```bash
 git clone <repo-url>
 cd S3E-System-PRO
 ```
 
-2. **Configure o ambiente**
+1. **Configure o ambiente**
+
 ```bash
 cp .env.example .env
 ```
 
-3. **Inicie os serviços**
+1. **Inicie os serviços**
+
 ```bash
 # Com Make
 make dev
@@ -30,10 +34,11 @@ make dev
 docker-compose up
 ```
 
-4. **Acesse a aplicação**
-- 🌐 Frontend: http://localhost:5173
-- 🔌 Backend: http://localhost:3000
-- 🗄️ PgAdmin: http://localhost:5050
+1. **Acesse a aplicação**
+
+- 🌐 Frontend: <http://localhost:5173>
+- 🔌 Backend: <http://localhost:3000>
+- 🗄️ PgAdmin: <http://localhost:5050>
 
 ### Comandos úteis
 
@@ -47,7 +52,8 @@ make backup            # Backup do DB
 
 ## Opção 2: Instalação Local 💻
 
-### Pré-requisitos
+### Prerequisites
+
 - Node.js 20+
 - PostgreSQL 16+
 - Redis (opcional)
@@ -60,7 +66,7 @@ npm install
 npm run dev
 ```
 
-Acesse: http://localhost:5173
+Acesse: <http://localhost:5173>
 
 ### Backend
 
@@ -70,7 +76,7 @@ npm install
 npm run dev
 ```
 
-Acesse: http://localhost:3000
+Acesse: <http://localhost:3000>
 
 ### Banco de Dados
 
@@ -82,7 +88,7 @@ GRANT ALL PRIVILEGES ON DATABASE s3e_db TO s3e_user;
 
 ## 📁 Estrutura do Projeto
 
-```
+```text
 S3E-System-PRO/
 ├── frontend/          # React + TypeScript + Vite
 │   ├── src/
@@ -109,26 +115,30 @@ S3E-System-PRO/
 ## 🛠️ Desenvolvimento
 
 ### Hot Reload
+
 - Frontend: Vite HMR ativo automaticamente
 - Backend: tsx watch recarrega em mudanças
 
 ### Adicionar dependências
 
 **Com Docker:**
+
 ```bash
 docker-compose exec frontend npm install <pacote>
 docker-compose exec backend npm install <pacote>
 ```
 
 **Sem Docker:**
+
 ```bash
 cd frontend && npm install <pacote>
 cd backend && npm install <pacote>
 ```
 
-### Banco de Dados
+### Database
 
 **Com Docker:**
+
 ```bash
 # Acessar PostgreSQL
 docker-compose exec postgres psql -U s3e_user -d s3e_db
@@ -141,6 +151,7 @@ make restore BACKUP_FILE=./backups/backup.sql
 ```
 
 **Sem Docker:**
+
 ```bash
 psql -U s3e_user -d s3e_db
 ```
@@ -192,7 +203,7 @@ cd backend && npm test
 
 ## ❓ Precisa de Ajuda?
 
-### Comandos úteis
+### Useful commands
 
 ```bash
 # Docker
@@ -208,6 +219,7 @@ make dev-build
 ### Problemas comuns
 
 **Porta em uso:**
+
 ```bash
 # Mudar porta no .env
 FRONTEND_PORT=5174
@@ -215,12 +227,14 @@ BACKEND_PORT=3001
 ```
 
 **Container não inicia:**
+
 ```bash
 docker-compose logs <serviço>
 docker-compose up --build
 ```
 
 **Banco não conecta:**
+
 ```bash
 docker-compose exec postgres pg_isready
 docker-compose restart postgres
@@ -241,7 +255,3 @@ docker-compose restart postgres
 3. Commit suas mudanças (`git commit -m 'Add nova feature'`)
 4. Push para a branch (`git push origin feature/nova-feature`)
 5. Abra um Pull Request
-
----
-
-**Feito com ❤️ pela equipe S3E Engenharia**

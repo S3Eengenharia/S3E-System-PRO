@@ -120,6 +120,7 @@ components/
 ### Camadas
 
 #### 1. Routes Layer
+
 - Define endpoints da API
 - Valida requests
 - Aplica middlewares
@@ -130,6 +131,7 @@ router.post('/budgets', validate(budgetSchema), budgetController.create);
 ```
 
 #### 2. Controllers Layer
+
 - Processa requisições HTTP
 - Chama services apropriados
 - Formata respostas
@@ -143,6 +145,7 @@ async create(req, res) {
 ```
 
 #### 3. Services Layer
+
 - Implementa lógica de negócio
 - Orquestra operações
 - Transforma dados
@@ -156,6 +159,7 @@ async create(data) {
 ```
 
 #### 4. Models Layer
+
 - Interage com banco de dados
 - Define schemas
 - Valida dados
@@ -176,12 +180,14 @@ const budgetSchema = new Schema({...});
 ## 🔐 Segurança
 
 ### Frontend
+
 - XSS Prevention
 - CSRF Protection
 - Secure Storage (no sensitive data in localStorage)
 - Input Sanitization
 
 ### Backend
+
 - JWT Authentication
 - Rate Limiting
 - SQL Injection Prevention
@@ -192,11 +198,13 @@ const budgetSchema = new Schema({...});
 ## 📊 Gerenciamento de Estado
 
 ### Atual
+
 - React Local State
 - Props passing
 - Component composition
 
 ### Futuro
+
 - Context API para estados globais
 - Zustand/Redux para estado complexo
 - React Query para cache de API
@@ -204,6 +212,7 @@ const budgetSchema = new Schema({...});
 ## 🔄 Comunicação Frontend-Backend
 
 ### REST API
+
 ```
 GET    /api/budgets       # Listar orçamentos
 POST   /api/budgets       # Criar orçamento
@@ -213,6 +222,7 @@ DELETE /api/budgets/:id   # Deletar orçamento
 ```
 
 ### Future: WebSockets
+
 - Real-time updates
 - Notifications
 - Collaborative editing
@@ -239,6 +249,7 @@ Products ─┬─< BudgetItems
 ```
 
 ### Principais Entidades
+
 - Users
 - Clients
 - Budgets
@@ -253,32 +264,38 @@ Products ─┬─< BudgetItems
 ## 🚀 Deploy
 
 ### Frontend
+
 - Build: `npm run build`
 - Output: `dist/`
 - Deploy: Vercel, Netlify, AWS S3 + CloudFront
 
 ### Backend
+
 - Build: `npm run build`
 - Output: `dist/`
 - Deploy: Railway, Render, AWS ECS, DigitalOcean
 
 ### Database
+
 - PostgreSQL no Railway/Render
 - Ou AWS RDS
 
 ## 📈 Escalabilidade
 
 ### Horizontal Scaling
+
 - Load balancer na frente do backend
 - Múltiplas instâncias do backend
 - Session storage em Redis
 
 ### Vertical Scaling
+
 - Otimização de queries
 - Caching strategies
 - Database indexing
 
 ### Microservices (Futuro)
+
 - Budget Service
 - Catalog Service
 - Project Service
@@ -287,11 +304,13 @@ Products ─┬─< BudgetItems
 ## 🔍 Monitoramento
 
 ### Logs
+
 - Winston para logging estruturado
 - Log levels: error, warn, info, debug
 - Armazenamento: Files + Cloud Service
 
 ### Métricas
+
 - Performance monitoring
 - Error tracking (Sentry)
 - Analytics
@@ -305,12 +324,14 @@ Products ─┬─< BudgetItems
 
 ## 🧪 Testes
 
-### Frontend
+### Front
+
 - Unit: Jest + Testing Library
 - E2E: Cypress/Playwright
 - Component: Storybook
 
-### Backend
+### Back
+
 - Unit: Jest
 - Integration: Supertest
 - E2E: Postman/Newman

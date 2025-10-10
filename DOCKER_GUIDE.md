@@ -30,22 +30,24 @@ nano .env  # ou use seu editor preferido
 
 ### 2. Iniciar em desenvolvimento
 
-#### Com Make (recomendado):
+#### Com Make (recomendado)
+
 ```bash
 make dev
 ```
 
-#### Sem Make:
+#### Sem Make
+
 ```bash
 docker-compose up
 ```
 
 ### 3. Acessar a aplicação
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:3000
-- **PgAdmin**: http://localhost:5050 (dev only)
-- **API Health**: http://localhost:3000/health
+- **Frontend**: <http://localhost:5173>
+- **Backend API**: <http://localhost:3000>
+- **PgAdmin**: <http://localhost:5050> (dev only)
+- **API Health**: <http://localhost:3000/health>
 
 ## 📦 Serviços Disponíveis
 
@@ -63,11 +65,11 @@ docker-compose up
 
 | Serviço | Porta | Descrição |
 |---------|-------|-----------|
-| nginx | 80/443 | Reverse Proxy |
+| nginx  | 80/443 | Reverse Proxy |
 | frontend | - | React build servido pelo nginx |
-| backend | - | API em produção |
+| backend  | - | API em produção |
 | postgres | - | Database |
-| redis | - | Cache |
+| redis    | - | Cache |
 
 ## 🛠️ Comandos Principais
 
@@ -89,7 +91,7 @@ make backup            # Backup do DB
 make test              # Executar testes
 ```
 
-### Sem Make
+### Docker Compose Direto
 
 ```bash
 # Desenvolvimento
@@ -178,11 +180,13 @@ CORS_ORIGIN=https://seu-dominio.com
 ### Deploy
 
 #### Docker Swarm
+
 ```bash
 docker stack deploy -c docker-compose.yml -c docker-compose.prod.yml s3e
 ```
 
 #### Kubernetes
+
 ```bash
 # Converter para Kubernetes
 kompose convert -f docker-compose.yml
@@ -213,7 +217,7 @@ docker-compose exec -T postgres psql -U s3e_user -d s3e_db < backup.sql
 
 ### Acessar PgAdmin (Desenvolvimento)
 
-1. Acesse http://localhost:5050
+1. Acesse <http://localhost:5050>
 2. Login: `admin@s3e.com` / `admin`
 3. Adicionar servidor:
    - Host: `postgres`
@@ -340,7 +344,7 @@ docker-compose exec postgres psql -U s3e_user -d s3e_db -c "SELECT 1"
 
 ## 📊 Estrutura dos Arquivos
 
-```
+```text
 .
 ├── docker-compose.yml           # Configuração principal
 ├── docker-compose.prod.yml      # Overrides de produção
@@ -367,7 +371,7 @@ docker-compose exec postgres psql -U s3e_user -d s3e_db -c "SELECT 1"
 
 ## 🔐 Segurança
 
-### Produção
+### Production
 
 1. **Nunca commitar `.env`** com credenciais reais
 2. **Usar secrets do Docker** para dados sensíveis
@@ -376,7 +380,7 @@ docker-compose exec postgres psql -U s3e_user -d s3e_db -c "SELECT 1"
 5. **Usar usuários não-root** nos containers
 6. **Manter imagens atualizadas**
 
-### Variáveis sensíveis
+### Sensible variables
 
 ```bash
 # Usar Docker secrets em produção

@@ -14,9 +14,10 @@ make dev
 ```
 
 **Pronto! Acesse:**
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3000
-- PgAdmin: http://localhost:5050
+
+- Frontend: <http://localhost:5173>
+- Backend: <http://localhost:3000>
+- PgAdmin: <http://localhost:5050>
 
 ## 📋 Pré-requisitos
 
@@ -50,11 +51,11 @@ docker-compose ps                   # Status
 | Serviço | Porta | Descrição |
 |---------|-------|-----------|
 | Frontend | 5173 | React App |
-| Backend | 3000 | API Node.js |
+| Backend  | 3000 | API Node.js |
 | PostgreSQL | 5432 | Banco de dados |
-| Redis | 6379 | Cache |
-| PgAdmin | 5050 | Admin DB (dev) |
-| Nginx | 80 | Proxy (prod) |
+| Redis    | 6379 | Cache |
+| PgAdmin  | 5050 | Admin DB (dev) |
+| Nginx    |  80  | Proxy (prod) |
 
 ## 📚 Documentação
 
@@ -109,16 +110,19 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ## 💾 Banco de Dados
 
 ### Backup
+
 ```bash
 make backup
 ```
 
 ### Restore
+
 ```bash
 make restore BACKUP_FILE=./backups/backup.sql
 ```
 
 ### Acessar
+
 ```bash
 # CLI
 docker-compose exec postgres psql -U s3e_user -d s3e_db
@@ -130,18 +134,21 @@ http://localhost:5050
 ## 🔧 Troubleshooting
 
 ### Porta em uso
+
 ```bash
 # Mudar no .env
 FRONTEND_PORT=5174
 ```
 
 ### Container não inicia
+
 ```bash
 docker-compose logs backend
 docker-compose up --build
 ```
 
 ### Limpar e recomeçar
+
 ```bash
 make clean
 make dev-build
@@ -158,7 +165,7 @@ make stats            # Recursos
 
 ## ⚙️ Arquivos Docker
 
-```
+```text
 .
 ├── docker-compose.yml          # Config principal
 ├── docker-compose.prod.yml     # Produção
