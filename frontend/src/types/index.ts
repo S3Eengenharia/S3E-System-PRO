@@ -332,7 +332,7 @@ export interface KitService {
 }
 
 export interface KitConfiguration {
-    kitType: '' | 'medidores' | 'comando';
+    kitType: '' | 'medidores' | 'comando' | 'quadro-eletrico' | 'subestacoes';
     // Medidores path
     medidores?: {
         materialType: '' | 'aluminio' | 'policarbonato';
@@ -348,25 +348,74 @@ export interface KitConfiguration {
         baseQuadroId?: string;
         items?: KitProduct[];
     };
-    // Common path from step 3 onwards
+    // Subestações path
+    subestacoes?: {
+        tipo: 'aerea' | 'abrigada' | '';
+        postoTransformacao?: {
+            potencia?: string;
+            tensao?: string;
+            items: KitProduct[];
+        };
+        aterramento?: {
+            items: KitProduct[];
+        };
+        iluminacao?: {
+            items: KitProduct[];
+        };
+        cabineMedicao?: {
+            items: KitProduct[];
+        };
+        condutores?: {
+            items: KitProduct[];
+        };
+        camposPersonalizados?: {
+            nome: string;
+            items: KitProduct[];
+        }[];
+    };
+    // Disjuntor Geral
     disjuntorGeralId?: string;
+    disjuntorGeralTipo?: '' | 'caixa-moldada' | 'din';
+    disjuntorGeralPolaridade?: '' | 'monopolar' | 'bipolar' | 'tripolar';
+    // Disjuntores Individuais
     disjuntoresIndividuais?: {
         id: string;
         quantityPerMeter: number;
     }[];
+    disjuntoresIndividuaisPolaridade?: '' | 'monopolar' | 'bipolar' | 'tripolar';
+    // Cabos
     cabos?: {
         type: 'flexivel' | 'rigido' | '';
         items: { id: string; quantity: number }[];
     };
+    // DPS
     dpsId?: string;
+    dpsClasse?: '' | 'classe1' | 'classe2';
+    dpsConfig?: {
+        quantidade: number;
+        tcmQuantidade: number;
+        caboTerraComprimento: number;
+        caboTerraBitola: string;
+        barramentoPenteQuantidade: number;
+        disjuntoresDPS?: { id: string; name: string; quantity: number }[];
+    };
+    // Acabamentos
     acabamentos?: {
         hasBornes: boolean;
         parafusos?: { id: string; quantity: number }[];
+        arruelas?: { id: string; quantity: number }[];
         terminais?: {
             type: 'compressao' | 'tubular' | '';
             id?: string;
             quantity: number;
-        }
+        };
+        terminaisTubulares?: {
+            quantity: number;
+            items?: { id: string; tipo: string; cor: string; quantity: number }[];
+        };
+        curvaBox?: {
+            quantity: number;
+        };
     }
 }
 
