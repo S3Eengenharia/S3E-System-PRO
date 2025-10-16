@@ -12,6 +12,8 @@ import Clientes from './components/Clientes';
 import Projetos from './components/Projetos';
 import Obras from './components/Obras';
 import Servicos from './components/Servicos';
+import Financeiro from './components/Financeiro';
+import EmissaoNFe from './components/EmissaoNFe';
 import SettingsModal from './components/SettingsModal';
 import { projectsData } from './data/mockData';
 import { type Project } from './types';
@@ -89,6 +91,10 @@ const App: React.FC = () => {
                  projects={projects}
                  setProjects={setProjects}
                />;
+      case 'Financeiro':
+        return <Financeiro toggleSidebar={toggleSidebar} />;
+      case 'Emissão NF-e':
+        return <EmissaoNFe toggleSidebar={toggleSidebar} />;
       default:
         return <Dashboard toggleSidebar={toggleSidebar} onNavigate={handleNavigate} projects={projects} />;
     }

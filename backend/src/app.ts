@@ -3,6 +3,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+// Routes
+import authRoutes from './routes/auth.js';
+import materiaisRoutes from './routes/materiais.js';
+import comprasRoutes from './routes/compras.js';
+import orcamentosRoutes from './routes/orcamentos.js';
+import configFiscalRoutes from './routes/configFiscal.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -13,28 +20,39 @@ app.use(cors({
   credentials: true
 }));
 app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' })); // Aumentado para suportar XMLs grandes
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// API routes will be added here
-app.get('/api', (req, res) => {
+// API routes
+app.get('/api', (_req, res) => {
   res.json({ 
     message: 'S3E System API',
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      api: '/api'
+      auth: '/api/auth',
+      materiais: '/api/materiais',
+      compras: '/api/compras',
+      orcamentos: '/api/orcamentos',
+      configFiscal: '/api/configuracoes-fiscais'
     }
   });
 });
 
+// Registrar rotas
+app.use('/api/auth', authRoutes);
+app.use('/api/materiais', materiaisRoutes);
+app.use('/api/compras', comprasRoutes);
+app.use('/api/orcamentos', orcamentosRoutes);
+app.use('/api/configuracoes-fiscais', configFiscalRoutes);
+
 // Error handling middleware
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);
   res.status(500).json({ 
     error: 'Internal Server Error',
@@ -43,7 +61,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 });
 
 // 404 handler
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 

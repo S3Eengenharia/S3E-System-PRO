@@ -194,6 +194,26 @@ export const DocumentIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+// Ícone de Financeiro (Gráfico com Cifrão)
+export const FinanceIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        <polyline points="22 12 18 8 18 16 22 12"/>
+        <polyline points="2 12 6 16 6 8 2 12"/>
+    </svg>
+);
+
+// Ícone de NF-e (Documento Fiscal)
+export const InvoiceIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <path d="M9 15h6"/>
+        <path d="M12 12v6"/>
+    </svg>
+);
+
 // ============================================
 // NAVEGAÇÃO PRINCIPAL DO SISTEMA
 // ============================================
@@ -209,6 +229,8 @@ export const navLinks = [
     { name: 'Materiais', icon: CubeIcon },
     { name: 'Projetos', icon: BlueprintIcon },
     { name: 'Obras', icon: ConstructionIcon },
+    { name: 'Financeiro', icon: FinanceIcon },
+    { name: 'Emissão NF-e', icon: InvoiceIcon },
     { name: 'Clientes', icon: ClientsIcon },
     { name: 'Fornecedores', icon: SupplierIcon },
 ];

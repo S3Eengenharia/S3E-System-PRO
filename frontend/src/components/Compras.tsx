@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type PurchaseOrder, type Supplier, PurchaseStatus, type PurchaseOrderItem, type Product, CatalogItemType } from '../types';
 import { purchasesData, catalogData, suppliersData } from '../data/mockData';
+import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -93,6 +94,23 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [purchaseItems, setPurchaseItems] = useState<PurchaseOrderItem[]>([]);
     const [productToAdd, setProductToAdd] = useState<{id: string, quantity: string, cost: string}>({id: '', quantity: '1', cost: ''});
     
+    // Novos campos do fornecedor
+    const [supplierName, setSupplierName] = useState('');
+    const [supplierCNPJ, setSupplierCNPJ] = useState('');
+    const [supplierPhone, setSupplierPhone] = useState('');
+    const [nfEmissionDate, setNfEmissionDate] = useState(new Date().toISOString().split('T')[0]);
+    const [receivedDate, setReceivedDate] = useState('');
+    
+    // Novos campos para item
+    const [itemName, setItemName] = useState('');
+    const [itemNCM, setItemNCM] = useState('');
+    const [itemQuantity, setItemQuantity] = useState<number>(1);
+    const [itemUnitPrice, setItemUnitPrice] = useState<number>(0);
+    
+    // Despesas adicionais
+    const [shippingCost, setShippingCost] = useState<number>(0);
+    const [otherExpenses, setOtherExpenses] = useState<number>(0);
+    
     // XML Import state
     const [xmlData, setXmlData] = useState<ParsedXMLData | null>(null);
     const xmlFileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +132,17 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         setStatus(PurchaseStatus.Pendente);
         setPurchaseItems([]);
         setProductToAdd({id: '', quantity: '1', cost: ''});
+        setSupplierName('');
+        setSupplierCNPJ('');
+        setSupplierPhone('');
+        setNfEmissionDate(new Date().toISOString().split('T')[0]);
+        setReceivedDate('');
+        setItemName('');
+        setItemNCM('');
+        setItemQuantity(1);
+        setItemUnitPrice(0);
+        setShippingCost(0);
+        setOtherExpenses(0);
         setXmlData(null);
     };
 
@@ -148,38 +177,66 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     }, [products, purchaseItems]);
 
     const handleAddItem = () => {
-        const product = products.find(p => p.id === productToAdd.id);
-        const quantity = parseInt(productToAdd.quantity);
-        const unitCost = parseFloat(productToAdd.cost);
-
-        if (product && quantity > 0 && unitCost >= 0) {
-            const newItem: PurchaseOrderItem = {
-                productId: product.id,
-                productName: product.name,
-                quantity,
-                unitCost,
-            };
-            setPurchaseItems(prev => [...prev, newItem]);
-            setProductToAdd({id: '', quantity: '1', cost: ''});
-        } else {
-            alert('Por favor, selecione um produto e preencha a quantidade e o custo corretamente.');
+        if (!itemName.trim()) {
+            alert('Por favor, informe o nome do item.');
+            return;
         }
+
+        if (itemQuantity <= 0) {
+            alert('A quantidade deve ser maior que zero.');
+            return;
+        }
+
+        if (itemUnitPrice < 0) {
+            alert('O valor unitário não pode ser negativo.');
+            return;
+        }
+
+            const newItem: PurchaseOrderItem = {
+            productId: `ITEM-${Date.now()}`,
+            productName: itemName,
+            quantity: itemQuantity,
+            unitCost: itemUnitPrice,
+            ncm: itemNCM || undefined
+        };
+        
+            setPurchaseItems(prev => [...prev, newItem]);
+        
+        // Limpar campos
+        setItemName('');
+        setItemNCM('');
+        setItemQuantity(1);
+        setItemUnitPrice(0);
     };
 
     const handleRemoveItem = (productId: string) => {
         setPurchaseItems(prev => prev.filter(item => item.productId !== productId));
     };
 
-    const purchaseTotal = useMemo(() => {
+    const subtotalPurchase = useMemo(() => {
         return purchaseItems.reduce((total, item) => total + item.quantity * item.unitCost, 0);
     }, [purchaseItems]);
 
+    const purchaseTotal = useMemo(() => {
+        return subtotalPurchase + shippingCost + otherExpenses;
+    }, [subtotalPurchase, shippingCost, otherExpenses]);
+
     const handleSavePurchase = () => {
-        const supplier = suppliersData.find(s => s.id === selectedSupplierId);
-        if (!supplier || purchaseItems.length === 0) {
-            alert('Selecione um fornecedor e adicione pelo menos um item.');
+        if (!supplierName.trim() || !supplierCNPJ.trim()) {
+            alert('Por favor, preencha o nome e CNPJ do fornecedor.');
             return;
         }
+        
+        if (purchaseItems.length === 0) {
+            alert('Adicione pelo menos um item à compra.');
+            return;
+        }
+
+        // Criar objeto supplier com os dados manuais
+        const supplier = {
+            id: `SUP-${Date.now()}`,
+            name: supplierName
+        };
 
         const stockAdjustments = new Map<string, number>();
 
@@ -227,7 +284,11 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         }
         
         const paymentDetails = xmlData ? `${xmlData.payment.method}${xmlData.payment.installments.length > 0 ? ` (${xmlData.payment.installments.length}x)` : ''}` : undefined;
-        const vendorDetails = xmlData ? xmlData.vendor : undefined;
+        const vendorDetails = xmlData ? xmlData.vendor : {
+            name: supplierName,
+            cnpj: supplierCNPJ,
+            address: supplierPhone ? `Telefone: ${supplierPhone}` : ''
+        };
         
         if(purchaseToEdit) {
             const updatedPurchase: PurchaseOrder = {
@@ -260,85 +321,49 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         handleCloseModal();
     };
     
-    const handleXmlImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleXmlImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                // FIX: Add a type check to ensure `e.target.result` is a string before using it. This resolves the error where an 'unknown' type cannot be assigned to a 'string'.
-                const result = e.target?.result;
-                if (typeof result !== 'string') {
-                    alert('Erro ao ler o arquivo XML.');
-                    return;
-                }
-                const xmlString = result;
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlString, 'application/xml');
-                
-                const get = (selector: string, parent: Document | Element = xmlDoc) => parent.querySelector(selector)?.textContent || '';
-                
-                const vendorCnpj = get('emit > CNPJ');
-                const matchingSupplier = suppliersData.find(s => s.cnpj === vendorCnpj);
-                
-                if (!matchingSupplier) {
-                    alert(`Fornecedor com CNPJ ${vendorCnpj} não encontrado. Por favor, cadastre o fornecedor antes de importar a nota.`);
-                    return;
-                }
+        try {
+            const xmlContent = await readFileAsText(file);
+            const parsedData = parseNFeXML(xmlContent);
 
-                const items: PurchaseOrderItem[] = Array.from(xmlDoc.querySelectorAll('det')).map(det => ({
-                    // Attempt to find a matching product in our mock data by name, otherwise use data from XML
-                    productId: products.find(p => p.name.toLowerCase() === get('prod > xProd', det).toLowerCase())?.id || get('prod > cProd', det),
-                    productName: get('prod > xProd', det),
-                    quantity: parseFloat(get('prod > qCom', det)),
-                    unitCost: parseFloat(get('prod > vUnCom', det)),
-                    ncm: get('prod > NCM', det),
-                }));
-                
-                const paymentMethodCode = get('pag > detPag > tPag');
-                const paymentMethods: { [key: string]: string } = {
-                    '01': 'Dinheiro', '02': 'Cheque', '03': 'Cartão de Crédito', '04': 'Cartão de Débito', '05': 'Crédito Loja', '15': 'Boleto Bancário', '99': 'Outros'
-                };
-                
-                const installments = Array.from(xmlDoc.querySelectorAll('cobr > dup')).map(dup => ({
-                    dueDate: new Date(`${get('dVenc', dup)}T00:00:00`).toLocaleDateString('pt-BR'),
-                    value: parseFloat(get('vDup', dup)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                }));
-                
-                const emissionDate = new Date(get('ide > dhEmi'));
-
-                const parsedData: ParsedXMLData = {
-                    invoice: {
-                        number: get('ide > nNF'),
-                        emissionDate: emissionDate.toLocaleDateString('pt-BR'),
-                    },
-                    vendor: {
-                        name: get('emit > xNome'),
-                        cnpj: vendorCnpj,
-                        address: `${get('enderEmit > xLgr')}, ${get('enderEmit > nro')} - ${get('enderEmit > xBairro')}, ${get('enderEmit > xMun')}/${get('enderEmit > UF')}`,
-                    },
-                    items,
-                    payment: {
-                        method: paymentMethods[paymentMethodCode] || 'Não especificado',
-                        installments,
-                    }
-                };
-                
-                // Directly populate the form
-                setXmlData(parsedData);
-                setSelectedSupplierId(matchingSupplier.id);
-                setPurchaseDate(emissionDate.toISOString().split('T')[0]);
-                setInvoiceNumber(parsedData.invoice.number);
-                setPurchaseItems(parsedData.items);
-                setStatus(PurchaseStatus.Pendente); // Default status for new imports
-
-            } catch (error) {
-                console.error("Erro ao processar XML:", error);
-                alert("Ocorreu um erro ao ler o arquivo XML. Verifique se o arquivo é uma NF-e válida.");
+            if (!parsedData) {
+                alert('Erro ao processar XML. Verifique se o arquivo é uma NF-e válida.');
+                return;
             }
-        };
-        reader.readAsText(file);
+
+            // Preencher dados do fornecedor
+            setSupplierName(parsedData.fornecedor.nome);
+            setSupplierCNPJ(parsedData.fornecedor.cnpj);
+            setSupplierPhone(parsedData.fornecedor.telefone || '');
+
+            // Preencher dados da nota
+            setInvoiceNumber(parsedData.notaFiscal.numero);
+            setNfEmissionDate(parsedData.notaFiscal.dataEmissao.split('/').reverse().join('-')); // Converter para formato YYYY-MM-DD
+            setPurchaseDate(new Date().toISOString().split('T')[0]);
+
+            // Preencher itens
+            const items: PurchaseOrderItem[] = parsedData.items.map(item => ({
+                productId: `ITEM-${Date.now()}-${Math.random()}`,
+                productName: item.nomeProduto,
+                quantity: item.quantidade,
+                unitCost: item.valorUnit,
+                ncm: item.ncm
+            }));
+            setPurchaseItems(items);
+
+            // Preencher despesas
+            setShippingCost(parsedData.totais.valorFrete);
+            setOtherExpenses(parsedData.totais.outrasDespesas);
+
+            alert('XML importado com sucesso! Verifique os dados e complete o cadastro.');
+        } catch (error) {
+            console.error("Erro ao processar XML:", error);
+            alert("Ocorreu um erro ao ler o arquivo XML. Verifique se o arquivo é uma NF-e válida.");
+        }
+
         event.target.value = '';
     };
 
@@ -498,26 +523,49 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
             {/* Register/Edit Purchase Modal */}
             {isModalOpen && (
-                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-full flex flex-col">
-                        <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center flex-shrink-0">
-                            <h2 className="text-xl font-bold text-brand-gray-800">{purchaseToEdit ? 'Editar Compra' : 'Registrar Nova Compra'}</h2>
-                            <button type="button" onClick={handleCloseModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100">
+                 <div className="fixed inset-0 bg-gradient-to-br from-black/70 via-black/60 to-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" aria-modal="true" role="dialog">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col border border-gray-200/50 animate-in zoom-in-95 duration-300">
+                        {/* Header com Gradiente */}
+                        <div className="p-6 rounded-t-2xl bg-gradient-to-r from-orange-600 to-orange-700 flex justify-between items-center flex-shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-white">{purchaseToEdit ? 'Editar Compra' : 'Registrar Nova Compra'}</h2>
+                                    <p className="text-sm text-white/80">Gerenciamento de pedidos de compra</p>
+                                </div>
+                            </div>
+                            <button type="button" onClick={handleCloseModal} className="p-2 rounded-xl text-white/90 hover:bg-white/20 transition-colors">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
                         
                         <div className="p-6 space-y-6 overflow-y-auto flex-grow">
-                            <div className="p-4 bg-brand-gray-50 rounded-lg flex justify-end">
+                            {/* Botão de Importar XML */}
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                                            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                            Importação Rápida
+                                        </h3>
+                                        <p className="text-sm text-gray-600 mt-1">Importe dados diretamente do XML da Nota Fiscal</p>
+                                    </div>
                                 <input type="file" ref={xmlFileInputRef} onChange={handleXmlImport} accept=".xml" className="hidden" />
                                 <button
                                     type="button"
                                     onClick={() => xmlFileInputRef.current?.click()}
-                                    className="flex items-center justify-center bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-brand-gray-100 transition-colors"
+                                        className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-lg shadow-lg transition-colors"
                                 >
                                     <DocumentArrowUpIcon className="w-5 h-5 mr-2" />
-                                    Importar XML da NF-e
+                                        Importar XML
                                 </button>
+                                </div>
                             </div>
 
                             {xmlData && (
@@ -548,79 +596,226 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {/* Informações do Fornecedor */}
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                    Dados do Fornecedor
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="lg:col-span-2">
+                                        <label htmlFor="supplierName" className="block text-sm font-semibold text-gray-700 mb-2">Nome do Fornecedor *</label>
+                                        <input 
+                                            type="text" 
+                                            id="supplierName" 
+                                            value={supplierName} 
+                                            onChange={e => setSupplierName(e.target.value)} 
+                                            placeholder="Nome completo da empresa"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                                            required 
+                                        />
+                                    </div>
                                 <div>
-                                    <label htmlFor="supplier" className="block text-sm font-medium text-brand-gray-700 mb-1">Fornecedor *</label>
-                                    <select id="supplier" value={selectedSupplierId} onChange={e => setSelectedSupplierId(e.target.value)} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue" required>
-                                        <option value="" disabled>Selecione...</option>
-                                        {suppliersData.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
+                                        <label htmlFor="supplierCNPJ" className="block text-sm font-semibold text-gray-700 mb-2">CNPJ *</label>
+                                        <input 
+                                            type="text" 
+                                            id="supplierCNPJ" 
+                                            value={supplierCNPJ} 
+                                            onChange={e => setSupplierCNPJ(e.target.value)} 
+                                            placeholder="00.000.000/0000-00"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                                            required 
+                                        />
                                 </div>
                                 <div>
-                                    <label htmlFor="purchaseDate" className="block text-sm font-medium text-brand-gray-700 mb-1">Data da Compra *</label>
-                                    <input type="date" id="purchaseDate" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue" required />
+                                        <label htmlFor="supplierPhone" className="block text-sm font-semibold text-gray-700 mb-2">Telefone</label>
+                                        <input 
+                                            type="tel" 
+                                            id="supplierPhone" 
+                                            value={supplierPhone} 
+                                            onChange={e => setSupplierPhone(e.target.value)} 
+                                            placeholder="(00) 00000-0000"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                                        />
                                 </div>
+                                </div>
+                            </div>
+
+                            {/* Informações da Compra */}
+                            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Informações da Nota Fiscal
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                  <div>
-                                    <label htmlFor="status" className="block text-sm font-medium text-brand-gray-700 mb-1">Status *</label>
-                                    <select id="status" value={status} onChange={e => setStatus(e.target.value as PurchaseStatus)} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue" required>
+                                        <label htmlFor="invoice" className="block text-sm font-semibold text-gray-700 mb-2">Nº Nota Fiscal *</label>
+                                        <input 
+                                            type="text" 
+                                            id="invoice" 
+                                            value={invoiceNumber} 
+                                            onChange={e => setInvoiceNumber(e.target.value)} 
+                                            placeholder="Ex: NF-000123"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+                                            required 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="nfEmissionDate" className="block text-sm font-semibold text-gray-700 mb-2">Data de Emissão NF *</label>
+                                        <input 
+                                            type="date" 
+                                            id="nfEmissionDate" 
+                                            value={nfEmissionDate} 
+                                            onChange={e => setNfEmissionDate(e.target.value)} 
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+                                            required 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="receivedDate" className="block text-sm font-semibold text-gray-700 mb-2">Data de Recebimento</label>
+                                        <input 
+                                            type="date" 
+                                            id="receivedDate" 
+                                            value={receivedDate} 
+                                            onChange={e => setReceivedDate(e.target.value)} 
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="purchaseDate" className="block text-sm font-semibold text-gray-700 mb-2">Data da Compra *</label>
+                                        <input 
+                                            type="date" 
+                                            id="purchaseDate" 
+                                            value={purchaseDate} 
+                                            onChange={e => setPurchaseDate(e.target.value)} 
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+                                            required 
+                                        />
+                                    </div>
+                                    <div className="lg:col-span-2">
+                                        <label htmlFor="status" className="block text-sm font-semibold text-gray-700 mb-2">Status *</label>
+                                        <select 
+                                            id="status" 
+                                            value={status} 
+                                            onChange={e => setStatus(e.target.value as PurchaseStatus)} 
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+                                            required
+                                        >
                                         {Object.values(PurchaseStatus).map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
-                                <div className="lg:col-span-3">
-                                    <label htmlFor="invoice" className="block text-sm font-medium text-brand-gray-700 mb-1">Nº Nota Fiscal (Opcional)</label>
-                                    <input type="text" id="invoice" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue" />
                                 </div>
                             </div>
 
                             {/* Items Section */}
-                            <div className="border-t border-brand-gray-200 pt-6 space-y-4">
-                                <h3 className="text-lg font-semibold text-brand-gray-800">Itens da Compra</h3>
+                            <div className="bg-gradient-to-br from-orange-50/50 to-amber-50/50 rounded-xl p-5 border border-orange-200/50 space-y-4">
+                                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    Itens da Compra
+                                </h3>
                                 {!xmlData && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 bg-brand-gray-50 rounded-lg items-end">
-                                        <div className="lg:col-span-5">
-                                            <label className="text-sm font-medium text-brand-gray-700">Produto</label>
-                                            <select value={productToAdd.id} onChange={e => setProductToAdd({...productToAdd, id: e.target.value})} className="w-full mt-1 px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue">
-                                                <option value="">Selecione...</option>
-                                                {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                            </select>
+                                    <div className="bg-white rounded-lg p-4 border-2 border-dashed border-orange-300">
+                                        <label className="text-sm font-semibold text-gray-700 mb-3 block">Adicionar Item da Nota Fiscal</label>
+                                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+                                            <div className="lg:col-span-4">
+                                                <label className="text-xs font-medium text-gray-600">Nome do Item *</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={itemName} 
+                                                    onChange={e => setItemName(e.target.value)} 
+                                                    placeholder="Ex: Cabo de cobre 10mm²"
+                                                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                />
                                         </div>
                                         <div className="lg:col-span-2">
-                                            <label className="text-sm font-medium text-brand-gray-700">Quantidade</label>
-                                            <input type="number" value={productToAdd.quantity} onChange={e => setProductToAdd({...productToAdd, quantity: e.target.value})} min="1" className="w-full mt-1 px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue" />
+                                                <label className="text-xs font-medium text-gray-600">NCM</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={itemNCM} 
+                                                    onChange={e => setItemNCM(e.target.value)} 
+                                                    placeholder="00000000"
+                                                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                />
                                         </div>
-                                        <div className="lg:col-span-3">
-                                            <label className="text-sm font-medium text-brand-gray-700">Custo Unitário (R$)</label>
-                                            <input type="number" value={productToAdd.cost} onChange={e => setProductToAdd({...productToAdd, cost: e.target.value})} min="0" step="0.01" className="w-full mt-1 px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue" />
+                                            <div className="lg:col-span-2">
+                                                <label className="text-xs font-medium text-gray-600">Quantidade *</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={itemQuantity} 
+                                                    onChange={e => setItemQuantity(parseFloat(e.target.value) || 1)} 
+                                                    min="0.01" 
+                                                    step="0.01"
+                                                    placeholder="1"
+                                                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                />
                                         </div>
                                         <div className="lg:col-span-2">
-                                            <button type="button" onClick={handleAddItem} className="w-full px-4 py-2 bg-brand-gray-700 text-white font-semibold rounded-lg hover:bg-brand-gray-600">Adicionar</button>
+                                                <label className="text-xs font-medium text-gray-600">Valor Unit. (R$) *</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={itemUnitPrice} 
+                                                    onChange={e => setItemUnitPrice(parseFloat(e.target.value) || 0)} 
+                                                    min="0" 
+                                                    step="0.01" 
+                                                    placeholder="0.00"
+                                                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                                />
+                                            </div>
+                                            <div className="lg:col-span-2">
+                                                <label className="text-xs font-medium text-gray-600">Valor Total</label>
+                                                <div className="mt-1 px-3 py-2 bg-green-50 border-2 border-green-300 rounded-lg font-bold text-green-700 text-center">
+                                                    R$ {(itemQuantity * itemUnitPrice).toFixed(2)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 flex justify-end">
+                                            <button type="button" onClick={handleAddItem} className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors shadow-lg flex items-center gap-2">
+                                                <PlusIcon className="w-5 h-5" />
+                                                Adicionar Item
+                                            </button>
                                         </div>
                                     </div>
                                 )}
-                                {purchaseItems.length > 0 && (
-                                    <div className="border border-brand-gray-200 rounded-lg overflow-hidden">
+                                {/* Lista de Itens Adicionados */}
+                                {purchaseItems.length > 0 ? (
+                                    <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden">
                                         <table className="min-w-full">
-                                            <thead className="bg-brand-gray-100">
+                                            <thead className="bg-gradient-to-r from-orange-100 to-amber-100">
                                                 <tr>
-                                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-gray-600 uppercase">Produto</th>
-                                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-gray-600 uppercase">NCM</th>
-                                                    <th className="px-4 py-2 text-center text-xs font-medium text-brand-gray-600 uppercase">Qtd.</th>
-                                                    <th className="px-4 py-2 text-right text-xs font-medium text-brand-gray-600 uppercase">Custo Unit.</th>
-                                                    <th className="px-4 py-2 text-right text-xs font-medium text-brand-gray-600 uppercase">Subtotal</th>
-                                                    <th className="px-4 py-2 text-right text-xs font-medium text-brand-gray-600 uppercase"></th>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Item</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">NCM</th>
+                                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Quantidade</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Valor Unit.</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Valor Total</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider w-12"></th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
-                                                {purchaseItems.map(item => (
-                                                    <tr key={item.productId} className="border-t border-brand-gray-200">
-                                                        <td className="px-4 py-2 text-sm font-medium text-brand-gray-800">{item.productName}</td>
-                                                        <td className="px-4 py-2 text-sm text-brand-gray-600">{item.ncm || 'N/A'}</td>
-                                                        <td className="px-4 py-2 text-sm text-brand-gray-600 text-center">{item.quantity}</td>
-                                                        <td className="px-4 py-2 text-sm text-brand-gray-600 text-right">R$ {item.unitCost.toFixed(2)}</td>
-                                                        <td className="px-4 py-2 text-sm font-semibold text-brand-gray-900 text-right">R$ {(item.quantity * item.unitCost).toFixed(2)}</td>
-                                                        <td className="px-4 py-2 text-right">
+                                            <tbody className="divide-y divide-gray-200">
+                                                {purchaseItems.map((item, index) => (
+                                                    <tr key={item.productId} className="hover:bg-orange-50/30 transition-colors group">
+                                                        <td className="px-4 py-3 text-sm">
+                                                            <div className="font-medium text-gray-900">{item.productName}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{item.ncm || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-700 text-center font-medium">{item.quantity}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-700 text-right">R$ {item.unitCost.toFixed(2)}</td>
+                                                        <td className="px-4 py-3 text-sm font-bold text-orange-700 text-right">R$ {(item.quantity * item.unitCost).toFixed(2)}</td>
+                                                        <td className="px-4 py-3 text-right">
                                                             {!xmlData && (
-                                                                <button type="button" onClick={() => handleRemoveItem(item.productId)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => handleRemoveItem(item.productId)} 
+                                                                    className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                                    title="Remover"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -628,19 +823,107 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                             </tbody>
                                         </table>
                                     </div>
+                                ) : (
+                                    <div className="text-center py-8 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                                        <svg className="w-16 h-16 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                        </svg>
+                                        <p className="text-gray-500 font-medium">Nenhum item adicionado</p>
+                                        <p className="text-sm text-gray-400 mt-1">Preencha os campos acima para adicionar itens</p>
+                                    </div>
                                 )}
+                            </div>
+
+                            {/* Despesas Adicionais */}
+                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-200">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Despesas Adicionais
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-white rounded-lg p-4 border-2 border-purple-300">
+                                        <label htmlFor="shippingCost" className="block text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                                            <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                            </svg>
+                                            Valor do Frete (R$)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            id="shippingCost"
+                                            value={shippingCost}
+                                            onChange={e => setShippingCost(parseFloat(e.target.value) || 0)}
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-semibold text-lg"
+                                        />
+                                    </div>
+                                    <div className="bg-white rounded-lg p-4 border-2 border-pink-300">
+                                        <label htmlFor="otherExpenses" className="block text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                                            <svg className="w-4 h-4 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Outras Despesas (R$)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            id="otherExpenses"
+                                            value={otherExpenses}
+                                            onChange={e => setOtherExpenses(parseFloat(e.target.value) || 0)}
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 font-semibold text-lg"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 flex justify-between items-center flex-shrink-0">
-                            <span className="text-xl font-bold text-brand-gray-800">
-                                Valor Total: R$ {purchaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                            <div className="flex gap-3">
-                                <button type="button" onClick={handleCloseModal} className="px-4 py-2 bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold rounded-lg hover:bg-brand-gray-50">
+                        {/* Footer Fixo */}
+                        <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200 flex-shrink-0 rounded-b-2xl">
+                            {/* Resumo de Valores em uma linha */}
+                            <div className="flex items-center justify-between mb-4 bg-white rounded-xl p-4 border-2 border-gray-200">
+                                <div className="flex items-center gap-6">
+                                    <div className="text-center">
+                                        <p className="text-xs font-medium text-gray-500 mb-1">Subtotal</p>
+                                        <p className="text-lg font-bold text-blue-600">
+                                            R$ {subtotalPurchase.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <span className="text-2xl text-gray-300">+</span>
+                                    <div className="text-center">
+                                        <p className="text-xs font-medium text-gray-500 mb-1">Frete</p>
+                                        <p className="text-lg font-bold text-purple-600">
+                                            R$ {shippingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <span className="text-2xl text-gray-300">+</span>
+                                    <div className="text-center">
+                                        <p className="text-xs font-medium text-gray-500 mb-1">Outras</p>
+                                        <p className="text-lg font-bold text-pink-600">
+                                            R$ {otherExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <span className="text-2xl text-gray-300">=</span>
+                                    <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg px-6 py-3">
+                                        <p className="text-xs font-semibold text-white/90 mb-1">TOTAL</p>
+                                        <p className="text-2xl font-bold text-white">
+                                            R$ {purchaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Botões */}
+                            <div className="flex justify-end gap-3">
+                                <button type="button" onClick={handleCloseModal} className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors">
                                     Cancelar
                                 </button>
-                                <button type="button" onClick={handleSavePurchase} className="px-6 py-2 bg-brand-blue text-white font-semibold rounded-lg shadow-sm hover:bg-brand-blue/90" disabled={purchaseItems.length === 0 || !selectedSupplierId}>
+                                <button type="button" onClick={handleSavePurchase} className="px-8 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 text-white font-semibold rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled={purchaseItems.length === 0 || !supplierName.trim() || !supplierCNPJ.trim()}>
                                     {purchaseToEdit ? 'Salvar Alterações' : 'Salvar Compra'}
                                 </button>
                             </div>
@@ -651,63 +934,109 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             
             {/* View Purchase Modal */}
             {purchaseToView && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-full flex flex-col">
-                        <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center flex-shrink-0">
-                            <h2 className="text-xl font-bold text-brand-gray-800">Detalhes da Compra: <span className="text-brand-blue">{purchaseToView.id}</span></h2>
-                            <button type="button" onClick={handleCloseViewModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6" /></button>
+                <div className="fixed inset-0 bg-gradient-to-br from-black/70 via-black/60 to-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" aria-modal="true" role="dialog">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col border border-gray-200/50 animate-in zoom-in-95 duration-300">
+                        {/* Header com Gradiente */}
+                        <div className="p-6 rounded-t-2xl bg-gradient-to-r from-orange-600 to-orange-700 flex justify-between items-center flex-shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                    </svg>
                         </div>
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <p><strong>Fornecedor:</strong> <span className="text-brand-gray-600">{purchaseToView.supplier.name}</span></p>
-                                <p><strong>Data:</strong> <span className="text-brand-gray-600">{purchaseToView.date}</span></p>
-                                <p><strong>Status:</strong> <span className={`font-semibold ${getStatusClass(purchaseToView.status).replace('bg-', 'text-')}`}>{purchaseToView.status}</span></p>
-                                <p><strong>NF-e:</strong> <span className="text-brand-gray-600">{purchaseToView.invoiceNumber || 'N/A'}</span></p>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-white">Detalhes da Compra</h2>
+                                    <p className="text-sm text-white/80">ID: {purchaseToView.id}</p>
+                                </div>
+                            </div>
+                            <button type="button" onClick={handleCloseViewModal} className="p-2 rounded-xl text-white/90 hover:bg-white/20 transition-colors">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
                             </div>
                             
+                        <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                            {/* Grid de Informações Principais */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                                    <p className="text-xs font-medium text-gray-600 mb-1">Fornecedor</p>
+                                    <p className="text-lg font-bold text-gray-900">{purchaseToView.supplier.name}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
+                                    <p className="text-xs font-medium text-gray-600 mb-1">Data da Compra</p>
+                                    <p className="text-lg font-bold text-gray-900">{purchaseToView.date}</p>
+                                </div>
+                                <div className={`rounded-xl p-4 border ${getStatusClass(purchaseToView.status)}`}>
+                                    <p className="text-xs font-medium mb-1 opacity-80">Status</p>
+                                    <p className="text-lg font-bold">{purchaseToView.status}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
+                                    <p className="text-xs font-medium text-gray-600 mb-1">Nota Fiscal</p>
+                                    <p className="text-lg font-bold text-gray-900">{purchaseToView.invoiceNumber || 'N/A'}</p>
+                                </div>
+                            </div>
+                            
+                            {/* Detalhes Adicionais */}
                             {(purchaseToView.fullVendorDetails || purchaseToView.paymentTerms) && (
-                                <div className="border-t border-brand-gray-200 pt-4 text-sm space-y-2">
+                                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl p-5 border border-cyan-200 space-y-4">
                                     {purchaseToView.fullVendorDetails && (
                                         <div>
-                                            <h4 className="font-semibold text-brand-gray-700">Detalhes do Vendedor (da NF-e)</h4>
-                                            <p className="text-brand-gray-600">
-                                                {`Vendedor: ${purchaseToView.fullVendorDetails.name} - CNPJ: ${purchaseToView.fullVendorDetails.cnpj}`}
-                                                <br />
-                                                {`Endereço: ${purchaseToView.fullVendorDetails.address}`}
-                                            </p>
+                                            <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                                </svg>
+                                                Detalhes do Vendedor (da NF-e)
+                                            </h4>
+                                            <div className="bg-white p-3 rounded-lg space-y-1 text-sm">
+                                                <p className="text-gray-700"><strong>Nome:</strong> {purchaseToView.fullVendorDetails.name}</p>
+                                                <p className="text-gray-700"><strong>CNPJ:</strong> {purchaseToView.fullVendorDetails.cnpj}</p>
+                                                <p className="text-gray-700"><strong>Endereço:</strong> {purchaseToView.fullVendorDetails.address}</p>
+                                            </div>
                                         </div>
                                     )}
                                     {purchaseToView.paymentTerms && (
                                         <div>
-                                            <h4 className="font-semibold text-brand-gray-700">Termos de Pagamento (da NF-e)</h4>
-                                            <p className="text-brand-gray-600">{purchaseToView.paymentTerms}</p>
+                                            <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                                </svg>
+                                                Termos de Pagamento (da NF-e)
+                                            </h4>
+                                            <div className="bg-white p-3 rounded-lg">
+                                                <p className="text-gray-700 text-sm">{purchaseToView.paymentTerms}</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
                             )}
 
-                             <div className="border-t border-brand-gray-200 pt-4">
-                                <h3 className="text-lg font-semibold text-brand-gray-800 mb-2">Itens</h3>
-                                 <div className="border border-brand-gray-200 rounded-lg overflow-hidden">
+                            {/* Itens da Compra */}
+                            <div className="bg-gradient-to-br from-orange-50/50 to-amber-50/50 rounded-xl p-5 border border-orange-200/50">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    Itens da Compra ({purchaseToView.items.length})
+                                </h3>
+                                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                                     <table className="min-w-full">
-                                        <thead className="bg-brand-gray-50">
+                                        <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                                             <tr>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-gray-500 uppercase">Produto</th>
-                                                <th className="px-4 py-2 text-center text-xs font-medium text-brand-gray-500 uppercase">Qtd.</th>
-                                                <th className="px-4 py-2 text-right text-xs font-medium text-brand-gray-500 uppercase">Custo Unit.</th>
-                                                <th className="px-4 py-2 text-right text-xs font-medium text-brand-gray-500 uppercase">Subtotal</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Produto</th>
+                                                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Qtd.</th>
+                                                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Custo Unit.</th>
+                                                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Subtotal</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-brand-gray-200">
-                                            {purchaseToView.items.map(item => (
-                                                <tr key={item.productId}>
-                                                    <td className="px-4 py-2 text-sm text-brand-gray-700">
-                                                        <div>{item.productName}</div>
-                                                        {item.ncm && <div className="text-xs text-brand-gray-500">NCM: {item.ncm}</div>}
+                                        <tbody className="divide-y divide-gray-200">
+                                            {purchaseToView.items.map((item, index) => (
+                                                <tr key={item.productId} className="hover:bg-orange-50/30 transition-colors">
+                                                    <td className="px-4 py-3 text-sm">
+                                                        <div className="font-medium text-gray-900">{item.productName}</div>
+                                                        {item.ncm && <div className="text-xs text-gray-500 mt-0.5">NCM: {item.ncm}</div>}
                                                     </td>
-                                                    <td className="px-4 py-2 text-sm text-brand-gray-700 text-center">{item.quantity}</td>
-                                                    <td className="px-4 py-2 text-sm text-brand-gray-700 text-right">R$ {item.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2 text-sm font-semibold text-brand-gray-800 text-right">R$ {(item.unitCost * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 text-center font-medium">{item.quantity}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 text-right">R$ {item.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-sm font-bold text-orange-700 text-right">R$ {(item.unitCost * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -715,9 +1044,20 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                 </div>
                              </div>
                         </div>
-                        <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 flex justify-between items-center flex-shrink-0">
-                            <span className="text-xl font-bold text-brand-gray-800">Total: R$ {purchaseToView.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <button type="button" onClick={handleCloseViewModal} className="px-4 py-2 bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold rounded-lg hover:bg-brand-gray-50">Fechar</button>
+                        
+                        <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200 flex justify-between items-center flex-shrink-0 rounded-b-2xl">
+                            <div className="flex items-center gap-3">
+                                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-600">Valor Total</p>
+                                    <p className="text-2xl font-bold text-green-600">R$ {purchaseToView.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                            </div>
+                            <button type="button" onClick={handleCloseViewModal} className="px-6 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all shadow-lg">
+                                Fechar
+                            </button>
                         </div>
                     </div>
                 </div>
