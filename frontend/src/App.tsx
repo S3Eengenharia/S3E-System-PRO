@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Orcamentos from './components/Orcamentos';
@@ -18,7 +23,7 @@ import SettingsModal from './components/SettingsModal';
 import { projectsData } from './data/mockData';
 import { type Project } from './types';
 
-const App: React.FC = () => {
+const MainApp: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState('Dashboard');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -124,6 +129,28 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsModalOpen(false)}
       />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <Router>
+      <ThemeProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <MainApp />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </AuthProvider>
+      </ThemeProvider>
+    </Router>
   );
 };
 

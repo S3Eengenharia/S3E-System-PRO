@@ -1,106 +1,166 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
-import { generateToken } from '../services/jwt.service';
+import * as authService from '../services/auth.service';
+import { LoginInput, RegisterInput } from '../validators/auth.validator';
 
-const prisma = new PrismaClient();
+/**
+ * Controllers de Autenticação
+ * 
+ * Responsáveis por:
+ * - Receber requisições HTTP
+ * - Validar dados (via middleware)
+ * - Chamar services para lógica de negócio
+ * - Retornar respostas HTTP apropriadas
+ */
 
-export const register = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password, name, role } = req.body;
-
-    // Verificar se usuário já existe
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      res.status(400).json({ error: 'Email já cadastrado' });
-      return;
-    }
-
-    // Hash da senha
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Criar usuário
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        role: role || 'user'
-      }
-    });
-
-    // Gerar token
-    const token = generateToken({ id: user.id, role: user.role });
-
-    res.status(201).json({
-      message: 'Usuário criado com sucesso',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Erro ao registrar usuário:', error);
-    res.status(500).json({ error: 'Erro ao criar usuário' });
-  }
-};
-
+/**
+ * Controller de Login
+ * 
+ * POST /api/auth/login
+ * Body: { email: string, password: string }
+ * 
+ * @example
+ * Request:
+ * POST /api/auth/login
+ * {
+ *   "email": "user@s3e.com",
+ *   "password": "123456"
+ * }
+ * 
+ * Response (200):
+ * {
+ *   "message": "Login realizado com sucesso",
+ *   "token": "eyJhbGci...",
+ *   "user": { "id": "...", "email": "...", "name": "...", "role": "..." }
+ * }
+ */
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    // Dados já validados pelo middleware de validação
+    const { email, password } = req.body as LoginInput;
 
-    // Buscar usuário
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.active) {
-      res.status(401).json({ error: 'Credenciais inválidas' });
-      return;
-    }
+    // Chamar service de autenticação
+    const result = await authService.authenticateUser(email, password);
 
-    // Verificar senha
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      res.status(401).json({ error: 'Credenciais inválidas' });
-      return;
-    }
-
-    // Gerar token
-    const token = generateToken({ id: user.id, role: user.role });
-
-    res.json({
+    // Retornar sucesso
+    res.status(200).json({
       message: 'Login realizado com sucesso',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
-      }
+      token: result.token,
+      user: result.user
     });
   } catch (error) {
+    // Tratamento de erros específicos
+    const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer login';
+    
+    if (errorMessage === 'Credenciais inválidas') {
+      res.status(401).json({ error: errorMessage });
+      return;
+    }
+
+    if (errorMessage.includes('Usuário inativo')) {
+      res.status(403).json({ error: errorMessage });
+      return;
+    }
+
+    // Erro genérico
     console.error('Erro ao fazer login:', error);
     res.status(500).json({ error: 'Erro ao fazer login' });
   }
 };
 
-export const getMe = async (req: Request, res: Response): Promise<void> => {
+/**
+ * Controller de Registro
+ * 
+ * POST /api/auth/register
+ * Body: { email: string, password: string, name: string, role?: string }
+ * 
+ * @example
+ * Request:
+ * POST /api/auth/register
+ * {
+ *   "email": "novo@s3e.com",
+ *   "password": "123456",
+ *   "name": "Novo Usuário",
+ *   "role": "user"
+ * }
+ * 
+ * Response (201):
+ * {
+ *   "message": "Usuário criado com sucesso",
+ *   "token": "eyJhbGci...",
+ *   "user": { ... }
+ * }
+ */
+export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
-    
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, active: true }
-    });
+    // Dados já validados pelo middleware de validação
+    const userData = req.body as RegisterInput;
 
-    if (!user) {
-      res.status(404).json({ error: 'Usuário não encontrado' });
+    // Chamar service de registro
+    const result = await authService.registerUser(userData);
+
+    // Retornar sucesso
+    res.status(201).json({
+      message: 'Usuário criado com sucesso',
+      token: result.token,
+      user: result.user
+    });
+  } catch (error) {
+    // Tratamento de erros específicos
+    const errorMessage = error instanceof Error ? error.message : 'Erro ao criar usuário';
+    
+    if (errorMessage === 'Email já cadastrado') {
+      res.status(400).json({ error: errorMessage });
       return;
     }
 
-    res.json(user);
+    // Erro genérico
+    console.error('Erro ao registrar usuário:', error);
+    res.status(500).json({ error: 'Erro ao criar usuário' });
+  }
+};
+
+/**
+ * Controller para obter dados do usuário autenticado
+ * 
+ * GET /api/auth/me
+ * Headers: Authorization: Bearer <token>
+ * 
+ * @example
+ * Request:
+ * GET /api/auth/me
+ * Headers: { Authorization: "Bearer eyJhbGci..." }
+ * 
+ * Response (200):
+ * {
+ *   "id": "...",
+ *   "email": "user@s3e.com",
+ *   "name": "Usuário",
+ *   "role": "admin",
+ *   "active": true,
+ *   "createdAt": "...",
+ *   "updatedAt": "..."
+ * }
+ */
+export const getMe = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // userId vem do middleware de autenticação
+    const userId = (req as any).user.userId;
+    
+    // Buscar dados do usuário
+    const user = await authService.getUserById(userId);
+
+    // Retornar dados
+    res.status(200).json(user);
   } catch (error) {
+    // Tratamento de erros
+    const errorMessage = error instanceof Error ? error.message : 'Erro ao buscar usuário';
+    
+    if (errorMessage === 'Usuário não encontrado') {
+      res.status(404).json({ error: errorMessage });
+      return;
+    }
+
+    // Erro genérico
     console.error('Erro ao buscar usuário:', error);
     res.status(500).json({ error: 'Erro ao buscar usuário' });
   }

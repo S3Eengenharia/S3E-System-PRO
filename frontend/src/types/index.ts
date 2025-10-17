@@ -77,6 +77,26 @@ export interface ProjectStage {
     assignedMemberId?: string;
     assignedMemberName?: string;
     highlight?: 'paused' | 'cancelled' | null;
+    linkedAdminStageId?: string; // Vinculo com etapa administrativa
+}
+
+// Administrative Stages (10 fixed stages for project tracking)
+export enum AdminStageStatus {
+    Pending = 'pending',
+    Completed = 'completed',
+    Overdue = 'overdue',
+}
+
+export interface AdminStage {
+    id: string;
+    name: string;
+    order: number; // 1-10
+    status: AdminStageStatus;
+    deadline: string; // ISO date string
+    startedAt: string; // When project started or when manually triggered
+    completedAt?: string;
+    extendedDeadline?: string;
+    extensionReason?: string;
 }
 
 export enum QCCheckStatus {
@@ -117,6 +137,7 @@ export interface Project {
     progress: number;
     billOfMaterials: ProjectMaterial[];
     stages: ProjectStage[];
+    adminStages: AdminStage[]; // 10 fixed administrative stages
     qualityChecks: QualityCheckItem[];
     obraStarted?: boolean;
     // FIX: Add optional attachments property to Project interface.
@@ -596,4 +617,17 @@ export interface User {
     name: string;
     email: string;
     role: UserRole;
+    phone?: string;
+    avatar?: string;
+}
+
+// Theme Types
+export type Theme = 'light' | 'dark';
+
+// Auth Types
+export interface AuthState {
+    user: User | null;
+    token: string | null;
+    isAuthenticated: boolean;
+    isLoading: boolean;
 }

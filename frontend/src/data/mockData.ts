@@ -7,10 +7,43 @@ import {
     type StockMovement, MovementType,
     type PurchaseOrder, PurchaseStatus,
     type Project, ProjectStatus, ProjectType, ProjectMaterialStatus, ProjectStageStatus, QCCheckStatus,
+    type AdminStage, AdminStageStatus,
     type Service, ServiceType,
     type Supplier, SupplierCategory,
     type User, UserRole
 } from '../types';
+
+// Helper function to generate the 10 fixed administrative stages
+const generateAdminStages = (projectStartDate: string): AdminStage[] => {
+    const stages = [
+        'Organizar Projeto',
+        'Abertura de SR',
+        'Emitir ART',
+        'Concluir Projeto',
+        'Protocolar Projeto',
+        'Aprovação do Projeto',
+        'Revisão Final',
+        'Cobrança',
+        'Acervo Técnico',
+        'Vistoria',
+    ];
+
+    const startDate = new Date(projectStartDate);
+    
+    return stages.map((name, index) => {
+        const deadline = new Date(startDate);
+        deadline.setHours(deadline.getHours() + 24); // 24 hours from start
+
+        return {
+            id: `ADMIN-STAGE-${index + 1}`,
+            name,
+            order: index + 1,
+            status: AdminStageStatus.Pending,
+            deadline: deadline.toISOString(),
+            startedAt: startDate.toISOString(),
+        };
+    });
+};
 
 export const usersData: User[] = [
     { id: 'USR-001', name: 'Usuário Admin', email: 'admin@s3e.com.br', role: UserRole.Admin },
@@ -140,6 +173,7 @@ export const projectsData: Project[] = [
             { id: 'STG-001-C', title: 'Montagem de Quadros', status: ProjectStageStatus.AFazer, dueDate: '2025-10-25', assignedMemberId: 'OBR-TM-001', assignedMemberName: 'Marcos Eletricista' },
             { id: 'STG-001-D', title: 'Instalação de Tomadas (Cancelado)', status: ProjectStageStatus.AFazer, highlight: 'cancelled' },
         ],
+        adminStages: generateAdminStages('2025-08-01'),
         qualityChecks: [
             { id: 'QC-001-A', description: 'Verificação de Aterramento', status: QCCheckStatus.Aprovado },
             { id: 'QC-001-B', description: 'Teste de Continuidade dos Circuitos', status: QCCheckStatus.Pendente },
@@ -155,7 +189,7 @@ export const projectsData: Project[] = [
         startDate: '2025-09-15', endDate: '2025-10-15', responsibleUserId: 'USR-004', responsibleUserName: 'Carlos Desenhista',
         description: 'Desenvolvimento do projeto luminotécnico para a nova loja no centro da cidade.',
         status: ProjectStatus.Planejamento, progress: 20,
-        billOfMaterials: [], stages: [], qualityChecks: [],
+        billOfMaterials: [], stages: [], adminStages: generateAdminStages('2025-09-15'), qualityChecks: [],
         attachments: [],
     },
     {
@@ -164,7 +198,7 @@ export const projectsData: Project[] = [
         startDate: '2025-10-01', endDate: '2025-10-31', responsibleUserId: 'USR-003', responsibleUserName: 'Maria Técnica',
         description: 'Emissão de laudo técnico para o Sistema de Proteção contra Descargas Atmosféricas.',
         status: ProjectStatus.Planejamento, progress: 10,
-        billOfMaterials: [], stages: [], qualityChecks: [],
+        billOfMaterials: [], stages: [], adminStages: generateAdminStages('2025-10-01'), qualityChecks: [],
         attachments: [],
     },
      {
@@ -178,6 +212,7 @@ export const projectsData: Project[] = [
             { id: 'STG-004-A', title: 'Remover fiação antiga', status: ProjectStageStatus.Concluido, assignedMemberId: 'OBR-TM-003', assignedMemberName: 'Laura Encarregada'},
             { id: 'STG-004-B', title: 'Instalar novo quadro de distribuição', status: ProjectStageStatus.Concluido, assignedMemberId: 'OBR-TM-003', assignedMemberName: 'Laura Encarregada'},
         ], 
+        adminStages: generateAdminStages('2025-07-01'),
         qualityChecks: [],
         obraStarted: true,
         attachments: [],
@@ -195,6 +230,7 @@ export const projectsData: Project[] = [
             { id: 'STG-005-A', title: 'Preparação do canteiro', status: ProjectStageStatus.Concluido },
             { id: 'STG-005-B', title: 'Demolição inicial', status: ProjectStageStatus.EmAndamento, highlight: 'cancelled' },
         ], 
+        adminStages: generateAdminStages('2025-09-01'),
         qualityChecks: [],
         obraStarted: true,
         attachments: [],

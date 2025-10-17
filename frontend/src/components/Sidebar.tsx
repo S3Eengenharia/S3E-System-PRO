@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { navLinks, S3ELogoIcon } from '../constants';
+import { useAuth } from '../hooks/useAuth';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -24,19 +25,58 @@ const Cog6ToothIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+const ArrowRightOnRectangleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+);
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, onNavigate, onOpenSettings }) => {
+    const { user, logout } = useAuth();
+    const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Carregar logo do localStorage
+        const savedLogo = localStorage.getItem('companyLogo');
+        if (savedLogo) {
+            setCompanyLogo(savedLogo);
+        }
+
+        // Ouvir mudanças na logo
+        const handleStorageChange = () => {
+            const updatedLogo = localStorage.getItem('companyLogo');
+            setCompanyLogo(updatedLogo);
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, []);
+
+    const handleLogout = () => {
+        logout();
+    };
 
     return (
         <aside className={`w-64 flex flex-col bg-white border-r border-brand-gray-200 fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-4 border-b border-brand-gray-200 flex justify-between items-center">
                 <div className="flex items-center space-x-3">
-                    <div className="bg-gradient-to-br from-brand-blue to-blue-600 rounded-lg p-2 shadow-md">
-                        <S3ELogoIcon className="w-8 h-8 text-white" />
-                    </div>
+                    {companyLogo ? (
+                        <div className="w-10 h-10 rounded-lg shadow-md overflow-hidden flex-shrink-0">
+                            <img src={companyLogo} alt="Logo da Empresa" className="w-full h-full object-contain" />
+                        </div>
+                    ) : (
+                        <div className="bg-gradient-to-br from-brand-s3e to-blue-900 rounded-lg p-2 shadow-md">
+                            <S3ELogoIcon className="w-6 h-6 text-white" />
+                        </div>
+                    )}
                     <div>
-                        <h1 className="font-bold text-lg text-brand-gray-800">S3E Engenharia</h1>
-                        <p className="text-xs text-brand-gray-500">Gestão Empresarial Elétrica</p>
+                        <h1 className="font-bold text-base text-brand-gray-800">S3E System</h1>
+                        <p className="text-xs text-brand-gray-500">Gestão Empresarial</p>
                     </div>
                 </div>
                 <button onClick={toggleSidebar} className="lg:hidden p-1 -mr-2 text-brand-gray-500 rounded-md hover:bg-brand-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue" aria-label="Close sidebar">
@@ -82,18 +122,25 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
             </div>
 
             <div className="p-4 border-t border-brand-gray-200">
-                 <div className="flex items-center justify-between">
+                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                        <img className="w-10 h-10 rounded-full object-cover" src="https://picsum.photos/100" alt="User Avatar" />
+                        <img className="w-10 h-10 rounded-full object-cover" src={user?.avatar || "https://picsum.photos/100"} alt="User Avatar" />
                         <div>
-                            <p className="font-semibold text-sm text-brand-gray-800">Usuário</p>
-                            <p className="text-xs text-brand-gray-500">Admin</p>
+                            <p className="font-semibold text-sm text-brand-gray-800">{user?.name || 'Usuário'}</p>
+                            <p className="text-xs text-brand-gray-500">{user?.role || 'Admin'}</p>
                         </div>
                     </div>
                     <button onClick={onOpenSettings} className="p-2 rounded-full text-brand-gray-400 hover:bg-brand-gray-100 hover:text-brand-gray-600" title="Configurações da Conta">
                         <Cog6ToothIcon className="w-5 h-5" />
                     </button>
                 </div>
+                <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors duration-150"
+                >
+                    <ArrowRightOnRectangleIcon className="w-4 h-4 mr-2" />
+                    Sair
+                </button>
             </div>
         </aside>
     );

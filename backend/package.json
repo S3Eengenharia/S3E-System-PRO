@@ -10,6 +10,7 @@
     "start": "dotenv -e .env.production -- node dist/app.js",
     "lint": "eslint . --ext .ts",
     "test": "jest",
+    "seed": "dotenv -e .env.development -- npx tsx src/seed.ts",
     "prisma:migrate:dev": "dotenv -e .env.development -- npx prisma migrate dev",
     "prisma:deploy:prod": "dotenv -e .env.production -- npx prisma migrate deploy",
     "prisma:studio:dev": "dotenv -e .env.development -- npx prisma studio",

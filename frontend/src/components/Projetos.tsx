@@ -3,6 +3,7 @@ import {
     type Project, ProjectStatus,
     type MaterialItem, type ProjectMaterial, ProjectMaterialStatus,
     type ProjectStage, ProjectStageStatus,
+    type AdminStage, AdminStageStatus,
     type QualityCheckItem, QCCheckStatus,
     type Client,
     type User,
@@ -86,7 +87,7 @@ interface ProjetosProps {
     setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
 }
 
-type ProjectFormState = Omit<Project, 'id' | 'clientName' | 'responsibleUserName' | 'progress' | 'billOfMaterials' | 'stages' | 'qualityChecks' | 'obraStarted' | 'attachments'>;
+type ProjectFormState = Omit<Project, 'id' | 'clientName' | 'responsibleUserName' | 'progress' | 'billOfMaterials' | 'stages' | 'adminStages' | 'qualityChecks' | 'obraStarted' | 'attachments'>;
 
 type TeamManagementModalMode = 'view' | 'add' | 'edit';
 
@@ -107,10 +108,11 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
     // Kanban state
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [taskToEdit, setTaskToEdit] = useState<ProjectStage | null>(null);
-    const [taskForm, setTaskForm] = useState<{ title: string; dueDate: string; status: ProjectStageStatus }>({
+    const [taskForm, setTaskForm] = useState<{ title: string; dueDate: string; status: ProjectStageStatus; linkedAdminStageId?: string }>({
         title: '',
         dueDate: '',
         status: ProjectStageStatus.AFazer,
+        linkedAdminStageId: undefined,
     });
     const [draggingTask, setDraggingTask] = useState<ProjectStage | null>(null);
     const [dragOverColumn, setDragOverColumn] = useState<ProjectStageStatus | null>(null);
@@ -122,6 +124,12 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
     const [memberToEdit, setMemberToEdit] = useState<User | null>(null);
     const [memberToDelete, setMemberToDelete] = useState<User | null>(null);
     const [memberForm, setMemberForm] = useState({ name: '', email: '', role: UserRole.Tecnico });
+
+    // Admin Stages State
+    const [isExtendDeadlineModalOpen, setIsExtendDeadlineModalOpen] = useState(false);
+    const [stageToExtend, setStageToExtend] = useState<{ projectId: string; stageId: string; stageName: string } | null>(null);
+    const [extensionReason, setExtensionReason] = useState('');
+    const [extensionHours, setExtensionHours] = useState(24);
 
 
     const [formState, setFormState] = useState<ProjectFormState>({
@@ -208,15 +216,50 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                 clientName: client.name!,
                 responsibleUserName: responsible.name,
             };
+            // Recalcular progresso
+            updatedProject.progress = calculateProgress(updatedProject);
             setProjects(prev => prev.map(p => p.id === projectToEdit.id ? updatedProject : p));
         } else {
+            // Gerar 10 etapas administrativas fixas
+            const adminStagesNames = [
+                'Organizar Projeto',
+                'Abertura de SR',
+                'Emitir ART',
+                'Concluir Projeto',
+                'Protocolar Projeto',
+                'Aprovação do Projeto',
+                'Revisão Final',
+                'Cobrança',
+                'Acervo Técnico',
+                'Vistoria',
+            ];
+
+            const startDate = new Date(formState.startDate);
+            const adminStages: AdminStage[] = adminStagesNames.map((name, index) => {
+                const deadline = new Date(startDate);
+                deadline.setHours(deadline.getHours() + 24); // 24h de prazo
+
+                return {
+                    id: `ADMIN-STAGE-${Date.now()}-${index + 1}`,
+                    name,
+                    order: index + 1,
+                    status: AdminStageStatus.Pending,
+                    deadline: deadline.toISOString(),
+                    startedAt: startDate.toISOString(),
+                };
+            });
+
             const newProject: Project = {
                 id: `PROJ-${String(projects.length + 1).padStart(3, '0')}`,
                 ...formState,
                 clientName: client.name!,
                 responsibleUserName: responsible.name,
                 progress: 0,
-                billOfMaterials: [], stages: [], qualityChecks: [], attachments: [],
+                billOfMaterials: [], 
+                stages: [], 
+                adminStages, 
+                qualityChecks: [], 
+                attachments: [],
                 obraStarted: false,
             };
             setProjects(prev => [newProject, ...prev]);
@@ -276,7 +319,7 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
     // Kanban Handlers
     const handleOpenAddTaskModal = (status: ProjectStageStatus) => {
         setTaskToEdit(null);
-        setTaskForm({ title: '', dueDate: '', status });
+        setTaskForm({ title: '', dueDate: '', status, linkedAdminStageId: undefined });
         setIsTaskModalOpen(true);
     };
 
@@ -286,6 +329,7 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             title: task.title,
             dueDate: task.dueDate || '',
             status: task.status,
+            linkedAdminStageId: task.linkedAdminStageId,
         });
         setIsTaskModalOpen(true);
     };
@@ -306,7 +350,13 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
         if (taskToEdit) {
             updatedStages = projectToView.stages.map(stage =>
                 stage.id === taskToEdit.id
-                    ? { ...stage, title: taskForm.title, dueDate: taskForm.dueDate || undefined, status: taskForm.status }
+                    ? { 
+                        ...stage, 
+                        title: taskForm.title, 
+                        dueDate: taskForm.dueDate || undefined, 
+                        status: taskForm.status,
+                        linkedAdminStageId: taskForm.linkedAdminStageId 
+                      }
                     : stage
             );
         } else {
@@ -315,11 +365,20 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                 title: taskForm.title,
                 dueDate: taskForm.dueDate || undefined,
                 status: taskForm.status,
+                linkedAdminStageId: taskForm.linkedAdminStageId,
             };
             updatedStages = [...projectToView.stages, newTask];
         }
         
-        const updatedProject = { ...projectToView, stages: updatedStages };
+        const updatedProject = { 
+            ...projectToView, 
+            stages: updatedStages,
+            progress: 0 // Será recalculado
+        };
+
+        // Recalcular progresso
+        updatedProject.progress = calculateProgress(updatedProject);
+
         setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
         setProjectToView(updatedProject); 
         
@@ -352,7 +411,14 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             stage.id === draggingTask.id ? { ...stage, status: newStatus } : stage
         );
         
-        const updatedProject = { ...projectToView, stages: updatedStages };
+        const updatedProject = { 
+            ...projectToView, 
+            stages: updatedStages,
+            progress: 0 // Será recalculado
+        };
+
+        // Recalcular progresso
+        updatedProject.progress = calculateProgress(updatedProject);
         
         setProjects(projects.map(p => (p.id === updatedProject.id ? updatedProject : p)));
         setProjectToView(updatedProject);
@@ -433,6 +499,85 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
             setProjectToView(updatedProject);
         }
+    };
+
+    // Admin Stages Handlers
+    const calculateProgress = (project: Project): number => {
+        const adminCompleted = project.adminStages.filter(s => s.status === AdminStageStatus.Completed).length;
+        const tasksCompleted = project.stages.filter(s => s.status === ProjectStageStatus.Concluido).length;
+        const totalAdminStages = project.adminStages.length; // 10
+        const totalTasks = project.stages.length;
+        
+        if (totalAdminStages + totalTasks === 0) return 0;
+        
+        return Math.round(((adminCompleted + tasksCompleted) / (totalAdminStages + totalTasks)) * 100);
+    };
+
+    const handleCompleteAdminStage = (stageId: string) => {
+        if (!projectToView) return;
+
+        const updatedAdminStages = projectToView.adminStages.map(stage =>
+            stage.id === stageId
+                ? { ...stage, status: AdminStageStatus.Completed, completedAt: new Date().toISOString() }
+                : stage
+        );
+
+        const updatedProject = {
+            ...projectToView,
+            adminStages: updatedAdminStages,
+            progress: 0 // Será recalculado
+        };
+
+        // Recalcular progresso
+        updatedProject.progress = calculateProgress(updatedProject);
+
+        setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
+        setProjectToView(updatedProject);
+    };
+
+    const handleOpenExtendDeadlineModal = (projectId: string, stageId: string, stageName: string) => {
+        setStageToExtend({ projectId, stageId, stageName });
+        setExtensionReason('');
+        setExtensionHours(24);
+        setIsExtendDeadlineModalOpen(true);
+    };
+
+    const handleCloseExtendDeadlineModal = () => {
+        setIsExtendDeadlineModalOpen(false);
+        setStageToExtend(null);
+        setExtensionReason('');
+        setExtensionHours(24);
+    };
+
+    const handleConfirmExtendDeadline = () => {
+        if (!projectToView || !stageToExtend || !extensionReason.trim()) {
+            alert('Por favor, informe a justificativa para a extensão de prazo.');
+            return;
+        }
+
+        const updatedAdminStages = projectToView.adminStages.map(stage => {
+            if (stage.id === stageToExtend.stageId) {
+                const currentDeadline = new Date(stage.extendedDeadline || stage.deadline);
+                const newDeadline = new Date(currentDeadline);
+                newDeadline.setHours(newDeadline.getHours() + extensionHours);
+
+                return {
+                    ...stage,
+                    extendedDeadline: newDeadline.toISOString(),
+                    extensionReason: extensionReason.trim()
+                };
+            }
+            return stage;
+        });
+
+        const updatedProject = {
+            ...projectToView,
+            adminStages: updatedAdminStages
+        };
+
+        setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
+        setProjectToView(updatedProject);
+        handleCloseExtendDeadlineModal();
     };
 
 
@@ -540,80 +685,241 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                 </div>
             </div>
             
-            {/* Add/Edit Project Modal */}
+            {/* Add/Edit Project Modal - MELHORADO */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
-                    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-full flex flex-col">
-                        <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-brand-gray-800">{projectToEdit ? 'Editar Projeto' : 'Novo Projeto'}</h2>
-                            <button type="button" onClick={handleCloseModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6" /></button>
-                        </div>
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            <div>
-                                <label className="block text-sm font-medium text-brand-gray-700 mb-1">Nome do Projeto</label>
-                                <input type="text" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn" aria-modal="true" role="dialog">
+                    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col animate-slideUp">
+                        {/* Header com cor S3E */}
+                        <div className="relative p-6 bg-gradient-to-r from-brand-s3e to-[#0d2847] text-white rounded-t-2xl">
+                            <div className="flex justify-between items-start">
                                 <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Cliente</label>
-                                    <select value={formState.clientId} onChange={e => setFormState({...formState, clientId: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white" required>
-                                        <option value="">Selecione...</option>
-                                        {clientsData.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
+                                    <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+                                        <span className="text-2xl">{projectToEdit ? '✏️' : '✨'}</span>
+                                        {projectToEdit ? 'Editar Projeto' : 'Novo Projeto'}
+                                    </h2>
+                                    <p className="text-blue-100 text-sm">
+                                        {projectToEdit ? 'Atualize as informações do projeto' : 'Preencha os dados para criar um novo projeto'}
+                                    </p>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Responsável Técnico</label>
-                                    <select value={formState.responsibleUserId} onChange={e => setFormState({...formState, responsibleUserId: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white" required>
-                                        <option value="">Selecione...</option>
-                                        {teamMembers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Data de Início</label>
-                                    <input type="date" value={formState.startDate} onChange={e => setFormState({...formState, startDate: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Data de Término Prevista</label>
-                                    <input type="date" value={formState.endDate} onChange={e => setFormState({...formState, endDate: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Tipo de Projeto</label>
-                                    <select value={formState.projectType} onChange={e => setFormState({...formState, projectType: e.target.value as ProjectType})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white" required>
-                                        {Object.values(ProjectType).map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Status</label>
-                                    <select value={formState.status} onChange={e => setFormState({...formState, status: e.target.value as ProjectStatus})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white" required>
-                                        {Object.values(ProjectStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Orçamento Aprovado (Opcional)</label>
-                                    <select value={formState.budgetId || ''} onChange={e => setFormState({...formState, budgetId: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white">
-                                        <option value="">Nenhum</option>
-                                        {budgetsData.filter(b => b.status === BudgetStatus.Aprovado).map(b => <option key={b.id} value={b.id}>{b.id} - {b.projectName}</option>)}
-                                    </select>
-                                </div>
-                                 <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Nº do Documento (ART, etc.)</label>
-                                    <input type="text" value={formState.documentNumber || ''} onChange={e => setFormState({...formState, documentNumber: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-brand-gray-700 mb-1">Descrição</label>
-                                <textarea value={formState.description} onChange={e => setFormState({...formState, description: e.target.value})} rows={3} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" />
+                                <button type="button" onClick={handleCloseModal} className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors">
+                                    <XMarkIcon className="w-5 h-5" />
+                                </button>
                             </div>
                         </div>
-                        <div className="p-6 bg-brand-gray-50 border-t flex justify-end gap-3">
-                            <button type="button" onClick={handleCloseModal} className="px-4 py-2 bg-white border border-brand-gray-300 rounded-lg font-semibold">Cancelar</button>
-                            <button type="submit" className="px-4 py-2 bg-brand-blue text-white rounded-lg font-semibold">{projectToEdit ? 'Salvar Alterações' : 'Criar Projeto'}</button>
+
+                        <div className="p-6 space-y-6 overflow-y-auto flex-grow">
+                            {/* Seção: Informações Básicas */}
+                            <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-xl border border-blue-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="p-2 bg-brand-blue rounded-lg">
+                                        <DocumentTextIcon className="w-5 h-5 text-white" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-brand-gray-800">Informações Básicas</h3>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-brand-blue">●</span>
+                                            Nome do Projeto
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            value={formState.name} 
+                                            onChange={e => setFormState({...formState, name: e.target.value})} 
+                                            className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue transition-all" 
+                                            placeholder="Ex: Instalação Elétrica Industrial - Fábrica XYZ"
+                                            required 
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <ClientsIcon className="w-4 h-4 text-brand-blue" />
+                                                Cliente
+                                            </label>
+                                            <select 
+                                                value={formState.clientId} 
+                                                onChange={e => setFormState({...formState, clientId: e.target.value})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-brand-blue focus:border-brand-blue transition-all" 
+                                                required
+                                            >
+                                                <option value="">Selecione um cliente...</option>
+                                                {clientsData.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <UserIcon className="w-4 h-4 text-brand-blue" />
+                                                Responsável Técnico
+                                            </label>
+                                            <select 
+                                                value={formState.responsibleUserId} 
+                                                onChange={e => setFormState({...formState, responsibleUserId: e.target.value})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-brand-blue focus:border-brand-blue transition-all" 
+                                                required
+                                            >
+                                                <option value="">Selecione o responsável...</option>
+                                                {teamMembers.map(u => <option key={u.id} value={u.id}>{u.name} - {u.role}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Seção: Prazos e Tipo */}
+                            <div className="bg-gradient-to-br from-purple-50 to-white p-5 rounded-xl border border-purple-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="p-2 bg-purple-600 rounded-lg">
+                                        <CalendarDaysIcon className="w-5 h-5 text-white" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-brand-gray-800">Prazos e Classificação</h3>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <ClockIcon className="w-4 h-4 text-purple-600" />
+                                                Data de Início
+                                            </label>
+                                            <input 
+                                                type="date" 
+                                                value={formState.startDate} 
+                                                onChange={e => setFormState({...formState, startDate: e.target.value})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-all" 
+                                                required 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <CalendarDaysIcon className="w-4 h-4 text-purple-600" />
+                                                Data de Término Prevista
+                                            </label>
+                                            <input 
+                                                type="date" 
+                                                value={formState.endDate} 
+                                                onChange={e => setFormState({...formState, endDate: e.target.value})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-all" 
+                                                required 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <BuildingOfficeIcon className="w-4 h-4 text-purple-600" />
+                                                Tipo de Projeto
+                                            </label>
+                                            <select 
+                                                value={formState.projectType} 
+                                                onChange={e => setFormState({...formState, projectType: e.target.value as ProjectType})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-all" 
+                                                required
+                                            >
+                                                {Object.values(ProjectType).map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-4 h-4 text-purple-600" />
+                                                Status
+                                            </label>
+                                            <select 
+                                                value={formState.status} 
+                                                onChange={e => setFormState({...formState, status: e.target.value as ProjectStatus})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-all" 
+                                                required
+                                            >
+                                                {Object.values(ProjectStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Seção: Informações Complementares */}
+                            <div className="bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="p-2 bg-green-600 rounded-lg">
+                                        <LinkIcon className="w-5 h-5 text-white" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-brand-gray-800">Informações Complementares</h3>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <DocumentTextIcon className="w-4 h-4 text-green-600" />
+                                                Orçamento Aprovado
+                                                <span className="text-xs text-brand-gray-400 ml-auto">(Opcional)</span>
+                                            </label>
+                                            <select 
+                                                value={formState.budgetId || ''} 
+                                                onChange={e => setFormState({...formState, budgetId: e.target.value})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-green-600 focus:border-green-600 transition-all"
+                                            >
+                                                <option value="">Nenhum orçamento vinculado</option>
+                                                {budgetsData.filter(b => b.status === BudgetStatus.Aprovado).map(b => <option key={b.id} value={b.id}>{b.id} - {b.projectName}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <DocumentTextIcon className="w-4 h-4 text-green-600" />
+                                                Nº do Documento
+                                                <span className="text-xs text-brand-gray-400 ml-auto">(ART, RRT, etc.)</span>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                value={formState.documentNumber || ''} 
+                                                onChange={e => setFormState({...formState, documentNumber: e.target.value})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 transition-all"
+                                                placeholder="Ex: ART-12345-2024"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                            <DocumentTextIcon className="w-4 h-4 text-green-600" />
+                                            Descrição do Projeto
+                                        </label>
+                                        <textarea 
+                                            value={formState.description} 
+                                            onChange={e => setFormState({...formState, description: e.target.value})} 
+                                            rows={4} 
+                                            className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 transition-all resize-none"
+                                            placeholder="Descreva os objetivos, escopo e principais características do projeto..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer com Botões Aprimorados */}
+                        <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 rounded-b-2xl flex justify-between items-center">
+                            <div className="text-sm text-brand-gray-500">
+                                <span className="text-red-500">*</span> Campos obrigatórios
+                            </div>
+                            <div className="flex gap-3">
+                                <button 
+                                    type="button" 
+                                    onClick={handleCloseModal} 
+                                    className="px-6 py-2.5 bg-white border-2 border-brand-gray-300 rounded-lg font-semibold text-brand-gray-700 hover:bg-brand-gray-50 hover:border-brand-gray-400 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    className="px-6 py-2.5 bg-brand-s3e text-white rounded-lg font-semibold hover:bg-opacity-90 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                                >
+                                    <span className="text-lg">{projectToEdit ? '💾' : '✨'}</span>
+                                    {projectToEdit ? 'Salvar Alterações' : 'Criar Projeto'}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -636,22 +942,27 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
 
             {/* View Project Modal */}
             {projectToView && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
-                        <div className="p-6 border-b border-brand-gray-200 flex justify-between items-start">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn" aria-modal="true" role="dialog">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col animate-scaleIn">
+                        {/* Header com cor S3E */}
+                        <div className="bg-gradient-to-r from-brand-s3e to-[#0d2847] p-6 rounded-t-xl flex justify-between items-start">
                             <div>
-                                <h2 className="text-2xl font-bold text-brand-gray-900">{projectToView.name}</h2>
-                                <p className="text-sm text-brand-gray-500">Cliente: {projectToView.clientName} | ID: {projectToView.id}</p>
+                                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                                    <span className="text-2xl">📋</span>
+                                    {projectToView.name}
+                                </h2>
+                                <p className="text-blue-100 text-sm mt-1">Cliente: {projectToView.clientName} | ID: {projectToView.id}</p>
                             </div>
-                            <button onClick={handleCloseViewModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6"/></button>
+                            <button onClick={handleCloseViewModal} className="p-2 rounded-full text-white hover:bg-white hover:bg-opacity-20 transition-colors"><XMarkIcon className="w-6 h-6"/></button>
                         </div>
                         
-                        <div className="border-b border-brand-gray-200">
-                             <nav className="flex px-6 -mb-px space-x-8">
-                                <button onClick={() => setViewModalActiveTab('overview')} className={`flex items-center gap-2 py-3 px-1 border-b-2 font-semibold text-sm ${viewModalActiveTab === 'overview' ? 'border-brand-blue text-brand-blue' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><ClipboardDocumentListIcon className="w-5 h-5"/> Visão Geral</button>
-                                <button onClick={() => setViewModalActiveTab('materials')} className={`flex items-center gap-2 py-3 px-1 border-b-2 font-semibold text-sm ${viewModalActiveTab === 'materials' ? 'border-brand-blue text-brand-blue' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><CubeIcon className="w-5 h-5"/> Materiais</button>
-                                <button onClick={() => setViewModalActiveTab('stages')} className={`flex items-center gap-2 py-3 px-1 border-b-2 font-semibold text-sm ${viewModalActiveTab === 'stages' ? 'border-brand-blue text-brand-blue' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><ViewColumnsIcon className="w-5 h-5"/> Etapas (Kanban)</button>
-                                <button onClick={() => setViewModalActiveTab('qc')} className={`flex items-center gap-2 py-3 px-1 border-b-2 font-semibold text-sm ${viewModalActiveTab === 'qc' ? 'border-brand-blue text-brand-blue' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><CheckBadgeIcon className="w-5 h-5"/> Qualidade</button>
+                        <div className="border-b border-brand-gray-200 bg-brand-gray-50">
+                             <nav className="flex px-6 -mb-px space-x-4 overflow-x-auto">
+                                <button onClick={() => setViewModalActiveTab('overview')} className={`flex items-center gap-2 py-3 px-3 border-b-2 font-semibold text-sm whitespace-nowrap ${viewModalActiveTab === 'overview' ? 'border-brand-s3e text-brand-s3e' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><ClipboardDocumentListIcon className="w-5 h-5"/> Visão Geral</button>
+                                <button onClick={() => setViewModalActiveTab('adminStages')} className={`flex items-center gap-2 py-3 px-3 border-b-2 font-semibold text-sm whitespace-nowrap ${viewModalActiveTab === 'adminStages' ? 'border-brand-s3e text-brand-s3e' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><span className="text-lg">📊</span> Etapas Admin</button>
+                                <button onClick={() => setViewModalActiveTab('materials')} className={`flex items-center gap-2 py-3 px-3 border-b-2 font-semibold text-sm whitespace-nowrap ${viewModalActiveTab === 'materials' ? 'border-brand-s3e text-brand-s3e' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><CubeIcon className="w-5 h-5"/> Materiais</button>
+                                <button onClick={() => setViewModalActiveTab('stages')} className={`flex items-center gap-2 py-3 px-3 border-b-2 font-semibold text-sm whitespace-nowrap ${viewModalActiveTab === 'stages' ? 'border-brand-s3e text-brand-s3e' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><ViewColumnsIcon className="w-5 h-5"/> Kanban Engenharia</button>
+                                <button onClick={() => setViewModalActiveTab('qc')} className={`flex items-center gap-2 py-3 px-3 border-b-2 font-semibold text-sm whitespace-nowrap ${viewModalActiveTab === 'qc' ? 'border-brand-s3e text-brand-s3e' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700'}`}><CheckBadgeIcon className="w-5 h-5"/> Qualidade</button>
                             </nav>
                         </div>
 
@@ -724,10 +1035,18 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                                             <h4 className="font-semibold text-brand-gray-800 mb-4">{status} ({projectToView.stages.filter(s => s.status === status).length})</h4>
                                             <div className="space-y-3 overflow-y-auto flex-grow">
                                                 {projectToView.stages.filter(s => s.status === status).map(task => (
-                                                     <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task)} onDragEnd={handleDragEnd} className="bg-white p-3 rounded-md shadow-sm cursor-grab active:cursor-grabbing border-l-4 border-brand-blue flex justify-between items-start group">
-                                                         <div>
+                                                     <div key={task.id} draggable onDragStart={(e) => handleDragStart(e, task)} onDragEnd={handleDragEnd} className="bg-white p-3 rounded-md shadow-sm cursor-grab active:cursor-grabbing border-l-4 border-brand-s3e flex justify-between items-start group">
+                                                         <div className="flex-1">
                                                             <p className="font-semibold text-brand-gray-900">{task.title}</p>
                                                             {task.dueDate && <p className="text-xs text-brand-gray-500 mt-1 flex items-center gap-1"><ClockIcon className="w-3 h-3"/> Vence em: {new Date(task.dueDate + 'T00:00').toLocaleDateString('pt-BR')}</p>}
+                                                            {task.linkedAdminStageId && (() => {
+                                                                const linkedStage = projectToView.adminStages.find(s => s.id === task.linkedAdminStageId);
+                                                                return linkedStage ? (
+                                                                    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded inline-block">
+                                                                        🔗 {linkedStage.order}. {linkedStage.name}
+                                                                    </p>
+                                                                ) : null;
+                                                            })()}
                                                             <button onClick={() => handleOpenEditTaskModal(task)} className="text-xs text-brand-blue hover:underline mt-2">Editar</button>
                                                         </div>
                                                         <div className="opacity-0 group-hover:opacity-100 text-brand-gray-400">
@@ -740,6 +1059,103 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                                         </div>
                                     ))}
                                 </div>
+                           )}
+                           {viewModalActiveTab === 'adminStages' && (
+                               <div className="space-y-4">
+                                   <div className="bg-white p-6 rounded-lg shadow-sm">
+                                       <div className="flex items-center justify-between mb-6">
+                                           <h4 className="text-lg font-semibold text-brand-gray-800 flex items-center gap-2">
+                                               <span className="text-2xl">📊</span>
+                                               Etapas Administrativas do Projeto
+                                           </h4>
+                                           <div className="text-sm text-brand-gray-600">
+                                               <span className="font-semibold">{projectToView.adminStages.filter(s => s.status === 'completed').length}</span> de {projectToView.adminStages.length} concluídas
+                                           </div>
+                                       </div>
+
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                           {projectToView.adminStages.sort((a, b) => a.order - b.order).map(stage => {
+                                               const now = new Date();
+                                               const deadline = new Date(stage.extendedDeadline || stage.deadline);
+                                               const timeRemaining = deadline.getTime() - now.getTime();
+                                               const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+                                               const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                                               const isOverdue = timeRemaining < 0 && stage.status !== 'completed';
+                                               const isCompleted = stage.status === 'completed';
+                                               
+                                               let statusColor = 'bg-yellow-100 border-yellow-300 text-yellow-800';
+                                               let statusIcon = '⏳';
+                                               if (isCompleted) {
+                                                   statusColor = 'bg-green-100 border-green-300 text-green-800';
+                                                   statusIcon = '✅';
+                                               } else if (isOverdue) {
+                                                   statusColor = 'bg-red-100 border-red-300 text-red-800';
+                                                   statusIcon = '⚠️';
+                                               }
+
+                                               return (
+                                                   <div key={stage.id} className={`border-2 rounded-lg p-4 transition-all ${statusColor}`}>
+                                                       <div className="flex items-start justify-between mb-2">
+                                                           <div className="flex items-center gap-2">
+                                                               <span className="text-xl">{statusIcon}</span>
+                                                               <div>
+                                                                   <h5 className="font-semibold">{stage.order}. {stage.name}</h5>
+                                                                   {isCompleted && stage.completedAt && (
+                                                                       <p className="text-xs mt-1">Concluída em: {new Date(stage.completedAt).toLocaleDateString('pt-BR')} às {new Date(stage.completedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                                   )}
+                                                               </div>
+                                                           </div>
+                                                           {!isCompleted && (
+                                                               <label className="flex items-center cursor-pointer">
+                                                                   <input
+                                                                       type="checkbox"
+                                                                       checked={false}
+                                                                       onChange={() => handleCompleteAdminStage(stage.id)}
+                                                                       className="w-5 h-5 rounded border-2 border-current cursor-pointer"
+                                                                       title="Marcar como concluída"
+                                                                   />
+                                                               </label>
+                                                           )}
+                                                       </div>
+
+                                                       {!isCompleted && (
+                                                           <div className="space-y-2 mt-3">
+                                                               <div className="flex items-center justify-between text-xs">
+                                                                   <span className="font-medium">
+                                                                       {isOverdue ? (
+                                                                           <span className="text-red-700 font-bold">⏰ ATRASADA!</span>
+                                                                       ) : (
+                                                                           <span>⏰ Tempo restante:</span>
+                                                                       )}
+                                                                   </span>
+                                                                   <span className={`font-bold ${isOverdue ? 'text-red-700' : ''}`}>
+                                                                       {isOverdue ? `${Math.abs(hoursRemaining)}h ${Math.abs(minutesRemaining)}min de atraso` : `${hoursRemaining}h ${minutesRemaining}min`}
+                                                                   </span>
+                                                               </div>
+                                                               <div className="flex items-center justify-between text-xs">
+                                                                   <span className="font-medium">Prazo:</span>
+                                                                   <span>{deadline.toLocaleDateString('pt-BR')} às {deadline.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                               </div>
+                                                               {stage.extendedDeadline && stage.extensionReason && (
+                                                                   <div className="mt-2 p-2 bg-white bg-opacity-50 rounded text-xs">
+                                                                       <p className="font-semibold">Prazo Estendido:</p>
+                                                                       <p className="italic">{stage.extensionReason}</p>
+                                                                   </div>
+                                                               )}
+                                                               <button
+                                                                   onClick={() => handleOpenExtendDeadlineModal(projectToView.id, stage.id, stage.name)}
+                                                                   className="mt-2 w-full px-3 py-1.5 bg-white bg-opacity-70 hover:bg-opacity-100 rounded text-xs font-semibold transition-colors"
+                                                               >
+                                                                   🔧 Estender Prazo
+                                                               </button>
+                                                           </div>
+                                                       )}
+                                                   </div>
+                                               );
+                                           })}
+                                       </div>
+                                   </div>
+                               </div>
                            )}
                            {viewModalActiveTab === 'qc' && (
                                <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -787,105 +1203,300 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             )}
 
             {isTaskModalOpen && projectToView && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
-                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-                        <div className="p-6 border-b">
-                            <h3 className="text-lg font-bold">{taskToEdit ? 'Editar Tarefa' : 'Adicionar Nova Tarefa'}</h3>
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 animate-fadeIn">
+                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-scaleIn">
+                        {/* Header com cor S3E */}
+                        <div className="bg-gradient-to-r from-brand-s3e to-[#0d2847] p-6 rounded-t-xl">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span className="text-2xl">📝</span>
+                                {taskToEdit ? 'Editar Tarefa' : 'Adicionar Nova Tarefa'}
+                            </h3>
+                            <p className="text-blue-100 text-sm mt-1">Tarefa do Kanban de Engenharia</p>
                         </div>
+                        
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-brand-gray-700 mb-1">Título da Tarefa</label>
-                                <input type="text" value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
+                                <label className="block text-sm font-medium text-brand-gray-700 mb-2">Título da Tarefa</label>
+                                <input 
+                                    type="text" 
+                                    value={taskForm.title} 
+                                    onChange={e => setTaskForm({...taskForm, title: e.target.value})} 
+                                    className="w-full px-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-2 focus:ring-brand-s3e focus:border-transparent" 
+                                    placeholder="Ex: Revisar projeto elétrico"
+                                    required 
+                                />
                             </div>
+                            
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Status</label>
-                                    <select value={taskForm.status} onChange={e => setTaskForm({...taskForm, status: e.target.value as ProjectStageStatus})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white">
+                                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Status</label>
+                                    <select 
+                                        value={taskForm.status} 
+                                        onChange={e => setTaskForm({...taskForm, status: e.target.value as ProjectStageStatus})} 
+                                        className="w-full px-4 py-2 border border-brand-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-s3e focus:border-transparent"
+                                    >
                                         {Object.values(ProjectStageStatus).map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-brand-gray-700 mb-1">Prazo (Opcional)</label>
-                                    <input type="date" value={taskForm.dueDate} onChange={e => setTaskForm({...taskForm, dueDate: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" />
+                                    <label className="block text-sm font-medium text-brand-gray-700 mb-2">Prazo</label>
+                                    <input 
+                                        type="date" 
+                                        value={taskForm.dueDate} 
+                                        onChange={e => setTaskForm({...taskForm, dueDate: e.target.value})} 
+                                        className="w-full px-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-2 focus:ring-brand-s3e focus:border-transparent" 
+                                    />
                                 </div>
                             </div>
+
+                            {/* Campo de Vínculo com Etapa Administrativa */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                    <span className="text-lg">🔗</span>
+                                    Vincular à Etapa Administrativa
+                                    <span className="text-xs text-brand-gray-400 ml-auto">(Opcional)</span>
+                                </label>
+                                <select
+                                    value={taskForm.linkedAdminStageId || ''}
+                                    onChange={e => setTaskForm({...taskForm, linkedAdminStageId: e.target.value || undefined})}
+                                    className="w-full px-4 py-2 border border-brand-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-s3e focus:border-transparent"
+                                >
+                                    <option value="">Nenhuma etapa vinculada</option>
+                                    {projectToView.adminStages.sort((a, b) => a.order - b.order).map(stage => (
+                                        <option key={stage.id} value={stage.id}>
+                                            {stage.order}. {stage.name} {stage.status === AdminStageStatus.Completed ? '✅' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-brand-gray-500 mt-2">
+                                    💡 Vincule esta task a uma etapa administrativa para melhor rastreabilidade
+                                </p>
+                            </div>
                         </div>
-                        <div className="p-4 bg-brand-gray-50 border-t flex justify-end gap-3">
-                            <button type="button" onClick={handleCloseTaskModal} className="px-4 py-2 bg-white border border-brand-gray-300 rounded-lg font-semibold">Cancelar</button>
-                            <button type="button" onClick={handleSaveTask} className="px-4 py-2 bg-brand-blue text-white rounded-lg font-semibold">Salvar Tarefa</button>
+                        
+                        <div className="p-6 bg-brand-gray-50 border-t flex justify-end gap-3">
+                            <button 
+                                type="button" 
+                                onClick={handleCloseTaskModal} 
+                                className="px-6 py-2 bg-white border border-brand-gray-300 rounded-lg font-semibold hover:bg-brand-gray-50 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={handleSaveTask} 
+                                className="px-6 py-2 bg-brand-s3e text-white rounded-lg font-semibold hover:bg-opacity-90 transition-colors"
+                            >
+                                Salvar Tarefa
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
             
-            {/* Team Management Modal */}
+            {/* Team Management Modal - MELHORADO */}
             {isTeamManagementModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-                        <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center">
-                             <div>
-                                <h2 className="text-xl font-bold text-brand-gray-800">{teamManagementMode === 'view' ? 'Gerenciar Equipe' : (memberToEdit ? 'Editar Membro' : 'Adicionar Membro')}</h2>
-                                {teamManagementMode !== 'view' && <p className="text-sm text-brand-gray-500">Preencha as informações abaixo.</p>}
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col animate-slideUp">
+                        {/* Header com cor S3E */}
+                        <div className="relative p-6 bg-gradient-to-r from-brand-s3e to-[#0d2847] text-white rounded-t-2xl">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h2 className="text-2xl font-bold mb-1 flex items-center gap-3">
+                                        <span className="text-2xl">{teamManagementMode === 'view' ? '👥' : (memberToEdit ? '✏️' : '➕')}</span>
+                                        {teamManagementMode === 'view' ? 'Gerenciar Equipe' : (memberToEdit ? 'Editar Membro' : 'Adicionar Membro')}
+                                    </h2>
+                                    <p className="text-blue-100 text-sm">
+                                        {teamManagementMode === 'view' ? `${teamMembers.length} membros na equipe` : 'Preencha as informações do membro'}
+                                    </p>
+                                </div>
+                                <button type="button" onClick={closeTeamModal} className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors">
+                                    <XMarkIcon className="w-5 h-5" />
+                                </button>
                             </div>
-                            <button type="button" onClick={closeTeamModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6" /></button>
                         </div>
                        
                         {teamManagementMode === 'view' && (
-                            <div className="p-6 overflow-y-auto">
-                                <div className="flex justify-end mb-4">
-                                    <button onClick={handleOpenAddMember} className="flex items-center gap-2 px-3 py-1.5 bg-brand-blue text-white text-sm font-semibold rounded-lg shadow-sm hover:bg-brand-blue/90">
-                                        <PlusIcon className="w-4 h-4" />
+                            <div className="p-6 overflow-y-auto flex-grow">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-purple-100 rounded-lg">
+                                            <UserIcon className="w-5 h-5 text-purple-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-brand-gray-800">Membros da Equipe</h3>
+                                            <p className="text-sm text-brand-gray-500">Gerencie os membros do seu projeto</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={handleOpenAddMember} 
+                                        className="flex items-center gap-2 px-4 py-2.5 bg-brand-s3e text-white font-semibold rounded-lg shadow-lg hover:shadow-xl hover:bg-opacity-90 transform hover:-translate-y-0.5 transition-all"
+                                    >
+                                        <PlusIcon className="w-5 h-5" />
                                         Adicionar Membro
                                     </button>
                                 </div>
-                                <div className="space-y-3">
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {teamMembers.map(user => (
-                                        <div key={user.id} className="p-3 bg-brand-gray-50 rounded-lg flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-brand-blue-light flex items-center justify-center font-bold text-brand-blue">{user.name.charAt(0)}</div>
-                                                <div>
-                                                    <div className="font-semibold text-brand-gray-800">{user.name}</div>
-                                                    <div className="text-sm text-brand-gray-500">{user.email}</div>
+                                        <div key={user.id} className="group bg-gradient-to-br from-white to-gray-50 rounded-xl p-4 border-2 border-brand-gray-100 hover:border-purple-200 hover:shadow-lg transition-all">
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative">
+                                                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center font-bold text-white text-lg shadow-md">
+                                                            {user.name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white"></div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-brand-gray-800 text-lg">{user.name}</div>
+                                                        <div className="text-sm text-brand-gray-500 flex items-center gap-1">
+                                                            📧 {user.email}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-4">
-                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleClass(user.role)}`}>
+
+                                            <div className="flex items-center justify-between pt-3 border-t border-brand-gray-100">
+                                                <span className={`px-3 py-1.5 inline-flex text-xs font-bold rounded-lg ${getRoleClass(user.role)}`}>
                                                     {user.role}
                                                 </span>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => handleOpenEditMember(user)} className="p-1.5 rounded-full text-brand-gray-400 hover:bg-brand-gray-200 hover:text-brand-blue" title="Editar"><PencilIcon className="w-5 h-5"/></button>
-                                                    <button onClick={() => setMemberToDelete(user)} className="p-1.5 rounded-full text-brand-gray-400 hover:bg-brand-gray-200 hover:text-brand-red" title="Excluir"><TrashIcon className="w-5 h-5"/></button>
+                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={() => handleOpenEditMember(user)} 
+                                                        className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" 
+                                                        title="Editar"
+                                                    >
+                                                        <PencilIcon className="w-4 h-4"/>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setMemberToDelete(user)} 
+                                                        className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" 
+                                                        title="Excluir"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4"/>
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
+
+                                {teamMembers.length === 0 && (
+                                    <div className="text-center py-12">
+                                        <div className="w-20 h-20 bg-brand-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <ClientsIcon className="w-10 h-10 text-brand-gray-400" />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-brand-gray-700 mb-2">Nenhum membro cadastrado</h3>
+                                        <p className="text-sm text-brand-gray-500 mb-4">Adicione membros para começar a gerenciar sua equipe</p>
+                                        <button 
+                                            onClick={handleOpenAddMember} 
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue text-white font-semibold rounded-lg hover:bg-brand-blue/90 transition-colors"
+                                        >
+                                            <PlusIcon className="w-5 h-5" />
+                                            Adicionar Primeiro Membro
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         {(teamManagementMode === 'add' || teamManagementMode === 'edit') && (
                              <form onSubmit={handleMemberFormSubmit} className="flex flex-col flex-grow">
-                                <div className="p-6 space-y-4 flex-grow overflow-y-auto">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-brand-gray-700 mb-1">Nome</label>
-                                            <input type="text" value={memberForm.name} onChange={e => setMemberForm({...memberForm, name: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
+                                <div className="p-6 space-y-6 flex-grow overflow-y-auto">
+                                    {/* Seção: Informações Pessoais */}
+                                    <div className="bg-gradient-to-br from-purple-50 to-white p-5 rounded-xl border border-purple-100">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="p-2 bg-purple-600 rounded-lg">
+                                                <UserIcon className="w-5 h-5 text-white" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-brand-gray-800">Informações Pessoais</h3>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-brand-gray-700 mb-1">Função</label>
-                                            <select value={memberForm.role} onChange={e => setMemberForm({...memberForm, role: e.target.value as UserRole})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white">
-                                                {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
-                                            </select>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                    <span className="text-purple-600">●</span>
+                                                    Nome Completo
+                                                </label>
+                                                <input 
+                                                    type="text" 
+                                                    value={memberForm.name} 
+                                                    onChange={e => setMemberForm({...memberForm, name: e.target.value})} 
+                                                    className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-all" 
+                                                    placeholder="Ex: João Silva Santos"
+                                                    required 
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                    <span className="text-purple-600">●</span>
+                                                    Email Profissional
+                                                </label>
+                                                <input 
+                                                    type="email" 
+                                                    value={memberForm.email} 
+                                                    onChange={e => setMemberForm({...memberForm, email: e.target.value})} 
+                                                    className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-all" 
+                                                    placeholder="Ex: joao.silva@s3e.com"
+                                                    required 
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-brand-gray-700 mb-1">Email</label>
-                                        <input type="email" value={memberForm.email} onChange={e => setMemberForm({...memberForm, email: e.target.value})} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
+
+                                    {/* Seção: Função e Permissões */}
+                                    <div className="bg-gradient-to-br from-pink-50 to-white p-5 rounded-xl border border-pink-100">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="p-2 bg-pink-600 rounded-lg">
+                                                <CheckBadgeIcon className="w-5 h-5 text-white" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-brand-gray-800">Função e Permissões</h3>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">
+                                                <span className="text-pink-600">●</span>
+                                                Função no Projeto
+                                            </label>
+                                            <select 
+                                                value={memberForm.role} 
+                                                onChange={e => setMemberForm({...memberForm, role: e.target.value as UserRole})} 
+                                                className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-pink-600 focus:border-pink-600 transition-all"
+                                            >
+                                                {Object.values(UserRole).map(role => (
+                                                    <option key={role} value={role}>{role}</option>
+                                                ))}
+                                            </select>
+                                            <p className="mt-2 text-xs text-brand-gray-500">
+                                                💡 Selecione a função que melhor descreve o papel deste membro no projeto
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-brand-gray-50 border-t flex justify-end gap-3">
-                                    <button type="button" onClick={() => setTeamManagementMode('view')} className="px-4 py-2 bg-white border border-brand-gray-300 rounded-lg font-semibold">Voltar</button>
-                                    <button type="submit" className="px-4 py-2 bg-brand-blue text-white rounded-lg font-semibold">{memberToEdit ? 'Salvar Alterações' : 'Criar Membro'}</button>
+
+                                {/* Footer */}
+                                <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 rounded-b-2xl flex justify-between items-center">
+                                    <div className="text-sm text-brand-gray-500">
+                                        <span className="text-red-500">*</span> Campos obrigatórios
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setTeamManagementMode('view')} 
+                                            className="px-6 py-2.5 bg-white border-2 border-brand-gray-300 rounded-lg font-semibold text-brand-gray-700 hover:bg-brand-gray-50 hover:border-brand-gray-400 transition-all"
+                                        >
+                                            ← Voltar
+                                        </button>
+                                        <button 
+                                            type="submit" 
+                                            className="px-6 py-2.5 bg-brand-s3e text-white rounded-lg font-semibold hover:bg-opacity-90 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                                        >
+                                            <span className="text-lg">{memberToEdit ? '💾' : '✨'}</span>
+                                            {memberToEdit ? 'Salvar Alterações' : 'Criar Membro'}
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         )}
@@ -903,6 +1514,79 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                         <div className="p-4 bg-brand-gray-50 border-t flex justify-end gap-3">
                             <button onClick={() => setMemberToDelete(null)} className="px-4 py-2 bg-white border rounded-lg font-semibold">Cancelar</button>
                             <button onClick={handleConfirmDeleteMember} className="px-4 py-2 bg-brand-red text-white rounded-lg font-semibold">Excluir</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Extend Deadline Modal */}
+            {isExtendDeadlineModalOpen && stageToExtend && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4 animate-fadeIn">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-scaleIn">
+                        <div className="bg-gradient-to-r from-brand-s3e to-[#0d2847] p-6 rounded-t-xl">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span className="text-2xl">⏰</span>
+                                Estender Prazo da Etapa
+                            </h3>
+                            <p className="text-blue-100 text-sm mt-1">{stageToExtend.stageName}</p>
+                        </div>
+                        
+                        <div className="p-6 space-y-4">
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                <p className="text-sm text-yellow-800">
+                                    <strong>Atenção:</strong> A extensão de prazo deve ser justificada por motivos válidos (imprevisto, mudança de escopo, etc.).
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-brand-gray-700 mb-2">
+                                    Horas Adicionais
+                                </label>
+                                <select
+                                    value={extensionHours}
+                                    onChange={(e) => setExtensionHours(Number(e.target.value))}
+                                    className="w-full px-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-2 focus:ring-brand-s3e focus:border-transparent"
+                                >
+                                    <option value={6}>6 horas</option>
+                                    <option value={12}>12 horas</option>
+                                    <option value={24}>24 horas (1 dia)</option>
+                                    <option value={48}>48 horas (2 dias)</option>
+                                    <option value={72}>72 horas (3 dias)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-brand-gray-700 mb-2">
+                                    Justificativa <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    value={extensionReason}
+                                    onChange={(e) => setExtensionReason(e.target.value)}
+                                    rows={4}
+                                    className="w-full px-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-2 focus:ring-brand-s3e focus:border-transparent resize-none"
+                                    placeholder="Descreva o motivo da extensão de prazo (obrigatório)..."
+                                    required
+                                />
+                                <p className="text-xs text-brand-gray-500 mt-1">
+                                    Mínimo 10 caracteres
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-6 bg-brand-gray-50 border-t flex justify-end gap-3">
+                            <button
+                                onClick={handleCloseExtendDeadlineModal}
+                                className="px-6 py-2 bg-white border border-brand-gray-300 rounded-lg font-semibold hover:bg-brand-gray-50 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmExtendDeadline}
+                                disabled={extensionReason.trim().length < 10}
+                                className="px-6 py-2 bg-brand-s3e text-white rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Confirmar Extensão
+                            </button>
                         </div>
                     </div>
                 </div>
