@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { vendasData } from '../data/mockData';
+import { useAuth } from '../hooks/useAuth';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -12,10 +14,14 @@ interface FinanceiroProps {
     toggleSidebar: () => void;
 }
 
-type TabType = 'vendas' | 'receber' | 'pagar' | 'faturamento' | 'cobrancas';
+type TabType = 'dashboard' | 'vendas' | 'receber' | 'pagar' | 'faturamento' | 'cobrancas';
 
 const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
-    const [activeTab, setActiveTab] = useState<TabType>('vendas');
+    const { fetchWithAuth } = useAuth();
+    const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+    const [dadosFinanceiros, setDadosFinanceiros] = useState<any[]>([]);
+    const [resumoFinanceiro, setResumoFinanceiro] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
     // Usar dados mockados de vendas do sistema
     const vendas = vendasData.map(v => ({
@@ -43,19 +49,56 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
         { id: '1', fornecedor: 'Distribuidora Elétrica', descricao: 'Materiais Projeto A', valor: 15000, vencimento: '25/10/2025', status: 'Pendente' },
     ];
 
+    // Carregar dados do backend
+    useEffect(() => {
+        carregarDadosFinanceiros();
+    }, []);
+
+    const carregarDadosFinanceiros = async () => {
+        setLoading(true);
+        try {
+            // Tentar buscar dados reais do backend
+            const [dadosMensais, resumo] = await Promise.all([
+                fetch('http://localhost:3001/api/relatorios/financeiro', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                }).then(res => res.json()).catch(() => null),
+                fetch('http://localhost:3001/api/relatorios/financeiro/resumo', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                }).then(res => res.json()).catch(() => null)
+            ]);
+
+            if (dadosMensais?.success) {
+                setDadosFinanceiros(dadosMensais.data);
+            }
+
+            if (resumo?.success) {
+                setResumoFinanceiro(resumo.data);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados financeiros:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const tabs = [
+        { id: 'dashboard' as TabType, label: 'Dashboard', icon: '📊' },
         { id: 'vendas' as TabType, label: 'Vendas', icon: '💰' },
         { id: 'receber' as TabType, label: 'Contas a Receber', icon: '📥' },
         { id: 'pagar' as TabType, label: 'Contas a Pagar', icon: '📤' },
-        { id: 'faturamento' as TabType, label: 'Faturamento', icon: '📊' },
+        { id: 'faturamento' as TabType, label: 'Faturamento', icon: '📈' },
         { id: 'cobrancas' as TabType, label: 'Status Cobranças', icon: '⚠️' }
     ];
 
     const totalReceber = useMemo(() => 
-        contasReceber.reduce((sum, c) => sum + c.valor, 0), []);
+        resumoFinanceiro?.contasReceberPendentes || contasReceber.reduce((sum, c) => sum + c.valor, 0), [resumoFinanceiro, contasReceber]);
     
     const totalPagar = useMemo(() => 
-        contasPagar.reduce((sum, c) => sum + c.valor, 0), []);
+        resumoFinanceiro?.contasPagarPendentes || contasPagar.reduce((sum, c) => sum + c.valor, 0), [resumoFinanceiro, contasPagar]);
 
     return (
         <div className="p-4 sm:p-8">
@@ -135,6 +178,66 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
                 </div>
 
                 <div className="p-6">
+                    {/* Tab: Dashboard */}
+                    {activeTab === 'dashboard' && (
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800 mb-6">Dashboard Financeiro - Últimos 12 Meses</h2>
+                            
+                            {loading ? (
+                                <div className="flex justify-center items-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue"></div>
+                                </div>
+                            ) : dadosFinanceiros.length > 0 ? (
+                                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                                    <ResponsiveContainer width="100%" height={400}>
+                                        <BarChart data={dadosFinanceiros}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="mes" />
+                                            <YAxis 
+                                                tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                                            />
+                                            <Tooltip 
+                                                formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                                                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                                            />
+                                            <Legend />
+                                            <Bar 
+                                                dataKey="receita" 
+                                                fill="#22c55e" 
+                                                name="Receitas"
+                                                radius={[8, 8, 0, 0]}
+                                            />
+                                            <Bar 
+                                                dataKey="despesa" 
+                                                fill="#ef4444" 
+                                                name="Despesas"
+                                                radius={[8, 8, 0, 0]}
+                                            />
+                                            <Bar 
+                                                dataKey="lucro" 
+                                                fill="#3b82f6" 
+                                                name="Lucro"
+                                                radius={[8, 8, 0, 0]}
+                                            />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                    
+                                    <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                        <p className="text-sm text-gray-600">
+                                            <strong>📊 Regime de Caixa:</strong> O gráfico mostra apenas valores efetivamente pagos/recebidos por mês.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <span className="text-4xl mb-4 block">📊</span>
+                                    <p className="text-gray-600">Nenhum dado financeiro disponível ainda.</p>
+                                    <p className="text-sm text-gray-500 mt-2">Realize vendas e registre pagamentos para ver os gráficos.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Tab: Vendas */}
                     {activeTab === 'vendas' && (
                         <div>
