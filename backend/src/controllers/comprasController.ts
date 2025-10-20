@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { XMLParser } from 'fast-xml-parser';
-import { ContasPagarService } from '../services/contasPagar.service';
+import { ComprasService, CompraPayload } from '../services/compras.service';
 
 const prisma = new PrismaClient();
 const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
@@ -9,159 +9,66 @@ const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: 
 // Listar compras
 export const getCompras = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status } = req.query;
-    
-    const where = status ? { status: status as string } : {};
+    const { status, fornecedorId, page = 1, limit = 10 } = req.query;
 
-    const compras = await prisma.compra.findMany({
-      where,
-      include: {
-        fornecedor: {
-          select: { id: true, nome: true }
-        },
-        items: true
-      },
-      orderBy: { dataCompra: 'desc' }
+    const resultado = await ComprasService.listarCompras(
+      status as string,
+      fornecedorId as string,
+      undefined,
+      undefined,
+      parseInt(page as string),
+      parseInt(limit as string)
+    );
+
+    res.json({
+      success: true,
+      data: resultado
     });
-
-    res.json(compras);
   } catch (error) {
     console.error('Erro ao buscar compras:', error);
-    res.status(500).json({ error: 'Erro ao buscar compras' });
+    res.status(500).json({ 
+      error: 'Erro ao buscar compras',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
   }
 };
 
 // Criar compra
 export const createCompra = async (req: Request, res: Response): Promise<void> => {
   try {
-    const {
-      fornecedorNome,
-      fornecedorCNPJ,
-      fornecedorTel,
-      numeroNF,
-      dataEmissaoNF,
-      dataCompra,
-      dataRecebimento,
-      valorFrete,
-      outrasDespesas,
-      status,
-      items,
-      observacoes
-    } = req.body;
+    const compraData: CompraPayload = {
+      fornecedorNome: req.body.fornecedorNome,
+      fornecedorCNPJ: req.body.fornecedorCNPJ,
+      fornecedorTel: req.body.fornecedorTel,
+      numeroNF: req.body.numeroNF,
+      dataEmissaoNF: new Date(req.body.dataEmissaoNF),
+      dataCompra: new Date(req.body.dataCompra),
+      dataRecebimento: req.body.dataRecebimento ? new Date(req.body.dataRecebimento) : undefined,
+      valorFrete: req.body.valorFrete || 0,
+      outrasDespesas: req.body.outrasDespesas || 0,
+      status: req.body.status,
+      items: req.body.items,
+      observacoes: req.body.observacoes,
+      condicoesPagamento: req.body.condicoesPagamento,
+      parcelas: req.body.parcelas,
+      dataPrimeiroVencimento: req.body.dataPrimeiroVencimento ? new Date(req.body.dataPrimeiroVencimento) : undefined
+    };
 
-    // Buscar ou criar fornecedor
-    let fornecedor = await prisma.fornecedor.findUnique({
-      where: { cnpj: fornecedorCNPJ }
-    });
-
-    if (!fornecedor) {
-      fornecedor = await prisma.fornecedor.create({
-        data: {
-          nome: fornecedorNome,
-          cnpj: fornecedorCNPJ,
-          telefone: fornecedorTel
-        }
+    // Validar dados obrigatórios
+    if (!compraData.fornecedorNome || !compraData.fornecedorCNPJ || !compraData.numeroNF || !compraData.items || compraData.items.length === 0) {
+      res.status(400).json({
+        error: 'Dados obrigatórios ausentes: fornecedorNome, fornecedorCNPJ, numeroNF, items'
       });
+      return;
     }
 
-    // Calcular valores
-    const valorSubtotal = items.reduce((sum: number, item: any) => 
-      sum + (item.quantidade * item.valorUnit), 0
-    );
-    const valorTotal = valorSubtotal + (valorFrete || 0) + (outrasDespesas || 0);
+    const resultado = await ComprasService.registrarCompra(compraData);
 
-    // Criar compra com items em transação
-    const compra = await prisma.compra.create({
-      data: {
-        fornecedorId: fornecedor.id,
-        fornecedorNome,
-        fornecedorCNPJ,
-        fornecedorTel,
-        numeroNF,
-        dataEmissaoNF: new Date(dataEmissaoNF),
-        dataCompra: new Date(dataCompra),
-        dataRecebimento: dataRecebimento ? new Date(dataRecebimento) : null,
-        valorSubtotal,
-        valorFrete: valorFrete || 0,
-        outrasDespesas: outrasDespesas || 0,
-        valorTotal,
-        status,
-        observacoes,
-        items: {
-          create: items.map((item: any) => ({
-            nomeProduto: item.nomeProduto,
-            ncm: item.ncm,
-            quantidade: item.quantidade,
-            valorUnit: item.valorUnit,
-            valorTotal: item.quantidade * item.valorUnit
-          }))
-        }
-      },
-      include: {
-        items: true,
-        fornecedor: true
-      }
+    res.status(201).json({
+      success: true,
+      message: 'Compra registrada com sucesso',
+      data: resultado
     });
-
-    // Se status for Recebido, atualizar estoque
-    if (status === 'Recebido') {
-      for (const item of items) {
-        // Tentar encontrar material pelo nome ou NCM
-        const material = await prisma.material.findFirst({
-          where: {
-            OR: [
-              { nome: { contains: item.nomeProduto } },
-              { sku: item.ncm }
-            ]
-          }
-        });
-
-        if (material) {
-          // Atualizar estoque e registrar movimentação
-          await prisma.$transaction([
-            prisma.material.update({
-              where: { id: material.id },
-              data: { estoque: { increment: item.quantidade } }
-            }),
-            prisma.movimentacaoEstoque.create({
-              data: {
-                materialId: material.id,
-                tipo: 'ENTRADA',
-                quantidade: item.quantidade,
-                motivo: 'COMPRA',
-                referencia: compra.id,
-                observacoes: `Compra NF: ${numeroNF}`
-              }
-            })
-          ]);
-        }
-      }
-    }
-
-    // Gerar contas a pagar automaticamente (se houver condições de pagamento)
-    const { condicoesPagamento, parcelas } = req.body;
-    
-    if (condicoesPagamento && parcelas && parcelas > 0) {
-      try {
-        const dataPrimeiroVencimento = new Date();
-        dataPrimeiroVencimento.setDate(dataPrimeiroVencimento.getDate() + 30); // Primeiro vencimento em 30 dias
-
-        await ContasPagarService.criarContasPagarParceladas({
-          fornecedorId: fornecedor.id,
-          compraId: compra.id,
-          descricao: `Compra NF ${numeroNF} - ${fornecedorNome}`,
-          valorTotal,
-          parcelas,
-          dataPrimeiroVencimento,
-          observacoes: condicoesPagamento
-        });
-      } catch (error) {
-        console.error('Erro ao gerar contas a pagar:', error);
-        // Não falha a compra se houver erro nas contas
-      }
-    }
-
-    res.status(201).json(compra);
   } catch (error) {
     console.error('Erro ao criar compra:', error);
     res.status(500).json({ error: 'Erro ao criar compra' });
@@ -232,62 +139,24 @@ export const updateCompraStatus = async (req: Request, res: Response): Promise<v
     const { id } = req.params;
     const { status } = req.body;
 
-    const compra = await prisma.compra.findUnique({
-      where: { id },
-      include: { items: true }
-    });
-
-    if (!compra) {
-      res.status(404).json({ error: 'Compra não encontrada' });
+    if (!status) {
+      res.status(400).json({ error: 'Status é obrigatório' });
       return;
     }
 
-    // Se mudou para Recebido, atualizar estoque
-    if (status === 'Recebido' && compra.status !== 'Recebido') {
-      for (const item of compra.items) {
-        const material = await prisma.material.findFirst({
-          where: {
-            OR: [
-              { nome: { contains: item.nomeProduto } },
-              { sku: item.ncm || '' }
-            ]
-          }
-        });
+    const compraAtualizada = await ComprasService.atualizarStatusCompra(id, status);
 
-        if (material) {
-          await prisma.$transaction([
-            prisma.material.update({
-              where: { id: material.id },
-              data: { estoque: { increment: item.quantidade } }
-            }),
-            prisma.movimentacaoEstoque.create({
-              data: {
-                materialId: material.id,
-                tipo: 'ENTRADA',
-                quantidade: item.quantidade,
-                motivo: 'COMPRA',
-                referencia: id,
-                observacoes: `Compra NF: ${compra.numeroNF}`
-              }
-            })
-          ]);
-        }
-      }
-    }
-
-    const compraAtualizada = await prisma.compra.update({
-      where: { id },
-      data: { 
-        status,
-        dataRecebimento: status === 'Recebido' ? new Date() : compra.dataRecebimento
-      },
-      include: { items: true, fornecedor: true }
+    res.json({
+      success: true,
+      message: 'Status da compra atualizado com sucesso',
+      data: compraAtualizada
     });
-
-    res.json(compraAtualizada);
   } catch (error) {
     console.error('Erro ao atualizar compra:', error);
-    res.status(500).json({ error: 'Erro ao atualizar compra' });
+    res.status(500).json({ 
+      error: 'Erro ao atualizar compra',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
   }
 };
 

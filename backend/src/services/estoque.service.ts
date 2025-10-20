@@ -4,6 +4,54 @@ const prisma = new PrismaClient();
 
 export class EstoqueService {
     /**
+     * Incrementa o estoque de um material (entrada)
+     */
+    static async incrementarEstoque(
+        materialId: string,
+        quantidade: number,
+        motivo: string,
+        referencia: string,
+        observacoes?: string
+    ) {
+        // Buscar material
+        const material = await prisma.material.findUnique({
+            where: { id: materialId }
+        });
+
+        if (!material) {
+            throw new Error(`Material ${materialId} não encontrado`);
+        }
+
+        if (quantidade <= 0) {
+            throw new Error('Quantidade deve ser maior que zero');
+        }
+
+        // Usar transação para garantir consistência
+        return await prisma.$transaction([
+            // 1. Aumentar estoque
+            prisma.material.update({
+                where: { id: materialId },
+                data: {
+                    estoque: {
+                        increment: quantidade
+                    }
+                }
+            }),
+            // 2. Registrar movimentação
+            prisma.movimentacaoEstoque.create({
+                data: {
+                    materialId,
+                    tipo: 'ENTRADA',
+                    quantidade,
+                    motivo,
+                    referencia,
+                    observacoes
+                }
+            })
+        ]);
+    }
+
+    /**
      * Dá baixa no estoque de um material
      */
     static async darBaixaMaterial(
