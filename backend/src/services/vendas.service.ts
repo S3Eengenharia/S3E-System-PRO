@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { VendaStatus } from '../types';
+import { EstoqueService } from './estoque.service';
 
 const prisma = new PrismaClient();
 
@@ -82,11 +83,33 @@ export class VendasService {
                 contasReceber.push(contaReceber);
             }
 
+            // 3. Processar baixa de estoque baseado no orçamento
+            let baixaEstoque = null;
+            try {
+                baixaEstoque = await EstoqueService.processarBaixaOrcamento(
+                    orcamentoId,
+                    venda.id
+                );
+            } catch (error) {
+                // Se houver erro de estoque, reverter tudo
+                throw new Error(
+                    `Erro ao processar estoque: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+                );
+            }
+
             return {
                 venda,
-                contasReceber
+                contasReceber,
+                baixaEstoque
             };
         });
+    }
+
+    /**
+     * Verifica disponibilidade de estoque para um orçamento antes de vender
+     */
+    static async verificarEstoqueOrcamento(orcamentoId: string) {
+        return await EstoqueService.verificarDisponibilidadeOrcamento(orcamentoId);
     }
 
     /**

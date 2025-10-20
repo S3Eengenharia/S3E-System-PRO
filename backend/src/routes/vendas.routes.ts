@@ -13,6 +13,9 @@ const router = express.Router();
 // Dashboard financeiro
 router.get('/dashboard', authenticate, VendasController.getDashboard);
 
+// Verificar disponibilidade de estoque para orçamento
+router.get('/estoque/:orcamentoId', authenticate, VendasController.verificarEstoque);
+
 // Listar vendas (com paginação)
 router.get('/', authenticate, VendasController.listarVendas);
 

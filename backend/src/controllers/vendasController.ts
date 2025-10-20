@@ -4,6 +4,35 @@ import { VendaStatus } from '../types';
 
 export class VendasController {
     /**
+     * Verifica disponibilidade de estoque para um orçamento
+     */
+    static async verificarEstoque(req: Request, res: Response) {
+        try {
+            const { orcamentoId } = req.params;
+
+            if (!orcamentoId) {
+                return res.status(400).json({
+                    error: 'ID do orçamento é obrigatório'
+                });
+            }
+
+            const verificacao = await VendasService.verificarEstoqueOrcamento(orcamentoId);
+
+            res.json({
+                success: true,
+                data: verificacao
+            });
+
+        } catch (error) {
+            console.error('Erro ao verificar estoque:', error);
+            res.status(500).json({
+                error: 'Erro interno do servidor',
+                message: error instanceof Error ? error.message : 'Erro desconhecido'
+            });
+        }
+    }
+
+    /**
      * Realiza uma nova venda
      */
     static async realizarVenda(req: Request, res: Response) {
