@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { XMLParser } from 'fast-xml-parser';
+import { ContasPagarService } from '../services/contasPagar.service';
 
 const prisma = new PrismaClient();
 const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
@@ -134,6 +135,29 @@ export const createCompra = async (req: Request, res: Response): Promise<void> =
             })
           ]);
         }
+      }
+    }
+
+    // Gerar contas a pagar automaticamente (se houver condições de pagamento)
+    const { condicoesPagamento, parcelas } = req.body;
+    
+    if (condicoesPagamento && parcelas && parcelas > 0) {
+      try {
+        const dataPrimeiroVencimento = new Date();
+        dataPrimeiroVencimento.setDate(dataPrimeiroVencimento.getDate() + 30); // Primeiro vencimento em 30 dias
+
+        await ContasPagarService.criarContasPagarParceladas({
+          fornecedorId: fornecedor.id,
+          compraId: compra.id,
+          descricao: `Compra NF ${numeroNF} - ${fornecedorNome}`,
+          valorTotal,
+          parcelas,
+          dataPrimeiroVencimento,
+          observacoes: condicoesPagamento
+        });
+      } catch (error) {
+        console.error('Erro ao gerar contas a pagar:', error);
+        // Não falha a compra se houver erro nas contas
       }
     }
 

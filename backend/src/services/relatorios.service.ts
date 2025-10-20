@@ -21,6 +21,7 @@ interface ResumoFinanceiro {
 export class RelatoriosService {
     /**
      * Retorna dados financeiros agregados dos últimos 12 meses
+     * Considera apenas contas PAGAS para receitas e despesas
      */
     static async getDadosFinanceirosMensais(): Promise<DadosFinanceirosMensais[]> {
         // Calcular data de início (12 meses atrás)
@@ -29,30 +30,32 @@ export class RelatoriosService {
         dataInicio.setDate(1);
         dataInicio.setHours(0, 0, 0, 0);
 
-        // Buscar todas as contas a receber dos últimos 12 meses
+        // Buscar apenas contas a receber PAGAS dos últimos 12 meses
         const contasReceber = await prisma.contaReceber.findMany({
             where: {
-                dataVencimento: {
+                dataPagamento: {
                     gte: dataInicio
-                }
+                },
+                status: 'Pago'
             },
             select: {
-                dataVencimento: true,
+                dataPagamento: true,
                 valorParcela: true,
                 status: true
             }
         });
 
-        // Buscar todas as contas a pagar dos últimos 12 meses
+        // Buscar apenas contas a pagar PAGAS dos últimos 12 meses
         const contasPagar = await prisma.contaPagar.findMany({
             where: {
-                dataVencimento: {
+                dataPagamento: {
                     gte: dataInicio
-                }
+                },
+                status: 'Pago'
             },
             select: {
-                dataVencimento: true,
-                valorTotal: true,
+                dataPagamento: true,
+                valorParcela: true,
                 status: true
             }
         });
@@ -70,27 +73,31 @@ export class RelatoriosService {
             mesesMap.set(mesAno, { receita: 0, despesa: 0 });
         }
 
-        // Agregar contas a receber (receitas)
+        // Agregar contas a receber (receitas) - usar data de pagamento
         contasReceber.forEach(conta => {
-            const data = new Date(conta.dataVencimento);
-            const mesAno = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
-            
-            if (mesesMap.has(mesAno)) {
-                const atual = mesesMap.get(mesAno)!;
-                atual.receita += conta.valorParcela;
-                mesesMap.set(mesAno, atual);
+            if (conta.dataPagamento) {
+                const data = new Date(conta.dataPagamento);
+                const mesAno = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
+                
+                if (mesesMap.has(mesAno)) {
+                    const atual = mesesMap.get(mesAno)!;
+                    atual.receita += conta.valorParcela;
+                    mesesMap.set(mesAno, atual);
+                }
             }
         });
 
-        // Agregar contas a pagar (despesas)
+        // Agregar contas a pagar (despesas) - usar data de pagamento
         contasPagar.forEach(conta => {
-            const data = new Date(conta.dataVencimento);
-            const mesAno = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
-            
-            if (mesesMap.has(mesAno)) {
-                const atual = mesesMap.get(mesAno)!;
-                atual.despesa += conta.valorTotal;
-                mesesMap.set(mesAno, atual);
+            if (conta.dataPagamento) {
+                const data = new Date(conta.dataPagamento);
+                const mesAno = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
+                
+                if (mesesMap.has(mesAno)) {
+                    const atual = mesesMap.get(mesAno)!;
+                    atual.despesa += conta.valorParcela;
+                    mesesMap.set(mesAno, atual);
+                }
             }
         });
 
@@ -129,7 +136,7 @@ export class RelatoriosService {
         // Buscar todas as contas a pagar
         const contasPagar = await prisma.contaPagar.findMany({
             select: {
-                valorTotal: true,
+                valorParcela: true,
                 status: true,
                 dataVencimento: true
             }
@@ -143,7 +150,7 @@ export class RelatoriosService {
         // Calcular totais de despesas
         const totalDespesas = contasPagar
             .filter(c => c.status === 'Pago')
-            .reduce((sum, c) => sum + c.valorTotal, 0);
+            .reduce((sum, c) => sum + c.valorParcela, 0);
 
         // Contas a receber pendentes
         const contasReceberPendentes = contasReceber
@@ -153,7 +160,7 @@ export class RelatoriosService {
         // Contas a pagar pendentes
         const contasPagarPendentes = contasPagar
             .filter(c => c.status === 'Pendente')
-            .reduce((sum, c) => sum + c.valorTotal, 0);
+            .reduce((sum, c) => sum + c.valorParcela, 0);
 
         // Contas em atraso (receitas e despesas)
         const contasReceberAtrasadas = contasReceber.filter(c => {
@@ -167,7 +174,7 @@ export class RelatoriosService {
         });
 
         const valorReceberAtrasado = contasReceberAtrasadas.reduce((sum, c) => sum + c.valorParcela, 0);
-        const valorPagarAtrasado = contasPagarAtrasadas.reduce((sum, c) => sum + c.valorTotal, 0);
+        const valorPagarAtrasado = contasPagarAtrasadas.reduce((sum, c) => sum + c.valorParcela, 0);
 
         return {
             totalReceitas: Number(totalReceitas.toFixed(2)),

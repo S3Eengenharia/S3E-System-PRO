@@ -47,6 +47,7 @@ export class VendasService {
             const venda = await tx.venda.create({
                 data: {
                     numeroVenda,
+                    orcamentoId,
                     valorTotal,
                     clienteId,
                     projetoId,

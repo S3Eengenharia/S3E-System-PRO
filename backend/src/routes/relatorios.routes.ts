@@ -19,11 +19,11 @@ router.get(
     RelatoriosController.getDashboardCompleto
 );
 
-// Dados financeiros mensais para gráficos (admin, gerente, financeiro)
+// Dados financeiros mensais para gráficos (admin, financeiro)
 router.get(
     '/financeiro',
     authenticate,
-    authorize('admin', 'gerente', 'financeiro'),
+    authorize('admin', 'financeiro'),
     RelatoriosController.getDadosFinanceiros
 );
 

@@ -10,6 +10,7 @@ import comprasRoutes from './routes/compras.js';
 import orcamentosRoutes from './routes/orcamentos.js';
 import configFiscalRoutes from './routes/configFiscal.js';
 import vendasRoutes from './routes/vendas.routes.js';
+import contasPagarRoutes from './routes/contasPagar.routes.js';
 import relatoriosRoutes from './routes/relatorios.routes.js';
 import protectedRoutes from './routes/protected.routes.js';
 
@@ -44,6 +45,7 @@ app.get('/api', (_req, res) => {
       compras: '/api/compras',
       orcamentos: '/api/orcamentos',
       vendas: '/api/vendas',
+      contasPagar: '/api/contas-pagar',
       relatorios: '/api/relatorios',
       configFiscal: '/api/configuracoes-fiscais'
     }
@@ -57,6 +59,7 @@ app.use('/api/materiais', materiaisRoutes);
 app.use('/api/compras', comprasRoutes);
 app.use('/api/orcamentos', orcamentosRoutes);
 app.use('/api/vendas', vendasRoutes);
+app.use('/api/contas-pagar', contasPagarRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/configuracoes-fiscais', configFiscalRoutes);
 

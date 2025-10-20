@@ -334,11 +334,10 @@ model ContaReceber {
 
 model ContaPagar {
   id             String   @id @default(uuid())
-  fornecedorId   String
+  fornecedorId   String?  // Opcional para permitir despesas sem fornecedor específico
   compraId       String?
   descricao      String
-  valorTotal     Float
-  valorPago      Float    @default(0)
+  valorParcela   Float    // Valor da parcela/despesa
   dataVencimento DateTime
   dataPagamento  DateTime?
   status         String   @default("Pendente") // Pendente, Pago, Atrasado, Cancelado
@@ -348,7 +347,7 @@ model ContaPagar {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id])
+  fornecedor Fornecedor? @relation(fields: [fornecedorId], references: [id])
 
   @@map("contas_pagar")
 }

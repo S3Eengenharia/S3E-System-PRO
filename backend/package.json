@@ -5,15 +5,15 @@
   "main": "dist/app.js",
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e .env.development -- tsx watch src/app.ts",
+    "dev": "tsx watch src/app.ts",
     "build": "tsc",
     "start": "dotenv -e .env.production -- node dist/app.js",
     "lint": "eslint . --ext .ts",
     "test": "jest",
-    "seed": "dotenv -e .env.development -- npx tsx src/seed.ts",
-    "prisma:migrate:dev": "dotenv -e .env.development -- npx prisma migrate dev",
+    "seed": "npx tsx src/seed.ts",
+    "prisma:migrate": "npx prisma migrate dev",
     "prisma:deploy:prod": "dotenv -e .env.production -- npx prisma migrate deploy",
-    "prisma:studio:dev": "dotenv -e .env.development -- npx prisma studio",
+    "prisma:studio": "npx prisma studio",
     "prisma:generate": "npx prisma generate"
   },
   "keywords": [
