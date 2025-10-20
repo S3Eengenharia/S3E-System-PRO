@@ -9,6 +9,7 @@ import materiaisRoutes from './routes/materiais.js';
 import comprasRoutes from './routes/compras.js';
 import orcamentosRoutes from './routes/orcamentos.js';
 import configFiscalRoutes from './routes/configFiscal.js';
+import protectedRoutes from './routes/protected.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.get('/api', (_req, res) => {
     endpoints: {
       health: '/health',
       auth: '/api/auth',
+      protected: '/api/protected',
       materiais: '/api/materiais',
       compras: '/api/compras',
       orcamentos: '/api/orcamentos',
@@ -46,6 +48,7 @@ app.get('/api', (_req, res) => {
 
 // Registrar rotas
 app.use('/api/auth', authRoutes);
+app.use('/api/protected', protectedRoutes);
 app.use('/api/materiais', materiaisRoutes);
 app.use('/api/compras', comprasRoutes);
 app.use('/api/orcamentos', orcamentosRoutes);
