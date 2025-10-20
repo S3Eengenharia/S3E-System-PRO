@@ -9,6 +9,8 @@ import materiaisRoutes from './routes/materiais.js';
 import comprasRoutes from './routes/compras.js';
 import orcamentosRoutes from './routes/orcamentos.js';
 import configFiscalRoutes from './routes/configFiscal.js';
+import vendasRoutes from './routes/vendas.routes.js';
+import relatoriosRoutes from './routes/relatorios.routes.js';
 import protectedRoutes from './routes/protected.routes.js';
 
 const app = express();
@@ -31,7 +33,7 @@ app.get('/health', (_req, res) => {
 
 // API routes
 app.get('/api', (_req, res) => {
-  res.json({ 
+  res.json({
     message: 'S3E System API',
     version: '1.0.0',
     endpoints: {
@@ -41,6 +43,8 @@ app.get('/api', (_req, res) => {
       materiais: '/api/materiais',
       compras: '/api/compras',
       orcamentos: '/api/orcamentos',
+      vendas: '/api/vendas',
+      relatorios: '/api/relatorios',
       configFiscal: '/api/configuracoes-fiscais'
     }
   });
@@ -52,6 +56,8 @@ app.use('/api/protected', protectedRoutes);
 app.use('/api/materiais', materiaisRoutes);
 app.use('/api/compras', comprasRoutes);
 app.use('/api/orcamentos', orcamentosRoutes);
+app.use('/api/vendas', vendasRoutes);
+app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/configuracoes-fiscais', configFiscalRoutes);
 
 // Error handling middleware

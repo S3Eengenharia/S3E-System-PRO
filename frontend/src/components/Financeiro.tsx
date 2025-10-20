@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { vendasData } from '../data/mockData';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -16,16 +17,27 @@ type TabType = 'vendas' | 'receber' | 'pagar' | 'faturamento' | 'cobrancas';
 const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
     const [activeTab, setActiveTab] = useState<TabType>('vendas');
 
-    // Mock data para demonstração
-    const vendas = [
-        { id: '1', cliente: 'Empresa A', projeto: 'Subestação 150kVA', valor: 85000, data: '15/10/2025', status: 'Concluído' },
-        { id: '2', cliente: 'Empresa B', projeto: 'Quadro de Medição', valor: 12500, data: '10/10/2025', status: 'Em Andamento' }
-    ];
+    // Usar dados mockados de vendas do sistema
+    const vendas = vendasData.map(v => ({
+        id: v.id,
+        cliente: v.cliente.nome,
+        projeto: v.projeto.titulo,
+        valor: v.valorTotal,
+        data: new Date(v.dataVenda).toLocaleDateString('pt-BR'),
+        status: v.status === 'Concluida' ? 'Concluído' : v.status
+    }));
 
-    const contasReceber = [
-        { id: '1', cliente: 'Empresa A', descricao: 'Parcela 1/3', valor: 28333.33, vencimento: '20/10/2025', status: 'Pendente' },
-        { id: '2', cliente: 'Empresa A', descricao: 'Parcela 2/3', valor: 28333.33, vencimento: '20/11/2025', status: 'Pendente' },
-    ];
+    // Extrair contas a receber de todas as vendas
+    const contasReceber = vendasData.flatMap(v => 
+        v.contasReceber.map(c => ({
+            id: c.id,
+            cliente: v.cliente.nome,
+            descricao: `Parcela (${v.numeroVenda})`,
+            valor: c.valorParcela,
+            vencimento: new Date(c.dataVencimento).toLocaleDateString('pt-BR'),
+            status: c.status === 'Pago' ? 'Pago' : 'Pendente'
+        }))
+    ).filter(c => c.status === 'Pendente');
 
     const contasPagar = [
         { id: '1', fornecedor: 'Distribuidora Elétrica', descricao: 'Materiais Projeto A', valor: 15000, vencimento: '25/10/2025', status: 'Pendente' },

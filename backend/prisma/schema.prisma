@@ -45,9 +45,9 @@ model Cliente {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  orcamentos    Orcamento[]
-  projetos      Projeto[]
-  contasReceber ContaReceber[]
+  orcamentos Orcamento[]
+  projetos   Projeto[]
+  vendas     Venda[]
 
   @@map("clientes")
 }
@@ -150,6 +150,7 @@ model Orcamento {
   cliente Cliente           @relation(fields: [clienteId], references: [id])
   items   OrcamentoItem[]
   projeto Projeto?
+  venda   Venda?            // Relação 1:1 com venda (quando orçamento é vendido)
 
   @@map("orcamentos")
 }
@@ -195,6 +196,7 @@ model Projeto {
   cliente    Cliente   @relation(fields: [clienteId], references: [id])
   tasks      Task[]
   notasFiscais NotaFiscal[]
+  vendas     Venda[]
 
   @@map("projetos")
 }
@@ -284,16 +286,38 @@ model MovimentacaoEstoque {
 }
 
 // ============================================
-// FINANCEIRO
+// VENDAS E FINANCEIRO
 // ============================================
+
+model Venda {
+  id              String   @id @default(uuid())
+  numeroVenda     String   @unique
+  orcamentoId     String   @unique // Vínculo com orçamento aprovado
+  dataVenda       DateTime @default(now())
+  valorTotal      Float
+  status          String   @default("Pendente") // Pendente, Concluida, Cancelada
+  clienteId       String
+  projetoId       String?
+  formaPagamento  String   @default("À vista") // À vista, Parcelado, Boleto, PIX
+  parcelas        Int      @default(1)
+  valorEntrada    Float    @default(0)
+  observacoes     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  orcamento Orcamento        @relation(fields: [orcamentoId], references: [id])
+  cliente   Cliente           @relation(fields: [clienteId], references: [id])
+  projeto   Projeto?          @relation(fields: [projetoId], references: [id])
+  contasReceber ContaReceber[]
+
+  @@map("vendas")
+}
 
 model ContaReceber {
   id             String   @id @default(uuid())
-  clienteId      String
-  projetoId      String?
+  vendaId        String
   descricao      String
-  valorTotal     Float
-  valorRecebido  Float    @default(0)
+  valorParcela   Float
   dataVencimento DateTime
   dataPagamento  DateTime?
   status         String   @default("Pendente") // Pendente, Pago, Atrasado, Cancelado
@@ -303,7 +327,7 @@ model ContaReceber {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  cliente Cliente @relation(fields: [clienteId], references: [id])
+  venda Venda @relation(fields: [vendaId], references: [id], onDelete: Cascade)
 
   @@map("contas_receber")
 }

@@ -19,6 +19,8 @@ import Obras from './components/Obras';
 import Servicos from './components/Servicos';
 import Financeiro from './components/Financeiro';
 import EmissaoNFe from './components/EmissaoNFe';
+import ComparacaoPrecos from './components/ComparacaoPrecos';
+import Vendas from './components/Vendas';
 import SettingsModal from './components/SettingsModal';
 import { projectsData } from './data/mockData';
 import { type Project } from './types';
@@ -75,6 +77,8 @@ const MainApp: React.FC = () => {
         return <Compras toggleSidebar={toggleSidebar} />;
       case 'Materiais':
         return <Materiais toggleSidebar={toggleSidebar} />;
+      case 'Comparação de Preços':
+        return <ComparacaoPrecos toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
       case 'Fornecedores':
         return <Fornecedores toggleSidebar={toggleSidebar} />;
       case 'Clientes':
@@ -98,6 +102,8 @@ const MainApp: React.FC = () => {
                />;
       case 'Financeiro':
         return <Financeiro toggleSidebar={toggleSidebar} />;
+      case 'Vendas':
+        return <Vendas toggleSidebar={toggleSidebar} />;
       case 'Emissão NF-e':
         return <EmissaoNFe toggleSidebar={toggleSidebar} />;
       default:

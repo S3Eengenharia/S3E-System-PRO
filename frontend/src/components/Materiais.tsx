@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type MaterialItem, MaterialCategory, type Supplier } from '../types';
-import { materialsData as initialMaterialsData, suppliersData } from '../data/mockData';
+import { materialsData as initialMaterialsData, suppliersData, purchasesData } from '../data/mockData';
 import { CurrencyDollarIcon } from '../constants';
 
 // Icons
@@ -126,6 +126,29 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         const endIndex = startIndex + ITEMS_PER_PAGE;
         return filteredMaterials.slice(startIndex, endIndex);
     }, [filteredMaterials, currentPage]);
+
+    // Histórico de compras do item visualizado
+    const purchaseHistoryForItem = useMemo(() => {
+        if (!itemToView) return [] as Array<{ date: string; supplier: string; unitCost: number; quantity: number }>;
+        const toTs = (d: string) => {
+            // aceita formatos dd/mm/yyyy ou yyyy-mm-dd
+            if (d.includes('/')) {
+                const [dd, mm, yyyy] = d.split('/').map(n => parseInt(n, 10));
+                return new Date(yyyy, (mm || 1) - 1, dd || 1).getTime();
+            }
+            return new Date(d).getTime();
+        };
+        const entries = purchasesData.flatMap(po =>
+            po.items
+                .filter(i => i.productId === itemToView.id)
+                .map(i => ({ date: po.date, supplier: po.supplier.name, unitCost: i.unitCost, quantity: i.quantity }))
+        );
+        return entries.sort((a, b) => toTs(b.date) - toTs(a.date));
+    }, [itemToView]);
+
+    const lastPurchaseForItem = useMemo(() => {
+        return purchaseHistoryForItem.length > 0 ? purchaseHistoryForItem[0] : null;
+    }, [purchaseHistoryForItem]);
 
     const handleNextPage = () => {
         setCurrentPage(prev => Math.min(prev + 1, totalPages));
@@ -551,6 +574,19 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                                 {itemToView.price ? `R$ ${itemToView.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'N/D'}
                                             </p>
                                             <p className="text-xs text-gray-500 mt-1">por {itemToView.unitOfMeasure}</p>
+                                            {/* Última Compra */}
+                                            <div className="mt-4 p-3 bg-white/70 rounded-lg border border-green-100">
+                                                <p className="text-xs font-semibold text-gray-600 mb-1">Última compra</p>
+                                                {lastPurchaseForItem ? (
+                                                    <div className="text-sm text-gray-700">
+                                                        <p><span className="font-semibold">Fornecedor:</span> {lastPurchaseForItem.supplier}</p>
+                                                        <p><span className="font-semibold">Valor Unitário:</span> R$ {lastPurchaseForItem.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">{lastPurchaseForItem.date} • {lastPurchaseForItem.quantity} un.</p>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-gray-500">Sem histórico de compras</p>
+                                                )}
+                                            </div>
                                         </div>
                                         
                                         <div className={`rounded-xl p-5 border ${itemToView.stock <= itemToView.minStock ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200'}`}>
@@ -675,6 +711,37 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                                 </div>
                                             )}
                                         </div>
+                                    </div>
+
+                                    {/* Histórico de Compras */}
+                                    <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-5 border border-amber-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-7 5-7-5m14 0v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7" />
+                                                </svg>
+                                                Histórico de Compras
+                                            </h3>
+                                            <span className="text-xs text-gray-500">{purchaseHistoryForItem.length} registro(s)</span>
+                                        </div>
+                                        {purchaseHistoryForItem.length === 0 ? (
+                                            <p className="text-sm text-gray-600">Sem registros para este material.</p>
+                                        ) : (
+                                            <div className="bg-white rounded-lg border border-amber-100 divide-y divide-amber-100">
+                                                {purchaseHistoryForItem.map((p, idx) => (
+                                                    <div key={idx} className="p-3 flex items-center justify-between">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-gray-800">{p.supplier}</p>
+                                                            <p className="text-xs text-gray-500">{p.date} • {p.quantity} un.</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-sm font-bold text-amber-700">R$ {p.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                            <p className="text-xs text-gray-500">valor unitário</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

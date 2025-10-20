@@ -92,6 +92,8 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     const [filter, setFilter] = useState<CatalogItemType | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [catalogSection, setCatalogSection] = useState<'itens' | 'servicos'>('itens');
+    const [servicesSearchTerm, setServicesSearchTerm] = useState('');
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -145,7 +147,6 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
 
     // State for multi-item steps
     const [disjuntorIndividualToAdd, setDisjuntorIndividualToAdd] = useState({ id: '', quantityPerMeter: 1 });
-    const [caboToAdd, setCaboToAdd] = useState({ id: '', quantity: 1 });
     const [acabamentoSearch, setAcabamentoSearch] = useState('');
     
     // Estados para busca personalizada (outros tipos de kit)
@@ -477,7 +478,6 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         setCurrentStep(1);
         // Resetar estados dos campos de adição
         setDisjuntorIndividualToAdd({ id: '', quantityPerMeter: 1 });
-        setCaboToAdd({ id: '', quantity: 1 });
         setAcabamentoSearch('');
         setTempCaixaQuantities({});
     };
@@ -792,10 +792,21 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     const disjuntoresIndividuais = useMemo(() => materialsData.filter(m => m.subType === 'Disjuntor Individual'), []);
     const cabosFlexiveis = useMemo(() => materialsData.filter(m => m.subType === 'Cabo Flexível'), []);
     const cabosRigidos = useMemo(() => materialsData.filter(m => m.subType === 'Cabo Rígido'), []);
+    const todosCabos = useMemo(() => materialsData.filter(m => m.subType === 'Cabo Flexível' || m.subType === 'Cabo Rígido'), []);
     const dpsItems = useMemo(() => materialsData.filter(m => m.subType === 'DPS'), []);
     const parafusosItems = useMemo(() => materialsData.filter(m => m.subType === 'Parafuso'), []);
     const terminaisCompressao = useMemo(() => materialsData.filter(m => m.subType === 'Terminal de Compressão'), []);
     const terminaisTubulares = useMemo(() => materialsData.filter(m => m.subType === 'Terminal Tubular'), []);
+    
+    // Filtro de cabos baseado na busca do usuário
+    const filteredCabos = useMemo(() => {
+        if (!caboSearch.trim()) return [];
+        return todosCabos.filter(cabo => 
+            cabo.name.toLowerCase().includes(caboSearch.toLowerCase()) ||
+            cabo.sku.toLowerCase().includes(caboSearch.toLowerCase()) ||
+            cabo.subType?.toLowerCase().includes(caboSearch.toLowerCase())
+        ).slice(0, 10); // Limitar a 10 resultados
+    }, [caboSearch, todosCabos]);
     
     // Filtro de materiais para subestações - TODOS os materiais, sem filtro por categoria
     const filteredMaterials = useMemo(() => {
@@ -805,6 +816,17 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             m.sku.toLowerCase().includes(materialSearchTerm.toLowerCase())
         ).slice(0, 30); // Mostrar até 30 resultados
     }, [materialSearchTerm]);
+
+    // Serviços filtrados (quando seção Serviços estiver ativa)
+    const filteredServices = useMemo(() => {
+        const term = servicesSearchTerm.trim().toLowerCase();
+        if (!term) return servicesData;
+        return servicesData.filter(s =>
+            s.name.toLowerCase().includes(term) ||
+            (s.internalCode || '').toLowerCase().includes(term) ||
+            (s.description || '').toLowerCase().includes(term)
+        );
+    }, [servicesSearchTerm]);
 
     // Calcular preço total da subestação
     const subestacaoTotalPrice = useMemo(() => {
@@ -839,11 +861,32 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         handleKitConfigChange('disjuntoresIndividuais', (kitConfig.disjuntoresIndividuais || []).filter(dj => dj.id !== id));
     };
 
-    const handleAddCabo = () => {
-        if (!caboToAdd.id || (kitConfig.cabos?.items || []).some(c => c.id === caboToAdd.id)) return;
-        handleKitConfigChange('cabos.items', [...(kitConfig.cabos?.items || []), caboToAdd]);
-        setCaboToAdd({ id: '', quantity: 1 });
+    // Adicionar cabo do estoque via autocomplete
+    const handleAddCaboFromSearch = (cabo: MaterialItem) => {
+        // Verificar se já existe
+        if ((kitConfig.cabos?.items || []).some((c: any) => c.materialId === cabo.id)) {
+            alert('Este cabo já foi adicionado!');
+            return;
+        }
+        
+        // Adicionar cabo do estoque real
+        const novoCabo = {
+            id: `cabo-${Date.now()}`,
+            materialId: cabo.id,
+            materialName: cabo.name,
+            materialSku: cabo.sku,
+            bitola: '10mm²', // Extrair da nome se possível
+            cor: 'Preto/Vermelho/Azul',
+            tipo: cabo.subType || 'HEPR Rígido',
+            quantidade: 10,
+            precoUnitario: cabo.price || 0,
+            isCustom: true
+        };
+        
+        handleKitConfigChange('cabos.items', [...(kitConfig.cabos?.items || []), novoCabo]);
+        setCaboSearch('');
     };
+    
     const handleRemoveCabo = (id: string) => {
         handleKitConfigChange('cabos.items', (kitConfig.cabos?.items || []).filter(c => c.id !== id));
     };
@@ -877,7 +920,37 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             </header>
 
             <div className="bg-white p-6 rounded-xl shadow-sm">
-                {/* Filters and Search */}
+                {/* Navegação Interna */}
+                <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="inline-flex items-center rounded-xl border border-brand-gray-200 bg-white p-1">
+                        <button
+                            onClick={() => setCatalogSection('itens')}
+                            className={`px-4 py-2 text-sm rounded-lg ${catalogSection === 'itens' ? 'bg-brand-gray-100 font-semibold' : 'hover:bg-brand-gray-50'}`}
+                        >
+                            Itens do Catálogo
+                        </button>
+                        <button
+                            onClick={() => setCatalogSection('servicos')}
+                            className={`px-4 py-2 text-sm rounded-lg ${catalogSection === 'servicos' ? 'bg-brand-gray-100 font-semibold' : 'hover:bg-brand-gray-50'}`}
+                        >
+                            Serviços
+                        </button>
+                    </div>
+                    {catalogSection === 'servicos' && (
+                        <div className="relative w-full sm:max-w-xs">
+                            <input
+                                type="text"
+                                placeholder="Buscar serviços (nome, código)..."
+                                value={servicesSearchTerm}
+                                onChange={(e) => setServicesSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
+                            />
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray-400" />
+                        </div>
+                    )}
+                </div>
+                {/* Seção: Itens do Catálogo */}
+                {catalogSection === 'itens' && (
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
                     <div className="relative w-full sm:max-w-xs">
                         <input
@@ -912,8 +985,35 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                         </div>
                     </div>
                 </div>
+                )}
+
+                {/* Seção: Serviços */}
+                {catalogSection === 'servicos' && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filteredServices.map(s => (
+                                <div key={s.id} className="p-4 rounded-xl border border-brand-gray-200 bg-white shadow-sm hover:shadow-md transition-all">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="font-semibold text-brand-gray-800">{s.name}</h3>
+                                        {s.internalCode && (
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gray-100 text-brand-gray-700">{s.internalCode}</span>
+                                        )}
+                                    </div>
+                                    {s.description && (
+                                        <p className="text-sm text-brand-gray-600 mb-2 line-clamp-3">{s.description}</p>
+                                    )}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-brand-gray-500">Tipo: {s.type}</span>
+                                        <span className="text-base font-bold text-brand-gray-900">R$ {s.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Content Area */}
+                {catalogSection === 'itens' && (
                 <div>
                     {viewMode === 'list' && (
                         <div className="overflow-x-auto">
@@ -1045,6 +1145,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                         </div>
                     )}
                 </div>
+                )}
             </div>
 
             {/* Create Kit Modal */}
@@ -1912,41 +2013,65 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
 
                                     {kitConfig.disjuntoresIndividuaisPolaridade && (
                                         <>
-                                            <div className="p-3 bg-brand-gray-50 rounded-lg grid grid-cols-12 gap-2 items-end">
-                                                <div className="col-span-6">
-                                                    <label className="text-xs font-medium text-brand-gray-700">Modelo (Amperagem)</label>
-                                                    <select value={disjuntorIndividualToAdd.id} onChange={e => setDisjuntorIndividualToAdd({...disjuntorIndividualToAdd, id: e.target.value})} className="w-full mt-1 px-3 py-2 border border-brand-gray-300 rounded-lg bg-white text-sm">
-                                                        <option value="">Selecione...</option>
-                                                        {disjuntoresIndividuais
-                                                            .filter(d => {
-                                                                const polaridade = kitConfig.disjuntoresIndividuaisPolaridade;
-                                                                const amperage = d.properties?.amperage || 0;
-                                                                
-                                                                // Filtrar por polaridade e amperagem
-                                                                if (polaridade === 'monopolar') {
-                                                                    return [40, 50, 63].includes(amperage);
-                                                                } else if (polaridade === 'bipolar') {
-                                                                    return [50, 63].includes(amperage);
-                                                                } else if (polaridade === 'tripolar') {
-                                                                    return [40, 50, 63, 70, 90, 100, 125].includes(amperage);
-                                                                }
-                                                                return false;
-                                                            })
-                                                            .filter(d => !(kitConfig.disjuntoresIndividuais || []).some(added => added.id === d.id))
-                                                            .map(dj => (
-                                                                <option key={dj.id} value={dj.id} disabled={dj.stock <= 0}>
-                                                                    {dj.properties?.amperage}A - {dj.name} {dj.stock <= 0 ? '(S/ Estoque)' : ''}
-                                                                </option>
-                                                            ))
-                                                        }
-                                                    </select>
-                                                </div>
-                                                <div className="col-span-3">
-                                                    <label className="text-xs font-medium text-brand-gray-700">Qtd. por Medidor</label>
-                                                    <input type="number" value={disjuntorIndividualToAdd.quantityPerMeter} onChange={e => setDisjuntorIndividualToAdd({...disjuntorIndividualToAdd, quantityPerMeter: parseInt(e.target.value)})} min="1" className="w-full mt-1 px-3 py-2 border border-brand-gray-300 rounded-lg text-sm" />
-                                                </div>
-                                                <div className="col-span-3">
-                                                    <button type="button" onClick={handleAddDisjuntorIndividual} className="w-full px-4 py-2 bg-brand-gray-700 text-white font-semibold rounded-lg hover:bg-brand-gray-600 text-sm" disabled={!disjuntorIndividualToAdd.id}>Adicionar</button>
+                                            <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200 shadow-sm">
+                                                <div className="grid grid-cols-12 gap-4 items-end">
+                                                    <div className="col-span-6">
+                                                        <label className="block text-sm font-semibold text-brand-gray-800 mb-2">
+                                                            📌 Modelo (Amperagem)
+                                                        </label>
+                                                        <select 
+                                                            value={disjuntorIndividualToAdd.id} 
+                                                            onChange={e => setDisjuntorIndividualToAdd({...disjuntorIndividualToAdd, id: e.target.value})} 
+                                                            className="w-full px-4 py-3 border-2 border-brand-gray-300 rounded-lg bg-white text-base font-medium focus:border-brand-blue focus:ring-2 focus:ring-brand-blue focus:ring-opacity-20 transition-all"
+                                                        >
+                                                            <option value="">🔽 Selecione o disjuntor...</option>
+                                                            {disjuntoresIndividuais
+                                                                .filter(d => {
+                                                                    const polaridade = kitConfig.disjuntoresIndividuaisPolaridade;
+                                                                    const amperage = d.properties?.amperage || 0;
+                                                                    
+                                                                    // Filtrar por polaridade e amperagem
+                                                                    if (polaridade === 'monopolar') {
+                                                                        return [40, 50, 63].includes(amperage);
+                                                                    } else if (polaridade === 'bipolar') {
+                                                                        return [50, 63].includes(amperage);
+                                                                    } else if (polaridade === 'tripolar') {
+                                                                        return [40, 50, 63, 70, 90, 100, 125].includes(amperage);
+                                                                    }
+                                                                    return false;
+                                                                })
+                                                                .filter(d => !(kitConfig.disjuntoresIndividuais || []).some(added => added.id === d.id))
+                                                                .map(dj => (
+                                                                    <option key={dj.id} value={dj.id} disabled={dj.stock <= 0}>
+                                                                        ⚡ {dj.properties?.amperage}A - {dj.name} {dj.stock <= 0 ? '(❌ SEM ESTOQUE)' : `(✅ ${dj.stock} unid.)`}
+                                                                    </option>
+                                                                ))
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <label className="block text-sm font-semibold text-brand-gray-800 mb-2">
+                                                            🔢 Qtd. por Medidor
+                                                        </label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={disjuntorIndividualToAdd.quantityPerMeter} 
+                                                            onChange={e => setDisjuntorIndividualToAdd({...disjuntorIndividualToAdd, quantityPerMeter: parseInt(e.target.value)})} 
+                                                            min="1" 
+                                                            className="w-full px-4 py-3 border-2 border-brand-gray-300 rounded-lg text-base font-semibold text-center focus:border-brand-blue focus:ring-2 focus:ring-brand-blue focus:ring-opacity-20 transition-all" 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={handleAddDisjuntorIndividual} 
+                                                            className="w-full px-4 py-3 bg-gradient-to-r from-brand-gray-700 to-brand-gray-800 text-white font-bold rounded-lg hover:from-brand-gray-600 hover:to-brand-gray-700 text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" 
+                                                            disabled={!disjuntorIndividualToAdd.id}
+                                                        >
+                                                            <PlusIcon className="w-5 h-5" />
+                                                            Adicionar
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                             
@@ -1968,26 +2093,82 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                                 })}
                                             </div>
 
-                                            {/* Seção de Cabos Calculados */}
+                                            {/* Seção de Adicionar Cabos do Estoque */}
                                             {(kitConfig.disjuntoresIndividuais || []).length > 0 && (
                                                 <div className="mt-6 pt-6 border-t border-brand-gray-200">
+                                                    {/* Input de Busca de Cabos */}
+                                                    <div className="mb-6 p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 shadow-sm">
+                                                        <h4 className="font-bold text-brand-gray-800 mb-3 flex items-center gap-2">
+                                                            <span className="text-xl">🔌</span>
+                                                            Adicionar Cabos do Estoque
+                                                        </h4>
+                                                        <div className="relative" ref={caboDropdownRef}>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    value={caboSearch}
+                                                                    onChange={(e) => setCaboSearch(e.target.value)}
+                                                                    onFocus={() => caboSearch && setCaboSearch(caboSearch)}
+                                                                    placeholder="🔍 Digite para buscar cabos (nome, código, bitola...)"
+                                                                    className="w-full px-4 py-3 border-2 border-brand-gray-300 rounded-lg text-base font-medium bg-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+                                                                />
+                                                                {caboSearch && (
+                                                                    <button
+                                                                        onClick={() => setCaboSearch('')}
+                                                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                                    >
+                                                                        <XMarkIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {/* Dropdown de Resultados */}
+                                                            {filteredCabos.length > 0 && (
+                                                                <div className="absolute z-50 w-full mt-2 bg-white border-2 border-green-300 rounded-lg shadow-xl max-h-80 overflow-y-auto">
+                                                                    {filteredCabos.map(cabo => (
+                                                                        <button
+                                                                            key={cabo.id}
+                                                                            onClick={() => handleAddCaboFromSearch(cabo)}
+                                                                            className="w-full px-4 py-3 text-left hover:bg-green-50 border-b border-gray-100 last:border-b-0 transition-colors flex justify-between items-center group"
+                                                                        >
+                                                                            <div className="flex-1">
+                                                                                <p className="font-semibold text-brand-gray-800 group-hover:text-green-700">
+                                                                                    {cabo.name}
+                                                                                </p>
+                                                                                <p className="text-sm text-gray-600 mt-1">
+                                                                                    SKU: {cabo.sku} | {cabo.subType}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="text-right ml-4">
+                                                                                <p className="font-bold text-brand-gray-800">
+                                                                                    R$ {cabo.price?.toFixed(2)}
+                                                                                </p>
+                                                                                <p className={`text-xs font-semibold ${cabo.stock > 10 ? 'text-green-600' : cabo.stock > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                                                    {cabo.stock > 0 ? `✅ ${cabo.stock} unid.` : '❌ Sem estoque'}
+                                                                                </p>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {caboSearch && filteredCabos.length === 0 && (
+                                                                <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+                                                                    Nenhum cabo encontrado com "{caboSearch}"
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 mt-2">
+                                                            💡 Dica: Digite o nome, código ou bitola do cabo para encontrá-lo rapidamente no estoque
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    {/* Seção de Cabos Calculados */}
                                                     <div className="flex items-center justify-between mb-4">
                                                         <h4 className="font-semibold text-brand-gray-800 flex items-center gap-2">
                                                             <span className="text-lg">⚡</span>
-                                                            Cabos Calculados Automaticamente
+                                                            Cabos no Kit
                                                         </h4>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                // Adicionar cabo extra
-                                                                const newCabo = { id: Date.now().toString(), bitola: '10mm²', cor: 'Preto', tipo: 'HEPR Rígido', quantidade: 1, isCustom: true };
-                                                                handleKitConfigChange('cabos.items', [...(kitConfig.cabos?.items || []), newCabo]);
-                                                            }}
-                                                            className="px-3 py-1.5 bg-brand-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-brand-gray-600 flex items-center gap-1"
-                                                        >
-                                                            <PlusIcon className="w-4 h-4" />
-                                                            Adicionar Cabo Extra
-                                                        </button>
                                                     </div>
 
                                                     <div className="space-y-3">
@@ -2047,25 +2228,32 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                                             ];
 
                                                             return todosCabos.map((cabo: any, idx) => (
-                                                                <div key={cabo.id || idx} className="p-4 bg-white border border-brand-gray-200 rounded-xl hover:border-brand-blue transition-colors">
-                                                                    <div className="grid grid-cols-12 gap-3 items-center">
+                                                                <div key={cabo.id || idx} className="p-5 bg-gradient-to-br from-white to-gray-50 border-2 border-brand-gray-200 rounded-xl hover:border-brand-blue hover:shadow-lg transition-all">
+                                                                    <div className="grid grid-cols-12 gap-4 items-center">
                                                                         {/* Tipo/Bitola */}
                                                                         <div className="col-span-3">
-                                                                            <label className="block text-xs font-medium text-brand-gray-600 mb-1">
-                                                                                Bitola
+                                                                            <label className="block text-sm font-bold text-brand-gray-800 mb-2 flex items-center gap-2">
+                                                                                <span>📏 Bitola</span>
                                                                                 {cabo.isCalculated && (
-                                                                                    <span className="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">Auto</span>
+                                                                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Auto</span>
                                                                                 )}
                                                                             </label>
                                                                             <select
                                                                                 value={cabo.bitola}
                                                                                 onChange={(e) => {
-                                                                                    const updated = (kitConfig.cabos?.items || []).map((c: any) =>
-                                                                                        c.id === cabo.id ? { ...c, bitola: e.target.value } : c
-                                                                                    );
-                                                                                    handleKitConfigChange('cabos.items', updated);
+                                                                                    // Se for calculado, converter para customizado ao editar
+                                                                                    if (cabo.isCalculated) {
+                                                                                        const newCabo = { ...cabo, bitola: e.target.value, isCalculated: false, isCustom: true };
+                                                                                        const updated = [...(kitConfig.cabos?.items || []), newCabo];
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    } else {
+                                                                                        const updated = (kitConfig.cabos?.items || []).map((c: any) =>
+                                                                                            c.id === cabo.id ? { ...c, bitola: e.target.value } : c
+                                                                                        );
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    }
                                                                                 }}
-                                                                                className="w-full px-2 py-1 border border-brand-gray-300 rounded text-sm bg-white hover:border-brand-blue focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
+                                                                                className="w-full px-4 py-2.5 border-2 border-brand-gray-300 rounded-lg text-base font-medium bg-white hover:border-brand-blue focus:border-brand-blue focus:ring-2 focus:ring-brand-blue focus:ring-opacity-20 transition-all cursor-pointer"
                                                                             >
                                                                                 <option value="2.5mm²">2.5mm²</option>
                                                                                 <option value="4mm²">4mm²</option>
@@ -2080,16 +2268,24 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
 
                                                                         {/* Tipo */}
                                                                         <div className="col-span-3">
-                                                                            <label className="block text-xs font-medium text-brand-gray-600 mb-1">Tipo</label>
+                                                                            <label className="block text-sm font-bold text-brand-gray-800 mb-2">
+                                                                                ⚡ Tipo
+                                                                            </label>
                                                                             <select
                                                                                 value={cabo.tipo}
                                                                                 onChange={(e) => {
-                                                                                    const updated = (kitConfig.cabos?.items || []).map((c: any) =>
-                                                                                        c.id === cabo.id ? { ...c, tipo: e.target.value } : c
-                                                                                    );
-                                                                                    handleKitConfigChange('cabos.items', updated);
+                                                                                    if (cabo.isCalculated) {
+                                                                                        const newCabo = { ...cabo, tipo: e.target.value, isCalculated: false, isCustom: true };
+                                                                                        const updated = [...(kitConfig.cabos?.items || []), newCabo];
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    } else {
+                                                                                        const updated = (kitConfig.cabos?.items || []).map((c: any) =>
+                                                                                            c.id === cabo.id ? { ...c, tipo: e.target.value } : c
+                                                                                        );
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    }
                                                                                 }}
-                                                                                className="w-full px-2 py-1 border border-brand-gray-300 rounded text-sm bg-white hover:border-brand-blue focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
+                                                                                className="w-full px-4 py-2.5 border-2 border-brand-gray-300 rounded-lg text-base font-medium bg-white hover:border-brand-blue focus:border-brand-blue focus:ring-2 focus:ring-brand-blue focus:ring-opacity-20 transition-all cursor-pointer"
                                                                             >
                                                                                 <option value="HEPR Rígido">HEPR Rígido</option>
                                                                                 <option value="HEPR Flexível">HEPR Flexível</option>
@@ -2100,35 +2296,51 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
 
                                                                         {/* Cor */}
                                                                         <div className="col-span-3">
-                                                                            <label className="block text-xs font-medium text-brand-gray-600 mb-1">Cor</label>
+                                                                            <label className="block text-sm font-bold text-brand-gray-800 mb-2">
+                                                                                🎨 Cor
+                                                                            </label>
                                                                             <input
                                                                                 type="text"
                                                                                 value={cabo.cor}
                                                                                 onChange={(e) => {
-                                                                                    const updated = (kitConfig.cabos?.items || []).map((c: any) =>
-                                                                                        c.id === cabo.id ? { ...c, cor: e.target.value } : c
-                                                                                    );
-                                                                                    handleKitConfigChange('cabos.items', updated);
+                                                                                    if (cabo.isCalculated) {
+                                                                                        const newCabo = { ...cabo, cor: e.target.value, isCalculated: false, isCustom: true };
+                                                                                        const updated = [...(kitConfig.cabos?.items || []), newCabo];
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    } else {
+                                                                                        const updated = (kitConfig.cabos?.items || []).map((c: any) =>
+                                                                                            c.id === cabo.id ? { ...c, cor: e.target.value } : c
+                                                                                        );
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    }
                                                                                 }}
-                                                                                className="w-full px-2 py-1 border border-brand-gray-300 rounded text-sm hover:border-brand-blue focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
-                                                                                placeholder="Ex: Preto"
+                                                                                className="w-full px-4 py-2.5 border-2 border-brand-gray-300 rounded-lg text-base font-medium hover:border-brand-blue focus:border-brand-blue focus:ring-2 focus:ring-brand-blue focus:ring-opacity-20 transition-all"
+                                                                                placeholder="Ex: Preto/Vermelho/Azul"
                                                                             />
                                                                         </div>
 
                                                                         {/* Quantidade */}
                                                                         <div className="col-span-2">
-                                                                            <label className="block text-xs font-medium text-brand-gray-600 mb-1">Metros</label>
+                                                                            <label className="block text-sm font-bold text-brand-gray-800 mb-2">
+                                                                                📐 Metros
+                                                                            </label>
                                                                             <input
                                                                                 type="number"
                                                                                 value={cabo.quantidade}
                                                                                 onChange={(e) => {
-                                                                                    const updated = (kitConfig.cabos?.items || []).map((c: any) =>
-                                                                                        c.id === cabo.id ? { ...c, quantidade: parseInt(e.target.value) || 0 } : c
-                                                                                    );
-                                                                                    handleKitConfigChange('cabos.items', updated);
+                                                                                    if (cabo.isCalculated) {
+                                                                                        const newCabo = { ...cabo, quantidade: parseInt(e.target.value) || 0, isCalculated: false, isCustom: true };
+                                                                                        const updated = [...(kitConfig.cabos?.items || []), newCabo];
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    } else {
+                                                                                        const updated = (kitConfig.cabos?.items || []).map((c: any) =>
+                                                                                            c.id === cabo.id ? { ...c, quantidade: parseInt(e.target.value) || 0 } : c
+                                                                                        );
+                                                                                        handleKitConfigChange('cabos.items', updated);
+                                                                                    }
                                                                                 }}
                                                                                 min="1"
-                                                                                className="w-full px-2 py-1 border border-brand-gray-300 rounded text-sm hover:border-brand-blue focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
+                                                                                className="w-full px-4 py-2.5 border-2 border-brand-gray-300 rounded-lg text-base font-bold text-center hover:border-brand-blue focus:border-brand-blue focus:ring-2 focus:ring-brand-blue focus:ring-opacity-20 transition-all"
                                                                             />
                                                                         </div>
 

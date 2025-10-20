@@ -155,6 +155,48 @@ export const purchasesData: PurchaseOrder[] = [
     { id: 'PC-2025-003', supplier: { id: 'SUP-003', name: 'Iluminação & Cia' }, date: '22/09/2025', items: [{productId: 'MAT-006', productName: 'Luminária LED de Sobrepor 18W', quantity: 200, unitCost: 35.50}], totalValue: 7100.00, status: PurchaseStatus.Cancelado },
 ];
 
+// Dados mockados de vendas para o módulo financeiro
+export const vendasData = [
+    {
+        id: 'VND-001',
+        numeroVenda: 'VND-1698765432',
+        dataVenda: '2024-01-15',
+        valorTotal: 15000.00,
+        status: 'Concluida',
+        cliente: { nome: 'Construtora Alfa' },
+        projeto: { titulo: 'Edifício Residencial' },
+        contasReceber: [
+            { id: 'CR-001', valorParcela: 7500.00, dataVencimento: '2024-02-15', status: 'Pago' },
+            { id: 'CR-002', valorParcela: 7500.00, dataVencimento: '2024-03-15', status: 'Pendente' }
+        ]
+    },
+    {
+        id: 'VND-002',
+        numeroVenda: 'VND-1698765433',
+        dataVenda: '2024-01-10',
+        valorTotal: 25000.00,
+        status: 'Concluida',
+        cliente: { nome: 'Mariana Costa' },
+        projeto: { titulo: 'Reforma Elétrica Loja' },
+        contasReceber: [
+            { id: 'CR-003', valorParcela: 25000.00, dataVencimento: '2024-02-10', status: 'Pago' }
+        ]
+    },
+    {
+        id: 'VND-003',
+        numeroVenda: 'VND-1698765434',
+        dataVenda: '2024-01-08',
+        valorTotal: 35000.00,
+        status: 'Concluida',
+        cliente: { nome: 'Indústria Gama' },
+        projeto: { titulo: 'Automação Industrial' },
+        contasReceber: [
+            { id: 'CR-004', valorParcela: 17500.00, dataVencimento: '2024-02-08', status: 'Pago' },
+            { id: 'CR-005', valorParcela: 17500.00, dataVencimento: '2024-03-08', status: 'Pendente' }
+        ]
+    }
+];
+
 export const projectsData: Project[] = [
     {
         id: 'PROJ-001', name: 'Instalação Elétrica Ed. Phoenix', clientId: 'CLI-001', clientName: 'Construtora Alfa', budgetId: 'ORC-2025-001', documentNumber: 'ART-12345/SP',

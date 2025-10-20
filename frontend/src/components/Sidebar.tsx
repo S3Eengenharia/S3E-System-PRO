@@ -85,28 +85,135 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
             </div>
 
             <nav className="flex-1 px-2 py-4 overflow-y-auto">
-                <span className="px-2 text-xs font-semibold text-brand-gray-400 uppercase tracking-wider">Módulos Principais</span>
-                <ul className="mt-2 space-y-1">
-                    {navLinks.map((link) => (
-                        <li key={link.name}>
-                            <a
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    onNavigate(link.name);
-                                }}
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
-                                    ${activeView === link.name
-                                        ? 'bg-brand-blue text-white'
-                                        : 'text-brand-gray-600 hover:bg-brand-gray-100'
-                                    }`}
-                            >
-                                <link.icon className="w-5 h-5 mr-3" />
-                                {link.name}
-                            </a>
-                        </li>
-                    ))}
-                </ul>
+                {/* GERAL / INÍCIO */}
+                <div className="mb-4">
+                    <span className="px-2 text-xs font-semibold text-brand-gray-400 uppercase tracking-wider">Geral</span>
+                    <ul className="mt-2 space-y-1">
+                        {navLinks.slice(0, 1).map((link) => (
+                            <li key={link.name}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onNavigate(link.name);
+                                    }}
+                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                        ${activeView === link.name
+                                            ? 'bg-brand-blue text-white'
+                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                        }`}
+                                >
+                                    <link.icon className="w-5 h-5 mr-3" />
+                                    {link.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* COMERCIAL / VENDAS */}
+                <div className="mb-4">
+                    <span className="px-2 text-xs font-semibold text-green-600 uppercase tracking-wider">Comercial</span>
+                    <ul className="mt-2 space-y-1">
+                        {navLinks.slice(1, 4).map((link) => (
+                            <li key={link.name}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onNavigate(link.name);
+                                    }}
+                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                        ${activeView === link.name
+                                            ? 'bg-brand-blue text-white'
+                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                        }`}
+                                >
+                                    <link.icon className="w-5 h-5 mr-3" />
+                                    {link.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* SUPRIMENTOS / ESTOQUE */}
+                <div className="mb-4">
+                    <span className="px-2 text-xs font-semibold text-orange-600 uppercase tracking-wider">Suprimentos</span>
+                    <ul className="mt-2 space-y-1">
+                        {navLinks.slice(4, 9).map((link) => (
+                            <li key={link.name}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onNavigate(link.name);
+                                    }}
+                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                        ${activeView === link.name
+                                            ? 'bg-brand-blue text-white'
+                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                        }`}
+                                >
+                                    <link.icon className="w-5 h-5 mr-3" />
+                                    {link.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* OPERACIONAL / PROJETOS */}
+                <div className="mb-4">
+                    <span className="px-2 text-xs font-semibold text-purple-600 uppercase tracking-wider">Operacional</span>
+                    <ul className="mt-2 space-y-1">
+                        {navLinks.slice(9, 12).map((link) => (
+                            <li key={link.name}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onNavigate(link.name);
+                                    }}
+                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                        ${activeView === link.name
+                                            ? 'bg-brand-blue text-white'
+                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                        }`}
+                                >
+                                    <link.icon className="w-5 h-5 mr-3" />
+                                    {link.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* FINANCEIRO / CONTÁBIL */}
+                <div className="mb-4">
+                    <span className="px-2 text-xs font-semibold text-blue-600 uppercase tracking-wider">Financeiro</span>
+                    <ul className="mt-2 space-y-1">
+                        {navLinks.slice(12).map((link) => (
+                            <li key={link.name}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onNavigate(link.name);
+                                    }}
+                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                        ${activeView === link.name
+                                            ? 'bg-brand-blue text-white'
+                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                        }`}
+                                >
+                                    <link.icon className="w-5 h-5 mr-3" />
+                                    {link.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             </nav>
 
             <div className="p-4 border-t border-brand-gray-200">

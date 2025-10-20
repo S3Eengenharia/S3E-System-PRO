@@ -631,3 +631,38 @@ export interface AuthState {
     isAuthenticated: boolean;
     isLoading: boolean;
 }
+
+// Price Comparison Types
+export enum PriceComparisonStatus {
+    Higher = 'Higher',      // Novo preço maior
+    Lower = 'Lower',        // Novo preço menor
+    Equal = 'Equal',        // Preços iguais
+    NoHistory = 'NoHistory' // Sem histórico de compra
+}
+
+export interface PriceComparisonItem {
+    id: string;
+    materialCode: string;
+    materialName: string;
+    unit: string;
+    quantity: number;
+    currentPrice: number | null;      // Preço atual (última compra ou estoque)
+    newPrice: number | null;          // Preço do novo orçamento
+    difference: number | null;        // Diferença em %
+    differenceValue: number | null;   // Diferença em R$
+    status: PriceComparisonStatus;
+    supplierName?: string;
+    lastPurchaseDate?: string;
+    stockQuantity?: number;
+}
+
+export interface PriceComparisonImport {
+    id: string;
+    fileName: string;
+    uploadDate: string;
+    supplierName: string;
+    itemsCount: number;
+    totalValue: number;
+    items: PriceComparisonItem[];
+    status: 'pending' | 'approved' | 'rejected';
+}
