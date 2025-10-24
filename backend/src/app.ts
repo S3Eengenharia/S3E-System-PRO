@@ -17,6 +17,15 @@ import alocacaoRoutes from './routes/alocacao.routes.js';
 import comparacaoPrecosRoutes from './routes/comparacaoPrecos.routes.js';
 import equipesRoutes from './routes/equipes.routes.js';
 import pdfRoutes from './routes/pdf.routes.js';
+import clientesRoutes from './routes/clientes.js';
+import fornecedoresRoutes from './routes/fornecedores.js';
+import projetosRoutes from './routes/projetos.js';
+import servicosRoutes from './routes/servicos.js';
+import movimentacoesRoutes from './routes/movimentacoes.js';
+import historicoRoutes from './routes/historico.js';
+import nfeRoutes from './routes/nfe.js';
+import empresasRoutes from './routes/empresas.js';
+import dashboardRoutes from './routes/dashboard.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,7 +64,16 @@ app.get('/api', (_req, res) => {
       obras: '/api/obras',
       comparacaoPrecos: '/api/comparacao-precos',
       equipes: '/api/equipes',
-      pdf: '/api/pdf'
+      pdf: '/api/pdf',
+      clientes: '/api/clientes',
+      fornecedores: '/api/fornecedores',
+      projetos: '/api/projetos',
+      servicos: '/api/servicos',
+      movimentacoes: '/api/movimentacoes',
+      historico: '/api/historico',
+      nfe: '/api/nfe',
+      empresas: '/api/empresas',
+      dashboard: '/api/dashboard'
     }
   });
 });
@@ -74,6 +92,15 @@ app.use('/api/obras', alocacaoRoutes);
 app.use('/api/comparacao-precos', comparacaoPrecosRoutes);
 app.use('/api/equipes', equipesRoutes);
 app.use('/api/pdf', pdfRoutes);
+app.use('/api/clientes', clientesRoutes);
+app.use('/api/fornecedores', fornecedoresRoutes);
+app.use('/api/projetos', projetosRoutes);
+app.use('/api/servicos', servicosRoutes);
+app.use('/api/movimentacoes', movimentacoesRoutes);
+app.use('/api/historico', historicoRoutes);
+app.use('/api/nfe', nfeRoutes);
+app.use('/api/empresas', empresasRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

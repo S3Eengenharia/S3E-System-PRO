@@ -100,6 +100,21 @@ model Material {
   @@map("materiais")
 }
 
+model Servico {
+  id            String   @id @default(uuid())
+  nome          String
+  codigo        String   @unique
+  descricao     String?
+  tipo          String   // Instalacao, Manutencao, Consultoria, LaudoTecnico
+  preco         Float
+  unidade       String   @default("un") // un, hora, m2, etc
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("servicos")
+}
+
 model Kit {
   id          String   @id @default(uuid())
   nome        String
@@ -452,4 +467,20 @@ model AlocacaoObra {
   projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
   @@map("alocacoes_obra")
+}
+
+model HistoryLog {
+  id        String   @id @default(uuid())
+  userId    String
+  userName  String
+  action    String   // CREATE, UPDATE, DELETE, VIEW
+  module    String   // Orcamentos, Clientes, Materiais, etc
+  entityId  String?  // ID do registro afetado
+  details   String?  // JSON com detalhes da ação
+  ip        String?
+  timestamp DateTime @default(now())
+
+  @@map("history_logs")
+  @@index([module, timestamp])
+  @@index([userId, timestamp])
 }
