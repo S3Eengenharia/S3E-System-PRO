@@ -26,6 +26,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Interceptor para adicionar token nas requisições
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    // Sempre buscar o token mais recente do localStorage
+    const currentToken = localStorage.getItem('token');
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(typeof options.headers === 'object' && options.headers !== null && !(options.headers instanceof Headers)
@@ -33,8 +36,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         : {}),
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Verificar se temos um token válido
+    if (currentToken && currentToken !== 'null' && currentToken !== 'undefined' && currentToken.trim() !== '') {
+      headers['Authorization'] = `Bearer ${currentToken}`;
+      console.log('🔐 AuthContext enviando token:', currentToken.substring(0, 20) + '...');
+    } else {
+      console.log('❌ AuthContext: Nenhum token válido encontrado. Token atual:', currentToken);
     }
 
     const response = await fetch(url, {
@@ -47,19 +54,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Check authentication status
   const checkAuth = async () => {
-    if (!token) {
+    // Sempre buscar o token mais recente do localStorage
+    const currentToken = localStorage.getItem('token');
+    console.log('🔍 checkAuth chamado, token do localStorage:', currentToken);
+    
+    if (!currentToken || currentToken === 'null' || currentToken === 'undefined' || currentToken.trim() === '') {
+      console.log('❌ Nenhum token válido encontrado');
+      setToken(null);
+      setUser(null);
+      setIsAuthenticated(false);
       setIsLoading(false);
       return;
     }
 
+    // Atualizar o estado do token
+    setToken(currentToken);
+
     try {
+      console.log('🔐 Verificando token com /api/auth/me');
       const response = await fetchWithAuth(`${API_BASE_URL}/api/auth/me`);
       
       if (response.ok) {
         const userData = await response.json();
+        console.log('✅ Usuário autenticado:', userData);
         setUser(userData);
         setIsAuthenticated(true);
       } else {
+        console.log('❌ Token inválido, limpando...');
         // Token inválido, limpar
         localStorage.removeItem('token');
         setToken(null);
@@ -67,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAuthenticated(false);
       }
     } catch (error) {
-      console.error('Erro ao verificar autenticação:', error);
+      console.error('❌ Erro ao verificar autenticação:', error);
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
@@ -79,6 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Login function
   const login = async (email: string, password: string) => {
+    console.log('🔐 Iniciando login para:', email);
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -91,10 +113,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log('❌ Erro no login:', errorData);
         throw new Error(errorData.error || 'Erro ao fazer login');
       }
 
       const data = await response.json();
+      console.log('✅ Login bem-sucedido:', data);
       
       // Salvar token
       localStorage.setItem('token', data.token);
@@ -104,10 +128,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (data.user) {
         setUser(data.user);
         setIsAuthenticated(true);
+        console.log('✅ Usuário definido:', data.user);
       }
       
       setIsLoading(false);
     } catch (error) {
+      console.log('❌ Erro no login:', error);
       setIsLoading(false);
       throw error;
     }

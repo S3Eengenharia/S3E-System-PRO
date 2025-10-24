@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { CatalogItem, CatalogItemType, Product, Kit, KitProduct, Service, KitService, ServiceType, KitConfiguration, MaterialItem } from '../types';
-import { catalogData, servicesData, quadrosAluminioData, caixasPolicarbonatoData, quadrosComandoBaseData, materialsData } from '../data/mockData';
+// Removido import de dados mock - usando API
+import { apiService } from '../services/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -88,8 +89,39 @@ const initialKitConfig: KitConfiguration = {
 };
 
 const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
-    const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(catalogData);
+    const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+    const [materials, setMaterials] = useState<MaterialItem[]>([]);
+    const [services, setServices] = useState<Service[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<CatalogItemType | 'Todos'>('Todos');
+
+    // Carregar dados da API
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [catalogRes, materialsRes, servicesRes] = await Promise.all([
+                apiService.get<CatalogItem[]>('/api/catalogo'),
+                apiService.get<MaterialItem[]>('/api/materiais'),
+                apiService.get<Service[]>('/api/servicos')
+            ]);
+
+            if (catalogRes.success && catalogRes.data) setCatalogItems(catalogRes.data);
+            if (materialsRes.success && materialsRes.data) setMaterials(materialsRes.data);
+            if (servicesRes.success && servicesRes.data) setServices(servicesRes.data);
+        } catch (err) {
+            setError('Erro ao carregar dados');
+            console.error('Erro ao carregar dados:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, []);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [catalogSection, setCatalogSection] = useState<'itens' | 'servicos'>('itens');
@@ -365,7 +397,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     // Filtrar itens disponíveis para composição (materiais + kits do catálogo)
     const itensDisponiveis = useMemo(() => {
         const allItems: (MaterialItem | Kit)[] = [
-            ...materialsData,
+            ...materials,
             ...catalogItems.filter(item => item.type === CatalogItemType.Kit) as Kit[]
         ];
         
@@ -679,7 +711,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         let total = 0;
         const addPrice = (id?: string, qty = 1) => {
             if (!id) return;
-            const material = materialsData.find(m => m.id === id) || quadrosAluminioData.find(m => m.id === id) || quadrosComandoBaseData.find(m => m.id === id);
+            const material = materials.find(m => m.id === id);
             if (material?.price) {
                 total += material.price * qty;
             }
@@ -720,7 +752,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         const products: KitProduct[] = [];
         const addProduct = (id?: string, qty = 1) => {
             if (!id) return;
-            const allItems = [...materialsData, ...quadrosAluminioData, ...caixasPolicarbonatoData, ...quadrosComandoBaseData];
+            const allItems = [...materials];
             const item = allItems.find(m => m.id === id);
             if (item?.price) {
                 products.push({ productId: item.id, name: item.name, price: item.price, quantity: qty });
@@ -788,15 +820,15 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         handleCloseKitModal();
     };
 
-    const disjuntoresGerais = useMemo(() => materialsData.filter(m => m.subType === 'Disjuntor Geral' && (m.properties?.amperage ?? 0) >= 50 && m.properties?.breakingCapacity === '6KA'), []);
-    const disjuntoresIndividuais = useMemo(() => materialsData.filter(m => m.subType === 'Disjuntor Individual'), []);
-    const cabosFlexiveis = useMemo(() => materialsData.filter(m => m.subType === 'Cabo Flexível'), []);
-    const cabosRigidos = useMemo(() => materialsData.filter(m => m.subType === 'Cabo Rígido'), []);
-    const todosCabos = useMemo(() => materialsData.filter(m => m.subType === 'Cabo Flexível' || m.subType === 'Cabo Rígido'), []);
-    const dpsItems = useMemo(() => materialsData.filter(m => m.subType === 'DPS'), []);
-    const parafusosItems = useMemo(() => materialsData.filter(m => m.subType === 'Parafuso'), []);
-    const terminaisCompressao = useMemo(() => materialsData.filter(m => m.subType === 'Terminal de Compressão'), []);
-    const terminaisTubulares = useMemo(() => materialsData.filter(m => m.subType === 'Terminal Tubular'), []);
+    const disjuntoresGerais = useMemo(() => materials.filter(m => m.subType === 'Disjuntor Geral' && (m.properties?.amperage ?? 0) >= 50 && m.properties?.breakingCapacity === '6KA'), []);
+    const disjuntoresIndividuais = useMemo(() => materials.filter(m => m.subType === 'Disjuntor Individual'), []);
+    const cabosFlexiveis = useMemo(() => materials.filter(m => m.subType === 'Cabo Flexível'), []);
+    const cabosRigidos = useMemo(() => materials.filter(m => m.subType === 'Cabo Rígido'), []);
+    const todosCabos = useMemo(() => materials.filter(m => m.subType === 'Cabo Flexível' || m.subType === 'Cabo Rígido'), []);
+    const dpsItems = useMemo(() => materials.filter(m => m.subType === 'DPS'), []);
+    const parafusosItems = useMemo(() => materials.filter(m => m.subType === 'Parafuso'), []);
+    const terminaisCompressao = useMemo(() => materials.filter(m => m.subType === 'Terminal de Compressão'), []);
+    const terminaisTubulares = useMemo(() => materials.filter(m => m.subType === 'Terminal Tubular'), []);
     
     // Filtro de cabos baseado na busca do usuário
     const filteredCabos = useMemo(() => {
@@ -811,7 +843,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     // Filtro de materiais para subestações - TODOS os materiais, sem filtro por categoria
     const filteredMaterials = useMemo(() => {
         if (!materialSearchTerm) return [];
-        return materialsData.filter(m => 
+        return materials.filter(m => 
             m.name.toLowerCase().includes(materialSearchTerm.toLowerCase()) ||
             m.sku.toLowerCase().includes(materialSearchTerm.toLowerCase())
         ).slice(0, 30); // Mostrar até 30 resultados
@@ -820,8 +852,8 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     // Serviços filtrados (quando seção Serviços estiver ativa)
     const filteredServices = useMemo(() => {
         const term = servicesSearchTerm.trim().toLowerCase();
-        if (!term) return servicesData;
-        return servicesData.filter(s =>
+        if (!term) return services;
+        return services.filter(s =>
             s.name.toLowerCase().includes(term) ||
             (s.internalCode || '').toLowerCase().includes(term) ||
             (s.description || '').toLowerCase().includes(term)
@@ -2083,7 +2115,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
 
                                             <div className="mt-4 space-y-2">
                                                 {(kitConfig.disjuntoresIndividuais || []).map(dj => {
-                                                    const item = materialsData.find(m => m.id === dj.id);
+                                                    const item = materials.find(m => m.id === dj.id);
                                                     return (
                                                         <div key={dj.id} className="p-2 bg-brand-gray-100 rounded-md flex justify-between items-center text-sm">
                                                             <span>{dj.quantityPerMeter}x {item?.name} (por medidor)</span>
@@ -2177,7 +2209,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                                             const cabosCalculados: { [key: string]: { bitola: string; cor: string; tipo: string; quantidade: number } } = {};
                                                             
                                                             (kitConfig.disjuntoresIndividuais || []).forEach(dj => {
-                                                                const disjuntor = materialsData.find(m => m.id === dj.id);
+                                                                const disjuntor = materials.find(m => m.id === dj.id);
                                                                 const amperage = disjuntor?.properties?.amperage || 0;
                                                                 const polaridade = kitConfig.disjuntoresIndividuaisPolaridade || '';
                                                                 
@@ -2690,7 +2722,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                                         <h5 className="text-sm font-semibold text-brand-gray-700 mb-2">Resumo dos Disjuntores:</h5>
                                                         <div className="space-y-1 text-sm text-brand-gray-600">
                                                             {(kitConfig.disjuntoresIndividuais || []).map(dj => {
-                                                                const item = materialsData.find(m => m.id === dj.id);
+                                                                const item = materials.find(m => m.id === dj.id);
                                                                 const unidadesPorDisjuntor = 
                                                                     kitConfig.disjuntoresIndividuaisPolaridade === 'monopolar' ? 2 :
                                                                     kitConfig.disjuntoresIndividuaisPolaridade === 'bipolar' ? 3 : 4;

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type StockMovement, MovementType, type Product, CatalogItemType } from '../types';
-import { movementsData, catalogData } from '../data/mockData';
+// Removido import de dados mock - usando API
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -58,7 +58,7 @@ interface MovimentacoesProps {
 }
 
 const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
-    const [movements, setMovements] = useState<StockMovement[]>(movementsData);
+    const [movements, setMovements] = useState<StockMovement[]>([]);
     const [products, setProducts] = useState<Product[]>(catalogData.filter(item => item.type === CatalogItemType.Produto) as Product[]);
     const [filter, setFilter] = useState<MovementType | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');

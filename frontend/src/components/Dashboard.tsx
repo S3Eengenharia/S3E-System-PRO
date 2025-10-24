@@ -14,10 +14,10 @@ import {
     CatalogIcon,
     BoltIcon
 } from '../constants';
-import { catalogData, materialsData, movementsData } from '../data/mockData';
+// Removido import de dados mock - usando API
 
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="4" x2="20" y1="12" y2="12" />
         <line x1="4" x2="20" y1="6" y2="6" />
         <line x1="4" x2="20" y1="18" y2="18" />
@@ -33,12 +33,33 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ toggleSidebar, onNavigate, projects }) => {
-    // Calculate dynamic data
-    const totalCatalogItems = catalogData.length;
+    // Calculate dynamic data (usando dados vazios por enquanto)
+    const totalCatalogItems = 0; // Será carregado da API
     const activeProjectsCount = projects.filter(p => p.status === ProjectStatus.EmExecucao || p.status === ProjectStatus.Planejamento).length;
-    const totalStockValue = materialsData.reduce((sum, item) => sum + (item.price || 0) * item.stock, 0);
-    const criticalItems = materialsData.filter(m => m.stock <= 5);
-    const criticalAlertsCount = criticalItems.length;
+    const totalStockValue = 0; // Será carregado da API
+    const criticalItems: any[] = []; // Será carregado da API
+    const criticalAlertsCount = 0;
+
+    // Função para testar autenticação
+    const testAuth = async () => {
+        try {
+            const response = await fetch('http://localhost:3001/api/clientes', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            console.log('🔐 Teste de autenticação:', response.status, response.statusText);
+            if (response.ok) {
+                alert('✅ Autenticação funcionando!');
+            } else {
+                alert('❌ Erro na autenticação: ' + response.status);
+            }
+        } catch (error) {
+            console.error('❌ Erro no teste:', error);
+            alert('❌ Erro na conexão');
+        }
+    };
 
 
     const statCardsData: StatCardData[] = [
@@ -100,6 +121,15 @@ const Dashboard: React.FC<DashboardProps> = ({ toggleSidebar, onNavigate, projec
                 </div>
             </header>
 
+            <div className="mb-4">
+                <button
+                    onClick={testAuth}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                    🔐 Testar Autenticação
+                </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {statCardsData.map((card, index) => (
                     <StatCard key={index} data={card} />
@@ -108,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ toggleSidebar, onNavigate, projec
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
-                    <RecentMovements movements={movementsData} materials={materialsData} />
+                    <RecentMovements movements={[]} materials={[]} />
                     <OngoingProjects projects={projects} />
                 </div>
                 <div className="lg:col-span-1 space-y-8">

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { type User, UserRole } from '../types';
-import { useAuth } from '../hooks/useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 
 interface SettingsModalProps {
@@ -63,7 +64,7 @@ const getRoleClass = (role: UserRole) => {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-    const { user, updateUser } = useAuth();
+    const { user, updateUser } = useContext(AuthContext)!;
     const { theme, toggleTheme } = useTheme();
 
     // Tabs

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from './useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 
 export interface EquipeMembro {
   id: string;
@@ -47,7 +48,7 @@ export const useEquipes = () => {
   const [estatisticas, setEstatisticas] = useState<EstatisticasEquipes | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { token } = useAuth();
+  const { token } = useContext(AuthContext)!;
 
   const baseUrl = '/api/equipes';
 

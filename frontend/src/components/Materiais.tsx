@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type MaterialItem, MaterialCategory, type Supplier } from '../types';
-import { materialsData as initialMaterialsData, suppliersData, purchasesData } from '../data/mockData';
+// Removido import de dados mock - usando API
 import { CurrencyDollarIcon } from '../constants';
 
 // Icons

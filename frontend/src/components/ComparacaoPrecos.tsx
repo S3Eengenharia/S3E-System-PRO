@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PriceComparisonItem, PriceComparisonStatus, PriceComparisonImport } from '../types';
-import { useAuth } from '../hooks/useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 
 interface ComparacaoPrecosProps {
     toggleSidebar: () => void;
@@ -17,7 +18,7 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const { token } = useAuth();
+    const { token } = useContext(AuthContext)!;
 
     // Função para processar CSV (mock - será substituído por API)
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {

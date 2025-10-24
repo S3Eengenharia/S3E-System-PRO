@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 // FIX: Import missing enums for Client type to resolve TypeScript errors.
 import { type Budget, BudgetStatus, type Client, ProjectType, type Material, type BudgetMaterial, type BudgetImage, ClientType, ClientStatus, ContactPreference, ClientSource, type BudgetService, type CatalogItem, CatalogItemType } from '../types';
-import { budgetsData, clientsData, materialsData, servicesData, catalogData } from '../data/mockData';
+// Removido import de dados mock - usando API
+import { apiService } from '../services/api';
 import { CubeIcon } from '../constants';
 import RichTextEditor from './RichTextEditor';
 
@@ -78,8 +79,8 @@ const PrinterIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-// Simplified in-memory list of materials for the form
-const simpleMaterialsData = materialsData.map(m => ({ id: m.id, name: m.name, price: m.price || 0 }));
+// Simplified in-memory list of materials for the form (usando dados vazios)
+const simpleMaterialsData: Array<{id: string, name: string, price: number}> = [];
 
 const getStatusClass = (status: BudgetStatus) => {
     switch (status) {
@@ -405,8 +406,45 @@ const BudgetPrintView: React.FC<{ budget: Budget }> = ({ budget }) => (
 
 
 const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId, clearInitialBudgetId }) => {
-    const [budgets, setBudgets] = useState<Budget[]>(budgetsData);
+    const [budgets, setBudgets] = useState<Budget[]>([]);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [materials, setMaterials] = useState<Material[]>([]);
+    const [services, setServices] = useState<BudgetService[]>([]);
+    const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<BudgetStatus | 'Todos'>('Todos');
+
+    // Carregar dados da API
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [budgetsRes, clientsRes, materialsRes, servicesRes, catalogRes] = await Promise.all([
+                apiService.get<Budget[]>('/api/orcamentos'),
+                apiService.get<Client[]>('/api/clientes'),
+                apiService.get<Material[]>('/api/materiais'),
+                apiService.get<BudgetService[]>('/api/servicos'),
+                apiService.get<CatalogItem[]>('/api/catalogo')
+            ]);
+
+            if (budgetsRes.success && budgetsRes.data) setBudgets(budgetsRes.data);
+            if (clientsRes.success && clientsRes.data) setClients(clientsRes.data);
+            if (materialsRes.success && materialsRes.data) setMaterials(materialsRes.data);
+            if (servicesRes.success && servicesRes.data) setServices(servicesRes.data);
+            if (catalogRes.success && catalogRes.data) setCatalogItems(catalogRes.data);
+        } catch (err) {
+            setError('Erro ao carregar dados');
+            console.error('Erro ao carregar dados:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, []);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     
@@ -654,7 +692,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
     const handleRestoreDraft = () => {
         if (!draft) return;
 
-        const client = clientsData.find(c => c.id === draft.clientId);
+        const client = clients.find(c => c.id === draft.clientId);
         if (client) {
             setSelectedClient(client);
             setClientSearchTerm(draft._formState?.clientSearchTerm || client.name);
@@ -866,7 +904,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
 
     const handleAddService = () => {
         if (!serviceToAddId) return;
-        const service = servicesData.find(s => s.id === serviceToAddId);
+        const service = services.find(s => s.id === serviceToAddId);
         if (service && !projectServices.some(ps => ps.serviceId === serviceToAddId)) {
             const newService: BudgetService = {
                 serviceId: service.id,
@@ -980,7 +1018,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
     const handleOpenEditModal = (budget: Budget) => {
         setEditingBudget(budget);
     
-        const client = clientsData.find(c => c.id === budget.clientId);
+        const client = clients.find(c => c.id === budget.clientId);
         setSelectedClient(client || null);
         setClientSearchTerm(client ? client.name : '');
     
@@ -1013,7 +1051,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
             budget.id.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-    const filteredClients = clientsData.filter(client =>
+    const filteredClients = clients.filter(client =>
         client.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
     );
 
@@ -1022,7 +1060,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
         !projectMaterials.some(pm => pm.materialId === material.id)
     );
 
-    const filteredCatalogItems = catalogData.filter(item =>
+    const filteredCatalogItems = catalogItems.filter(item =>
         item.name.toLowerCase().includes(catalogItemSearchTerm.toLowerCase()) &&
         !projectCatalogItems.some(pm => pm.materialId === item.id)
     );
@@ -1031,7 +1069,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
         stockMaterial => !projectMaterials.some(pm => pm.materialId === stockMaterial.id)
     );
     
-    const availableServices = servicesData.filter(
+    const availableServices = services.filter(
         service => !projectServices.some(ps => ps.serviceId === service.id)
     );
 

@@ -6,7 +6,7 @@ import {
     type Opportunity, OpportunityStatus, type Interaction, InteractionType,
     type Budget, BudgetStatus, ProjectType
 } from '../types';
-import { clientsData, budgetsData } from '../data/mockData';
+import { apiService } from '../services/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -98,7 +98,9 @@ interface ClientesProps {
 type ClientFormState = Omit<Client, 'id' | 'projectHistory' | 'opportunities' | 'salesOrders' | 'interactions'>;
 
 const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
-    const [clients, setClients] = useState<Client[]>(clientsData);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<ClientStatus | 'Todos'>('Todos');
     const [sourceFilter, setSourceFilter] = useState<ClientSource | 'Todos'>('Todos');
@@ -116,6 +118,29 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         name: '', type: ClientType.PessoaJuridica, document: '', contactPerson: '', phone: '', email: '', address: '', notes: '',
         status: ClientStatus.Potencial, contactPreference: ContactPreference.Telefone, source: ClientSource.Indicacao
     });
+
+    // Carregar clientes da API
+    const loadClients = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const response = await apiService.get<Client[]>('/api/clientes');
+            if (response.success && response.data) {
+                setClients(response.data);
+            } else {
+                setError('Erro ao carregar clientes');
+            }
+        } catch (err) {
+            setError('Erro ao carregar clientes');
+            console.error('Erro ao carregar clientes:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadClients();
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -180,31 +205,49 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         setFormState(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (clientToEdit) {
-            const updatedClient: Client = { ...clientToEdit, ...formState };
-            setClients(prev => prev.map(s => s.id === clientToEdit.id ? updatedClient : s));
-        } else {
-            const newClient: Client = {
-                id: `CLI-${String(clients.length + 1).padStart(3, '0')}`,
-                ...formState,
-                projectHistory: [],
-                opportunities: [],
-                salesOrders: [],
-                interactions: [],
-            };
-            setClients(prev => [newClient, ...prev]);
+        try {
+            if (clientToEdit) {
+                // Editar cliente existente
+                const response = await apiService.put(`/api/clientes/${clientToEdit.id}`, formState);
+                if (response.success) {
+                    await loadClients(); // Recarregar lista
+                } else {
+                    alert('Erro ao atualizar cliente');
+                }
+            } else {
+                // Criar novo cliente
+                const response = await apiService.post('/api/clientes', formState);
+                if (response.success) {
+                    await loadClients(); // Recarregar lista
+                } else {
+                    alert('Erro ao criar cliente');
+                }
+            }
+            handleCloseModal();
+        } catch (err) {
+            console.error('Erro ao salvar cliente:', err);
+            alert('Erro ao salvar cliente');
         }
-        handleCloseModal();
     };
     
     const handleOpenDeleteModal = (client: Client) => { setClientToDelete(client); setOpenDropdownId(null); };
     const handleCloseDeleteModal = () => setClientToDelete(null);
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (clientToDelete) {
-            setClients(prev => prev.filter(s => s.id !== clientToDelete.id));
-            handleCloseDeleteModal();
+            try {
+                const response = await apiService.delete(`/api/clientes/${clientToDelete.id}`);
+                if (response.success) {
+                    await loadClients(); // Recarregar lista
+                } else {
+                    alert('Erro ao deletar cliente');
+                }
+                handleCloseDeleteModal();
+            } catch (err) {
+                console.error('Erro ao deletar cliente:', err);
+                alert('Erro ao deletar cliente');
+            }
         }
     };
 
@@ -278,8 +321,42 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredClients.map((client) => (
+                {loading && (
+                    <div className="flex justify-center items-center py-8">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue mx-auto mb-2"></div>
+                            <p className="text-brand-gray-600">Carregando clientes...</p>
+                        </div>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                        <p className="text-red-800">{error}</p>
+                        <button 
+                            onClick={loadClients}
+                            className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                        >
+                            Tentar novamente
+                        </button>
+                    </div>
+                )}
+
+                {!loading && !error && filteredClients.length === 0 && (
+                    <div className="text-center py-8">
+                        <p className="text-brand-gray-500">Nenhum cliente encontrado</p>
+                        <p className="text-sm text-brand-gray-400 mt-1">
+                            {searchTerm || statusFilter !== 'Todos' || sourceFilter !== 'Todos' || preferenceFilter !== 'Todos' 
+                                ? 'Tente ajustar os filtros de busca' 
+                                : 'Comece adicionando seu primeiro cliente'
+                            }
+                        </p>
+                    </div>
+                )}
+
+                {!loading && !error && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {filteredClients.map((client) => (
                         <div key={client.id} className={`bg-white rounded-lg border border-brand-gray-200 shadow-sm flex flex-col p-4 transition-shadow hover:shadow-lg ${getStatusBorderClass(client.status)}`}>
                              <div className="flex justify-between items-start mb-2">
                                 <h3 className="font-bold text-lg text-brand-gray-800 leading-tight flex-1 pr-2">{client.name}</h3>
@@ -318,7 +395,8 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
                     ))}
-                </div>
+                    </div>
+                )}
             </div>
 
             {isModalOpen && (

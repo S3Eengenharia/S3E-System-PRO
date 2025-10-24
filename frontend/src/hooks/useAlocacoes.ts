@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from './useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 
 // Tipos
 export interface Equipe {
@@ -61,7 +62,7 @@ const API_BASE_URL = 'http://localhost:3000/api';
  * Hook personalizado para gerenciar alocações de equipes
  */
 export const useAlocacoes = () => {
-  const { token } = useAuth();
+  const { token } = useContext(AuthContext)!;
   const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [alocacoes, setAlocacoes] = useState<AlocacaoCalendario[]>([]);
   const [estatisticas, setEstatisticas] = useState<Estatisticas | null>(null);

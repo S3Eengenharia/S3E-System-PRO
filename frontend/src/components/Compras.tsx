@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type PurchaseOrder, type Supplier, PurchaseStatus, type PurchaseOrderItem, type Product, CatalogItemType } from '../types';
-import { purchasesData, catalogData, suppliersData } from '../data/mockData';
+// Removido import de dados mock - usando API
 import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
 
 // Icons
@@ -73,8 +73,8 @@ interface ComprasProps {
 }
 
 const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
-    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(purchasesData);
-    const [products, setProducts] = useState<Product[]>(catalogData.filter(item => item.type === CatalogItemType.Produto) as Product[]);
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+    const [products, setProducts] = useState<Product[]>([].filter(item => item.type === CatalogItemType.Produto) as Product[]);
     const [filter, setFilter] = useState<PurchaseStatus | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);

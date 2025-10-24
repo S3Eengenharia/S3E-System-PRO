@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
+import DashboardAPI from './components/DashboardAPI';
 import Orcamentos from './components/Orcamentos';
 import Catalogo from './components/Catalogo';
 import Movimentacoes from './components/Movimentacoes';
@@ -13,17 +14,19 @@ import Historico from './components/Historico';
 import Compras from './components/Compras';
 import Materiais from './components/Materiais';
 import Fornecedores from './components/Fornecedores';
+import FornecedoresAPI from './components/FornecedoresAPI';
 import Clientes from './components/Clientes';
+import ClientesAPI from './components/ClientesAPI';
 import Projetos from './components/Projetos';
+import ProjetosAPI from './components/ProjetosAPI';
 import Obras from './components/Obras';
-import Servicos from './components/Servicos';
+import ServicosAPI from './components/ServicosAPI';
 import Financeiro from './components/Financeiro';
 import EmissaoNFe from './components/EmissaoNFe';
 import ComparacaoPrecos from './components/ComparacaoPrecos';
 import Vendas from './components/Vendas';
 import SettingsModal from './components/SettingsModal';
 import GerenciamentoObras from './pages/Obras/Gerenciamento';
-import { projectsData } from './data/mockData';
 import { type Project } from './types';
 
 const MainApp: React.FC = () => {
@@ -32,7 +35,7 @@ const MainApp: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [initialBudgetId, setInitialBudgetId] = useState<string | null>(null);
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
-  const [projects, setProjects] = useState<Project[]>(projectsData);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -68,8 +71,6 @@ const MainApp: React.FC = () => {
                />;
       case 'Catálogo':
         return <Catalogo toggleSidebar={toggleSidebar} />;
-      case 'Serviços':
-        return <Servicos toggleSidebar={toggleSidebar} />;
       case 'Movimentações':
         return <Movimentacoes toggleSidebar={toggleSidebar} />;
       case 'Histórico':
@@ -81,11 +82,11 @@ const MainApp: React.FC = () => {
       case 'Comparação de Preços':
         return <ComparacaoPrecos toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
       case 'Fornecedores':
-        return <Fornecedores toggleSidebar={toggleSidebar} />;
+        return <FornecedoresAPI toggleSidebar={toggleSidebar} />;
       case 'Clientes':
-        return <Clientes toggleSidebar={toggleSidebar} />;
+        return <ClientesAPI toggleSidebar={toggleSidebar} />;
       case 'Projetos':
-        return <Projetos 
+        return <ProjetosAPI 
                  toggleSidebar={toggleSidebar} 
                  onNavigate={handleNavigate}
                  onViewBudget={handleViewBudget}
@@ -109,8 +110,10 @@ const MainApp: React.FC = () => {
         return <Vendas toggleSidebar={toggleSidebar} />;
       case 'Emissão NF-e':
         return <EmissaoNFe toggleSidebar={toggleSidebar} />;
+      case 'Serviços':
+        return <ServicosAPI toggleSidebar={toggleSidebar} />;
       default:
-        return <Dashboard toggleSidebar={toggleSidebar} onNavigate={handleNavigate} projects={projects} />;
+        return <DashboardAPI toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
     }
   }
 

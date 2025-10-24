@@ -6,7 +6,7 @@ import {
     CatalogIcon,
     MovementIcon as StockIcon,
 } from '../constants';
-import { historyData } from '../data/mockData';
+// Removido import de dados mock - usando API
 
 // Fix: Define icons locally because they are not exported from constants.tsx
 const MenuIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -74,7 +74,7 @@ interface HistoricoProps {
 }
 
 const Historico: React.FC<HistoricoProps> = ({ toggleSidebar }) => {
-    const [logs] = useState<HistoryLog[]>(historyData);
+    const [logs] = useState<HistoryLog[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [moduleFilter, setModuleFilter] = useState<ModuleType | 'Todos'>('Todos');
     const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7days' | '30days'>('all');

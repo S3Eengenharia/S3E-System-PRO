@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { vendasData } from '../data/mockData';
-import { useAuth } from '../hooks/useAuth';
+// Removido import de dados mock - usando API
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts';
 
 // Icons
@@ -17,14 +18,14 @@ interface FinanceiroProps {
 type TabType = 'dashboard' | 'vendas' | 'receber' | 'pagar' | 'faturamento' | 'cobrancas';
 
 const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
-    const { fetchWithAuth } = useAuth();
+    const { user } = useContext(AuthContext)!;
     const [activeTab, setActiveTab] = useState<TabType>('dashboard');
     const [dadosFinanceiros, setDadosFinanceiros] = useState<any[]>([]);
     const [resumoFinanceiro, setResumoFinanceiro] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     // Usar dados mockados de vendas do sistema
-    const vendas = vendasData.map(v => ({
+    const vendas = [].map(v => ({
         id: v.id,
         cliente: v.cliente.nome,
         projeto: v.projeto.titulo,
@@ -34,7 +35,7 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
     }));
 
     // Extrair contas a receber de todas as vendas
-    const contasReceber = vendasData.flatMap(v => 
+    const contasReceber = [].flatMap(v => 
         v.contasReceber.map(c => ({
             id: c.id,
             cliente: v.cliente.nome,

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { navLinks, S3ELogoIcon } from '../constants';
-import { useAuth } from '../hooks/useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -34,7 +35,7 @@ const ArrowRightOnRectangleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, onNavigate, onOpenSettings }) => {
-    const { user, logout } = useAuth();
+    const { user, logout } = useContext(AuthContext)!;
     const [companyLogo, setCompanyLogo] = useState<string | null>(null);
 
     useEffect(() => {

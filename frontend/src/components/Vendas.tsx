@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { vendasData, budgetsData, clientsData } from '../data/mockData';
+import { useContext } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
+// Removido import de dados mock - usando API
 import { BudgetStatus } from '../types';
 
 // Icons
@@ -25,7 +26,7 @@ interface VendaForm {
 type TabType = 'nova' | 'lista' | 'dashboard';
 
 const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
-    const { user } = useAuth();
+    const { user } = useContext(AuthContext)!;
     const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
     // Estados para nova venda
@@ -41,19 +42,19 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     
     // Filtrar orçamentos aprovados
     const orcamentosAprovados = useMemo(() => {
-        return budgetsData.filter(orc => orc.status === BudgetStatus.Aprovado);
+        return []; // Será carregado da API
     }, []);
 
     // Orçamento selecionado
     const orcamentoSelecionado = useMemo(() => {
         if (!vendaForm.orcamentoId) return null;
-        return budgetsData.find(orc => orc.id === vendaForm.orcamentoId) || null;
+        return null; // Será carregado da API
     }, [vendaForm.orcamentoId]);
 
     // Cliente do orçamento selecionado
     const clienteDoOrcamento = useMemo(() => {
         if (!orcamentoSelecionado) return null;
-        return clientsData.find(cli => cli.id === orcamentoSelecionado.clienteId) || null;
+        return null; // Será carregado da API
     }, [orcamentoSelecionado]);
 
     // Estados para lista de vendas
@@ -73,7 +74,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
         setLoadingVendas(true);
         try {
             // Usar dados mockados reais
-            setVendas(vendasData);
+            setVendas([]);
         } catch (error) {
             console.error('Erro ao carregar vendas:', error);
         } finally {
@@ -84,7 +85,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     const carregarDashboard = async () => {
         try {
             // Calcular dados do dashboard baseado nos dados mockados
-            const vendasDoMes = vendasData.filter(v => {
+            const vendasDoMes = [].filter(v => {
                 const vendaDate = new Date(v.dataVenda);
                 const currentMonth = new Date();
                 return vendaDate.getMonth() === currentMonth.getMonth() &&
@@ -94,7 +95,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
             const totalVendas = vendasDoMes.length;
             const valorTotalVendas = vendasDoMes.reduce((sum, v) => sum + v.valorTotal, 0);
 
-            const todasContas = vendasData.flatMap(v => v.contasReceber);
+            const todasContas = [].flatMap(v => v.contasReceber);
             const contasAReceber = todasContas.filter(c => c.status === 'Pendente');
             const valorAReceber = contasAReceber.reduce((sum, c) => sum + c.valorParcela, 0);
 
@@ -189,23 +190,23 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
 
     // Calcular totais para o dashboard
     const totalVendas = useMemo(() => {
-        return vendasData.reduce((sum, v) => sum + v.valorTotal, 0);
+        return [].reduce((sum, v) => sum + v.valorTotal, 0);
     }, []);
 
     const totalContas = useMemo(() => {
-        const todasContas = vendasData.flatMap(v => v.contasReceber);
+        const todasContas = [].flatMap(v => v.contasReceber);
         return todasContas.length;
     }, []);
 
     const totalReceber = useMemo(() => {
-        const todasContas = vendasData.flatMap(v => v.contasReceber);
+        const todasContas = [].flatMap(v => v.contasReceber);
         return todasContas
             .filter(c => c.status === 'Pendente')
             .reduce((sum, c) => sum + c.valorParcela, 0);
     }, []);
 
     const totalAtrasado = useMemo(() => {
-        const todasContas = vendasData.flatMap(v => v.contasReceber);
+        const todasContas = [].flatMap(v => v.contasReceber);
         return todasContas
             .filter(c => {
                 const vencimento = new Date(c.dataVencimento);
@@ -251,7 +252,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                     <p className="text-3xl font-bold text-blue-700">
                         R$ {totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
-                    <p className="text-xs text-gray-600 mt-1">{vendasData.length} vendas realizadas</p>
+                    <p className="text-xs text-gray-600 mt-1">{[].length} vendas realizadas</p>
                 </div>
 
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200 shadow-sm">
@@ -314,8 +315,8 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                     <h3 className="text-sm font-semibold text-gray-600 mb-4">Vendas por Status</h3>
                                     <div className="space-y-3">
                                         {['Concluida', 'Pendente', 'Cancelada'].map(status => {
-                                            const count = vendasData.filter(v => v.status === status).length;
-                                            const total = vendasData.filter(v => v.status === status).reduce((sum, v) => sum + v.valorTotal, 0);
+                                            const count = [].filter(v => v.status === status).length;
+                                            const total = [].filter(v => v.status === status).reduce((sum, v) => sum + v.valorTotal, 0);
                                             return (
                                                 <div key={status} className="flex justify-between items-center">
                                                     <span className="text-sm text-gray-700">{status}</span>
@@ -332,7 +333,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
                                     <h3 className="text-sm font-semibold text-gray-600 mb-4">Contas a Receber</h3>
                                     <div className="space-y-3">
-                                        {vendasData.flatMap(v => v.contasReceber).map(conta => (
+                                        {[].flatMap(v => v.contasReceber).map(conta => (
                                             <div key={conta.id} className="flex justify-between items-center border-b border-green-100 pb-2">
                                                 <div>
                                                     <p className="text-sm font-medium text-gray-700">Parcela</p>
@@ -374,7 +375,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {vendasData.map(venda => (
+                                        {[].map(venda => (
                                             <tr key={venda.id} className="hover:bg-gray-50">
                                                 <td className="px-4 py-3 text-sm font-medium text-gray-900">{venda.numeroVenda}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{venda.cliente.nome}</td>

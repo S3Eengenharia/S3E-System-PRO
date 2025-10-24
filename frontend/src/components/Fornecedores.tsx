@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type Supplier, SupplierCategory } from '../types';
 import { SupplierIcon } from '../constants';
-import { suppliersData } from '../data/mockData';
+import { apiService } from '../services/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -79,7 +79,9 @@ interface FornecedoresProps {
 type SupplierFormState = Omit<Supplier, 'id'>;
 
 const Fornecedores: React.FC<FornecedoresProps> = ({ toggleSidebar }) => {
-    const [suppliers, setSuppliers] = useState<Supplier[]>(suppliersData);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<SupplierCategory | 'Todos'>('Todos');
 
@@ -94,6 +96,29 @@ const Fornecedores: React.FC<FornecedoresProps> = ({ toggleSidebar }) => {
         name: '', cnpj: '', contactPerson: '', phone: '', email: '', address: '', categories: [],
         stateRegistration: '', website: '', bankDetails: '', notes: ''
     });
+
+    // Carregar fornecedores da API
+    const loadSuppliers = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const response = await apiService.get<Supplier[]>('/api/fornecedores');
+            if (response.success && response.data) {
+                setSuppliers(response.data);
+            } else {
+                setError('Erro ao carregar fornecedores');
+            }
+        } catch (err) {
+            setError('Erro ao carregar fornecedores');
+            console.error('Erro ao carregar fornecedores:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadSuppliers();
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
