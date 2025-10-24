@@ -1,0 +1,20 @@
+version: '3.8'
+
+# Production overrides
+services:
+  backend:
+    build:
+      target: production
+    environment:
+      NODE_ENV: production
+    command: node dist/app.js
+    volumes: []  # Remove volume mounts in production
+
+  frontend:
+    build:
+      target: production
+    command: nginx -g 'daemon off;'
+    volumes: []  # Remove volume mounts in production
+
+  nginx:
+    profiles: []  # Enable nginx in production
