@@ -22,6 +22,7 @@ import EmissaoNFe from './components/EmissaoNFe';
 import ComparacaoPrecos from './components/ComparacaoPrecos';
 import Vendas from './components/Vendas';
 import SettingsModal from './components/SettingsModal';
+import GerenciamentoObras from './pages/Obras/Gerenciamento';
 import { projectsData } from './data/mockData';
 import { type Project } from './types';
 
@@ -100,6 +101,8 @@ const MainApp: React.FC = () => {
                  projects={projects}
                  setProjects={setProjects}
                />;
+      case 'Gestão de Obras':
+        return <GerenciamentoObras toggleSidebar={toggleSidebar} />;
       case 'Financeiro':
         return <Financeiro toggleSidebar={toggleSidebar} />;
       case 'Vendas':

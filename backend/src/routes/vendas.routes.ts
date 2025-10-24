@@ -1,6 +1,6 @@
 import express from 'express';
 import { VendasController } from '../controllers/vendasController';
-import { authenticate } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth.js';
 
 const router = express.Router();
 

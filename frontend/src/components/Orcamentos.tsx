@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type Budget, BudgetStatus, type Client, ProjectType, type Material, type BudgetMaterial, type BudgetImage, ClientType, ClientStatus, ContactPreference, ClientSource, type BudgetService, type CatalogItem, CatalogItemType } from '../types';
 import { budgetsData, clientsData, materialsData, servicesData, catalogData } from '../data/mockData';
 import { CubeIcon } from '../constants';
+import RichTextEditor from './RichTextEditor';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -221,9 +222,10 @@ const BudgetPrintView: React.FC<{ budget: Budget }> = ({ budget }) => (
                             Escopo do Projeto
                         </h3>
                         <div className="prose prose-sm max-w-none">
-                            <div className="text-brand-gray-700 leading-relaxed whitespace-pre-wrap text-justify">
-                                {budget.description}
-                            </div>
+                            <div 
+                                className="text-brand-gray-700 leading-relaxed text-justify"
+                                dangerouslySetInnerHTML={{ __html: budget.description }}
+                            />
                         </div>
                     </div>
                 )}
@@ -411,6 +413,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
     const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
     
     const [budgetToView, setBudgetToView] = useState<Budget | null>(null);
+    const [gerandoPDF, setGerandoPDF] = useState(false);
 
     const [draft, setDraft] = useState<BudgetDraft | null>(null);
 
@@ -929,6 +932,51 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
         setBudgetToView(null);
     };
 
+    // Função para gerar PDF via backend com fallback frontend
+    const handleGerarPDF = async (budget: Budget) => {
+        setGerandoPDF(true);
+        
+        try {
+            // Tentar gerar PDF via backend primeiro
+            const response = await fetch(`/api/pdf/orcamento/${budget.id}/url`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                
+                if (result.success && result.data.url) {
+                    // PDF gerado com sucesso via backend
+                    const link = document.createElement('a');
+                    link.href = result.data.url;
+                    link.download = result.data.filename;
+                    link.click();
+                    
+                    alert('PDF gerado com sucesso!');
+                    return;
+                }
+            }
+            
+            // Fallback: usar impressão do navegador
+            console.log('Backend PDF não disponível, usando fallback frontend');
+            window.print();
+            
+        } catch (error) {
+            console.error('Erro ao gerar PDF via backend:', error);
+            
+            // Fallback: usar impressão do navegador
+            console.log('Erro no backend, usando fallback frontend');
+            window.print();
+            
+        } finally {
+            setGerandoPDF(false);
+        }
+    };
+
     const handleOpenEditModal = (budget: Budget) => {
         setEditingBudget(budget);
     
@@ -1230,13 +1278,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
                                             <label htmlFor="description" className="block text-sm font-semibold text-brand-gray-700 mb-2">
                                                 Descrição do Projeto
                                             </label>
-                                            <textarea 
-                                                id="description" 
-                                                value={description} 
-                                                onChange={e => setDescription(e.target.value)} 
-                                                rows={4} 
-                                                placeholder="Detalhe o escopo do serviço, observações importantes, etc..." 
-                                                className="w-full px-4 py-3 border-2 border-brand-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue transition-all resize-none" 
+                                            <RichTextEditor
+                                                value={description}
+                                                onChange={setDescription}
+                                                placeholder="Detalhe o escopo do serviço, observações importantes, etc..."
+                                                className="w-full"
                                             />
                                         </div>
                                         
@@ -1736,11 +1782,21 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar, initialBudgetId,
                             <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 flex justify-end gap-3 flex-shrink-0">
                                 <button
                                     type="button"
-                                    onClick={() => window.print()}
-                                    className="flex items-center gap-2 px-4 py-2 bg-brand-gray-700 text-white font-semibold rounded-lg hover:bg-brand-gray-600"
+                                    onClick={() => budgetToView && handleGerarPDF(budgetToView)}
+                                    disabled={gerandoPDF}
+                                    className="flex items-center gap-2 px-4 py-2 bg-brand-gray-700 text-white font-semibold rounded-lg hover:bg-brand-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <PrinterIcon className="w-5 h-5" />
-                                    Imprimir / Baixar PDF
+                                    {gerandoPDF ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            Gerando PDF...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <PrinterIcon className="w-5 h-5" />
+                                            Gerar PDF
+                                        </>
+                                    )}
                                 </button>
                                 <button type="button" onClick={handleCloseViewModal} className="px-4 py-2 bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold rounded-lg hover:bg-brand-gray-50">
                                     Fechar

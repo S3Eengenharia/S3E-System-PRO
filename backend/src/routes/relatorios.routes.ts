@@ -1,6 +1,6 @@
 import express from 'express';
 import { RelatoriosController } from '../controllers/relatoriosController';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate, authorize } from '../middlewares/auth.js';
 
 const router = express.Router();
 

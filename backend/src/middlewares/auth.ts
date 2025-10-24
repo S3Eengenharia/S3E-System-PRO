@@ -29,6 +29,9 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
   }
 };
 
+// Alias para compatibilidade
+export const authenticateToken = authenticate;
+
 export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const userRole = (req as AuthRequest).user?.role;

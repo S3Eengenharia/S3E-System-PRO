@@ -192,11 +192,12 @@ model Projeto {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  orcamento  Orcamento @relation(fields: [orcamentoId], references: [id])
-  cliente    Cliente   @relation(fields: [clienteId], references: [id])
-  tasks      Task[]
+  orcamento    Orcamento      @relation(fields: [orcamentoId], references: [id])
+  cliente      Cliente        @relation(fields: [clienteId], references: [id])
+  tasks        Task[]
   notasFiscais NotaFiscal[]
-  vendas     Venda[]
+  vendas       Venda[]
+  alocacoes    AlocacaoObra[]
 
   @@map("projetos")
 }
@@ -409,4 +410,46 @@ model NotaFiscal {
   projeto Projeto? @relation(fields: [projetoId], references: [id])
 
   @@map("notas_fiscais")
+}
+
+// ============================================
+// GESTÃO OPERACIONAL - EQUIPES E ALOCAÇÕES
+// ============================================
+
+enum TipoEquipe {
+  MONTAGEM
+  CAMPO
+  DISTINTA
+}
+
+model Equipe {
+  id        String      @id @default(uuid())
+  nome      String      @unique // Ex: Equipe A, Equipe B, Equipe C
+  tipo      TipoEquipe
+  membros   String[]    // Array de IDs de usuários
+  ativa     Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  alocacoes AlocacaoObra[]
+
+  @@map("equipes")
+}
+
+model AlocacaoObra {
+  id               String    @id @default(uuid())
+  equipeId         String
+  projetoId        String    // Relacionado com Projeto (Obra)
+  dataInicio       DateTime
+  dataFimPrevisto  DateTime
+  dataFimReal      DateTime?
+  status           String    @default("Planejada") // Planejada, EmAndamento, Concluida, Cancelada
+  observacoes      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  equipe  Equipe  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@map("alocacoes_obra")
 }

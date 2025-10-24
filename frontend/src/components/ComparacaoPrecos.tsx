@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PriceComparisonItem, PriceComparisonStatus, PriceComparisonImport } from '../types';
+import { useAuth } from '../hooks/useAuth';
 
 interface ComparacaoPrecosProps {
     toggleSidebar: () => void;
@@ -14,6 +15,9 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [supplierName, setSupplierName] = useState('');
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const { token } = useAuth();
 
     // Função para processar CSV (mock - será substituído por API)
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,110 +30,88 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
     };
 
     // Processar CSV e criar comparação
-    const processCSV = () => {
+    const processCSV = async () => {
         if (!selectedFile || !supplierName.trim()) {
             alert('Preencha todos os campos');
             return;
         }
 
-        // Mock de processamento - em produção, enviará para backend
-        const mockItems: PriceComparisonItem[] = [
-            {
-                id: '1',
-                materialCode: 'MAT-001',
-                materialName: 'Cabo 2,5mm² - Rolo 100m',
-                unit: 'Rolo',
-                quantity: 5,
-                currentPrice: 285.00,
-                newPrice: 295.00,
-                difference: 3.51,
-                differenceValue: 10.00,
-                status: PriceComparisonStatus.Higher,
-                supplierName: supplierName,
-                lastPurchaseDate: '2024-09-15',
-                stockQuantity: 12
-            },
-            {
-                id: '2',
-                materialCode: 'MAT-002',
-                materialName: 'Disjuntor 20A Bipolar',
-                unit: 'Unidade',
-                quantity: 10,
-                currentPrice: 45.00,
-                newPrice: 42.50,
-                difference: -5.56,
-                differenceValue: -2.50,
-                status: PriceComparisonStatus.Lower,
-                supplierName: supplierName,
-                lastPurchaseDate: '2024-10-01',
-                stockQuantity: 25
-            },
-            {
-                id: '3',
-                materialCode: 'MAT-003',
-                materialName: 'Tomada 2P+T 10A',
-                unit: 'Unidade',
-                quantity: 20,
-                currentPrice: 12.50,
-                newPrice: 12.50,
-                difference: 0,
-                differenceValue: 0,
-                status: PriceComparisonStatus.Equal,
-                supplierName: supplierName,
-                lastPurchaseDate: '2024-09-20',
-                stockQuantity: 50
-            },
-            {
-                id: '4',
-                materialCode: 'MAT-004',
-                materialName: 'Eletroduto 3/4" - 3m',
-                unit: 'Barra',
-                quantity: 30,
-                currentPrice: null,
-                newPrice: 18.90,
-                difference: null,
-                differenceValue: null,
-                status: PriceComparisonStatus.NoHistory,
-                supplierName: supplierName,
-                stockQuantity: 0
-            },
-            {
-                id: '5',
-                materialCode: 'MAT-005',
-                materialName: 'Quadro Distribuição 12 Disjuntores',
-                unit: 'Unidade',
-                quantity: 2,
-                currentPrice: 350.00,
-                newPrice: 380.00,
-                difference: 8.57,
-                differenceValue: 30.00,
-                status: PriceComparisonStatus.Higher,
-                supplierName: supplierName,
-                lastPurchaseDate: '2024-08-10',
-                stockQuantity: 3
+        setIsProcessing(true);
+        setError(null);
+
+        try {
+            // Preparar FormData para upload
+            const formData = new FormData();
+            formData.append('csvFile', selectedFile);
+
+            // Fazer upload e processar CSV
+            const response = await fetch('/api/comparacao-precos/upload-csv', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Erro ao processar CSV');
             }
-        ];
 
-        const totalValue = mockItems.reduce((sum, item) => {
-            return sum + ((item.newPrice || 0) * item.quantity);
-        }, 0);
+            const result = await response.json();
 
-        const newImport: PriceComparisonImport = {
-            id: `IMP-${Date.now()}`,
-            fileName: selectedFile.name,
-            uploadDate: new Date().toISOString(),
-            supplierName: supplierName,
-            itemsCount: mockItems.length,
-            totalValue: totalValue,
-            items: mockItems,
-            status: 'pending'
-        };
+            if (!result.success) {
+                throw new Error(result.message || 'Erro ao processar CSV');
+            }
 
-        setImports([newImport, ...imports]);
-        setSelectedImport(newImport);
-        setIsUploadModalOpen(false);
-        setSupplierName('');
-        setSelectedFile(null);
+            // Converter dados do backend para o formato do frontend
+            const mockItems: PriceComparisonItem[] = result.data.items.map((item: any, index: number) => ({
+                id: index.toString(),
+                materialCode: item.codigo,
+                materialName: item.nome,
+                unit: item.unidade,
+                quantity: item.quantidade,
+                currentPrice: item.preco_atual || null,
+                newPrice: item.preco_unitario,
+                difference: item.diferenca_percentual || 0,
+                differenceValue: item.preco_atual ? 
+                    (item.preco_unitario - item.preco_atual) * item.quantidade : null,
+                status: item.status === 'Lower' ? PriceComparisonStatus.Lower :
+                       item.status === 'Higher' ? PriceComparisonStatus.Higher :
+                       item.status === 'Equal' ? PriceComparisonStatus.Equal :
+                       PriceComparisonStatus.NoHistory,
+                supplierName: supplierName,
+                lastPurchaseDate: '2024-10-01', // TODO: buscar data real do histórico
+                stockQuantity: 0 // TODO: buscar estoque real
+            }));
+
+            const totalValue = mockItems.reduce((sum, item) => {
+                return sum + ((item.newPrice || 0) * item.quantity);
+            }, 0);
+
+            const newImport: PriceComparisonImport = {
+                id: `IMP-${Date.now()}`,
+                fileName: selectedFile.name,
+                uploadDate: new Date().toISOString(),
+                supplierName: supplierName,
+                itemsCount: result.data.summary.total_items,
+                totalValue: totalValue,
+                items: mockItems,
+                status: 'pending'
+            };
+
+            setImports([newImport, ...imports]);
+            setSelectedImport(newImport);
+            setIsUploadModalOpen(false);
+            setSupplierName('');
+            setSelectedFile(null);
+
+        } catch (error) {
+            console.error('Erro ao processar CSV:', error);
+            setError(error instanceof Error ? error.message : 'Erro desconhecido');
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     // Filtrar itens
@@ -550,6 +532,19 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                                 />
                             </div>
 
+                            {/* Exibir erro se houver */}
+                            {error && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-red-700 font-medium">Erro ao processar CSV</span>
+                                    </div>
+                                    <p className="text-red-600 text-sm mt-1">{error}</p>
+                                </div>
+                            )}
+
                             {/* Upload do Arquivo */}
                             <div>
                                 <label className="block text-sm font-medium text-brand-gray-700 mb-2">
@@ -600,10 +595,17 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                             </button>
                             <button
                                 onClick={processCSV}
-                                disabled={!selectedFile || !supplierName.trim()}
+                                disabled={!selectedFile || !supplierName.trim() || isProcessing}
                                 className="px-6 py-2 bg-brand-s3e text-white rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Processar e Comparar
+                                {isProcessing ? (
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        Processando...
+                                    </span>
+                                ) : (
+                                    'Processar e Comparar'
+                                )}
                             </button>
                         </div>
                     </div>

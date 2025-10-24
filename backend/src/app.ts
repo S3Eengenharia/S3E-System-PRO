@@ -13,6 +13,10 @@ import vendasRoutes from './routes/vendas.routes.js';
 import contasPagarRoutes from './routes/contasPagar.routes.js';
 import relatoriosRoutes from './routes/relatorios.routes.js';
 import protectedRoutes from './routes/protected.routes.js';
+import alocacaoRoutes from './routes/alocacao.routes.js';
+import comparacaoPrecosRoutes from './routes/comparacaoPrecos.routes.js';
+import equipesRoutes from './routes/equipes.routes.js';
+import pdfRoutes from './routes/pdf.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,7 +51,11 @@ app.get('/api', (_req, res) => {
       vendas: '/api/vendas',
       contasPagar: '/api/contas-pagar',
       relatorios: '/api/relatorios',
-      configFiscal: '/api/configuracoes-fiscais'
+      configFiscal: '/api/configuracoes-fiscais',
+      obras: '/api/obras',
+      comparacaoPrecos: '/api/comparacao-precos',
+      equipes: '/api/equipes',
+      pdf: '/api/pdf'
     }
   });
 });
@@ -62,6 +70,10 @@ app.use('/api/vendas', vendasRoutes);
 app.use('/api/contas-pagar', contasPagarRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/configuracoes-fiscais', configFiscalRoutes);
+app.use('/api/obras', alocacaoRoutes);
+app.use('/api/comparacao-precos', comparacaoPrecosRoutes);
+app.use('/api/equipes', equipesRoutes);
+app.use('/api/pdf', pdfRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

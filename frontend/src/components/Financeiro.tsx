@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { vendasData } from '../data/mockData';
 import { useAuth } from '../hooks/useAuth';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -47,6 +47,33 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
 
     const contasPagar = [
         { id: '1', fornecedor: 'Distribuidora Elétrica', descricao: 'Materiais Projeto A', valor: 15000, vencimento: '25/10/2025', status: 'Pendente' },
+    ];
+
+    // Dados para gráficos melhorados
+    const dadosDistribuicaoDespesas = [
+        { name: 'Materiais', value: 45000, color: '#3b82f6' },
+        { name: 'Mão de Obra', value: 28000, color: '#10b981' },
+        { name: 'Equipamentos', value: 15000, color: '#f59e0b' },
+        { name: 'Transporte', value: 8000, color: '#ef4444' },
+        { name: 'Outros', value: 5000, color: '#8b5cf6' }
+    ];
+
+    const dadosComparativoMensal = [
+        { mes: 'Jan', receita: 120000, despesa: 95000, lucro: 25000 },
+        { mes: 'Fev', receita: 135000, despesa: 110000, lucro: 25000 },
+        { mes: 'Mar', receita: 150000, despesa: 120000, lucro: 30000 },
+        { mes: 'Abr', receita: 165000, despesa: 130000, lucro: 35000 },
+        { mes: 'Mai', receita: 180000, despesa: 140000, lucro: 40000 },
+        { mes: 'Jun', receita: 195000, despesa: 150000, lucro: 45000 }
+    ];
+
+    const dadosTendenciaVendas = [
+        { mes: 'Jan', vendas: 120000, orcamentos: 180000 },
+        { mes: 'Fev', vendas: 135000, orcamentos: 200000 },
+        { mes: 'Mar', vendas: 150000, orcamentos: 220000 },
+        { mes: 'Abr', vendas: 165000, orcamentos: 240000 },
+        { mes: 'Mai', vendas: 180000, orcamentos: 260000 },
+        { mes: 'Jun', vendas: 195000, orcamentos: 280000 }
     ];
 
     // Carregar dados do backend
@@ -235,6 +262,112 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
                                     <p className="text-sm text-gray-500 mt-2">Realize vendas e registre pagamentos para ver os gráficos.</p>
                                 </div>
                             )}
+
+                            {/* Novos gráficos melhorados */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                                {/* Gráfico de Pizza - Distribuição de Despesas */}
+                                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="text-2xl">🥧</span>
+                                        Distribuição de Despesas
+                                    </h3>
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <PieChart>
+                                            <Pie
+                                                data={dadosDistribuicaoDespesas}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={100}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {dadosDistribuicaoDespesas.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip 
+                                                formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                                                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                                            />
+                                            <Legend />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* Gráfico de Barras Comparativo */}
+                                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="text-2xl">📊</span>
+                                        Comparativo Mensal
+                                    </h3>
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <BarChart data={dadosComparativoMensal}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="mes" />
+                                            <YAxis 
+                                                tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                                            />
+                                            <Tooltip 
+                                                formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                                                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                                            />
+                                            <Legend />
+                                            <Bar dataKey="receita" fill="#10b981" name="Receita" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="despesa" fill="#ef4444" name="Despesa" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="lucro" fill="#3b82f6" name="Lucro" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Gráfico de Tendência - Vendas vs Orçamentos */}
+                            <div className="mt-6">
+                                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="text-2xl">📈</span>
+                                        Tendência de Vendas vs Orçamentos
+                                    </h3>
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <AreaChart data={dadosTendenciaVendas}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="mes" />
+                                            <YAxis 
+                                                tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                                            />
+                                            <Tooltip 
+                                                formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                                                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                                            />
+                                            <Legend />
+                                            <Area 
+                                                type="monotone" 
+                                                dataKey="vendas" 
+                                                stackId="1" 
+                                                stroke="#3b82f6" 
+                                                fill="#3b82f6" 
+                                                fillOpacity={0.6}
+                                                name="Vendas Realizadas"
+                                            />
+                                            <Area 
+                                                type="monotone" 
+                                                dataKey="orcamentos" 
+                                                stackId="2" 
+                                                stroke="#10b981" 
+                                                fill="#10b981" 
+                                                fillOpacity={0.4}
+                                                name="Orçamentos Gerados"
+                                            />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                    
+                                    <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                        <p className="text-sm text-gray-600">
+                                            <strong>📈 Análise:</strong> A diferença entre orçamentos e vendas indica o potencial de conversão e oportunidades de melhoria no processo comercial.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 

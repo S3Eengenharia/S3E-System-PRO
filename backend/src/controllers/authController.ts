@@ -166,3 +166,44 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+/**
+ * Controller para listar todos os usuários
+ * 
+ * GET /api/auth/users
+ * Headers: Authorization: Bearer <token>
+ * 
+ * @example
+ * Request:
+ * GET /api/auth/users
+ * Headers: { Authorization: "Bearer eyJhbGci..." }
+ * 
+ * Response (200):
+ * {
+ *   "users": [
+ *     {
+ *       "id": "...",
+ *       "email": "user@s3e.com",
+ *       "name": "Usuário",
+ *       "role": "admin",
+ *       "active": true
+ *     },
+ *     ...
+ *   ]
+ * }
+ */
+export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Buscar todos os usuários
+    const users = await authService.getAllUsers();
+
+    // Retornar lista
+    res.status(200).json({
+      users: users
+    });
+  } catch (error) {
+    // Erro genérico
+    console.error('Erro ao buscar usuários:', error);
+    res.status(500).json({ error: 'Erro ao buscar usuários' });
+  }
+};
+

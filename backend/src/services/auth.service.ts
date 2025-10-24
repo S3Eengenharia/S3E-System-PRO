@@ -248,3 +248,32 @@ export const emailExists = async (email: string): Promise<boolean> => {
   return !!user;
 };
 
+/**
+ * Busca todos os usuários ativos do sistema
+ * 
+ * @returns Lista de usuários (sem senha)
+ * 
+ * @example
+ * ```typescript
+ * const users = await getAllUsers();
+ * console.log(users); // [{ id: "...", name: "...", ... }, ...]
+ * ```
+ */
+export const getAllUsers = async () => {
+  const users = await prisma.user.findMany({
+    where: { active: true },
+    select: { 
+      id: true, 
+      email: true, 
+      name: true, 
+      role: true, 
+      active: true,
+      createdAt: true,
+      updatedAt: true
+    },
+    orderBy: { name: 'asc' }
+  });
+
+  return users;
+};
+
