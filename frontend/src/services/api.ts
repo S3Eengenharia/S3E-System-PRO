@@ -61,13 +61,35 @@ class ApiService {
         headers,
       });
 
-      const data = await response.json();
+      // Verificar se a resposta é JSON antes de tentar parsear
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType && contentType.includes('application/json');
 
       if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        if (isJson) {
+          try {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+          } catch (jsonError) {
+            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+          }
+        } else {
+          // Se não for JSON, pode ser HTML de erro
+          const errorText = await response.text();
+          console.error('Resposta não-JSON recebida:', errorText.substring(0, 200));
+          throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+        }
       }
 
-      return data;
+      if (isJson) {
+        const data = await response.json();
+        return data;
+      } else {
+        // Se não for JSON, retornar erro
+        const text = await response.text();
+        console.error('Resposta não-JSON recebida:', text.substring(0, 200));
+        throw new Error('Resposta não é JSON válido');
+      }
     } catch (error) {
       console.error('API Error:', error);
       return {

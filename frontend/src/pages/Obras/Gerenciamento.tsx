@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAlocacoes, type NovaAlocacao, type Equipe } from '../../hooks/useAlocacoes';
 import ModalGerenciarEquipes from '../../components/ModalGerenciarEquipes';
 import GanttChart, { type GanttItem } from '../../components/GanttChart';
+import EquipesGantt from '../../components/Obras/EquipesGantt';
+import EquipeManagerModal from '../../components/Obras/EquipeManagerModal';
 
 // Ícones
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>;
@@ -74,8 +76,11 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
   // Estado do modal de gerenciar equipes
   const [isModalEquipesOpen, setIsModalEquipesOpen] = useState(false);
   
-  // Estado da visualização (calendário ou Gantt)
-  const [visualizacao, setVisualizacao] = useState<'calendario' | 'gantt'>('calendario');
+  // Estado do novo modal de gestão de equipes
+  const [isEquipeManagerOpen, setIsEquipeManagerOpen] = useState(false);
+  
+  // Estado da visualização (calendário, gantt ou timeline)
+  const [visualizacao, setVisualizacao] = useState<'calendario' | 'gantt' | 'timeline'>('timeline');
 
   // Atualizar calendário quando mês/ano mudar
   useEffect(() => {
@@ -111,7 +116,7 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
   const ganttItems: GanttItem[] = useMemo(() => {
     return alocacoes.map(alocacao => {
       const startDate = new Date(alocacao.dataInicio);
-      const endDate = alocacao.dataFimPrevisto ? new Date(alocacao.dataFimPrevisto) : new Date(startDate.getTime() + (alocacao.duracaoDias * 24 * 60 * 60 * 1000));
+      const endDate = alocacao.dataFimPrevisto ? new Date(alocacao.dataFimPrevisto) : new Date(startDate.getTime() + (20 * 24 * 60 * 60 * 1000)); // 20 dias padrão
       
       // Calcular progresso baseado no status e dias decorridos
       let progress = 0;
@@ -350,7 +355,9 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
               <div>
                 <h1 className="text-2xl font-bold text-brand-gray-900">Gestão de Obras</h1>
                 <p className="text-sm text-brand-gray-600">
-                  {visualizacao === 'calendario' ? 'Calendário de Alocação de Equipes' : 'Gantt Chart - Cronograma de Projetos'}
+                  {visualizacao === 'calendario' ? 'Calendário de Alocação de Equipes' : 
+                   visualizacao === 'gantt' ? 'Gantt Chart - Cronograma de Projetos' : 
+                   'Timeline de Equipes - Visualização Gantt'}
                 </p>
               </div>
             </div>
@@ -358,6 +365,19 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
             <div className="flex items-center gap-3">
               {/* Botões de Visualização */}
               <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setVisualizacao('timeline')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    visualizacao === 'timeline'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Timeline
+                </button>
                 <button
                   onClick={() => setVisualizacao('calendario')}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -385,7 +405,7 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
               </div>
               
               <button
-                onClick={() => setIsModalEquipesOpen(true)}
+                onClick={() => setIsEquipeManagerOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-brand-blue text-brand-blue font-semibold rounded-lg shadow-sm hover:bg-brand-blue-light transition-colors"
               >
                 <UserGroupIcon className="w-5 h-5" />
@@ -589,6 +609,21 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
           </div>
         </div>
 
+        {visualizacao === 'timeline' && (
+          <div className="max-w-7xl mx-auto p-6">
+            <EquipesGantt
+              onEquipeClick={(equipe) => {
+                console.log('Equipe clicada:', equipe);
+                // Aqui você pode implementar ações quando uma equipe é clicada
+              }}
+              onAlocacaoClick={(alocacao) => {
+                console.log('Alocação clicada:', alocacao);
+                setAlocacaoSelecionada(alocacao.id);
+              }}
+            />
+          </div>
+        )}
+
         {visualizacao === 'gantt' && (
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
@@ -756,6 +791,16 @@ const GerenciamentoObras: React.FC<GerenciamentoObrasProps> = ({ toggleSidebar }
       <ModalGerenciarEquipes
         isOpen={isModalEquipesOpen}
         onClose={() => setIsModalEquipesOpen(false)}
+      />
+
+      {/* Novo Modal de Gestão de Equipes */}
+      <EquipeManagerModal
+        isOpen={isEquipeManagerOpen}
+        onClose={() => setIsEquipeManagerOpen(false)}
+        onEquipeEdit={(equipe) => {
+          console.log('Editar equipe:', equipe);
+          // Aqui você pode implementar a edição de equipes
+        }}
       />
       </div>
     </div>

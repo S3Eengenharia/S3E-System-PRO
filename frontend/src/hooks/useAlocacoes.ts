@@ -56,7 +56,7 @@ export interface Estatisticas {
   alocacoesConcluidas: number;
 }
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 /**
  * Hook personalizado para gerenciar alocações de equipes
@@ -82,19 +82,32 @@ export const useAlocacoes = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/obras/equipes`, {
+      
+      const url = `${API_BASE_URL}/obras/equipes`;
+      console.log('🔍 Buscando equipes:', url);
+      
+      const response = await fetch(url, {
         headers: getHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Erro ao buscar equipes');
+        // Verificar se a resposta é JSON antes de tentar parsear
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`);
+        } else {
+          throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        }
       }
 
       const data = await response.json();
       setEquipes(data.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setError(errorMessage);
       console.error('Erro ao buscar equipes:', err);
+      setEquipes([]); // Fallback para array vazio
     } finally {
       setLoading(false);
     }
@@ -104,22 +117,42 @@ export const useAlocacoes = () => {
    * Buscar alocações do calendário
    */
   const fetchAlocacoesCalendario = useCallback(async (mes: number, ano: number) => {
+    // Validação de parâmetros obrigatórios
+    if (!mes || !ano || mes < 1 || mes > 12 || ano < 2020 || ano > 2030) {
+      console.warn('Parâmetros inválidos para buscar alocações:', { mes, ano });
+      setAlocacoes([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/obras/alocacoes/calendario?mes=${mes}&ano=${ano}`, {
+      
+      const url = `${API_BASE_URL}/obras/alocacoes/calendario?mes=${mes}&ano=${ano}`;
+      console.log('🔍 Buscando alocações:', url);
+      
+      const response = await fetch(url, {
         headers: getHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Erro ao buscar alocações');
+        // Verificar se a resposta é JSON antes de tentar parsear
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`);
+        } else {
+          throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        }
       }
 
       const data = await response.json();
       setAlocacoes(data.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setError(errorMessage);
       console.error('Erro ao buscar alocações:', err);
+      setAlocacoes([]); // Fallback para array vazio
     } finally {
       setLoading(false);
     }
@@ -149,21 +182,48 @@ export const useAlocacoes = () => {
    * Buscar equipes disponíveis em um período
    */
   const fetchEquipesDisponiveis = useCallback(async (dataInicio: string, dataFim: string): Promise<Equipe[]> => {
+    // Validação de parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      console.warn('Parâmetros de data obrigatórios não fornecidos');
+      return [];
+    }
+
+    // Validar formato de data
+    const inicioDate = new Date(dataInicio);
+    const fimDate = new Date(dataFim);
+    
+    if (isNaN(inicioDate.getTime()) || isNaN(fimDate.getTime())) {
+      console.warn('Formato de data inválido:', { dataInicio, dataFim });
+      return [];
+    }
+
+    if (inicioDate > fimDate) {
+      console.warn('Data de início não pode ser posterior à data de fim');
+      return [];
+    }
+
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/obras/equipes/disponiveis?dataInicio=${dataInicio}&dataFim=${dataFim}`,
-        { headers: getHeaders() }
-      );
+      const url = `${API_BASE_URL}/obras/equipes/disponiveis?dataInicio=${dataInicio}&dataFim=${dataFim}`;
+      console.log('🔍 Buscando equipes disponíveis:', url);
+      
+      const response = await fetch(url, { headers: getHeaders() });
 
       if (!response.ok) {
-        throw new Error('Erro ao buscar equipes disponíveis');
+        // Verificar se a resposta é JSON antes de tentar parsear
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`);
+        } else {
+          throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        }
       }
 
       const data = await response.json();
       return data.data || [];
     } catch (err) {
       console.error('Erro ao buscar equipes disponíveis:', err);
-      return [];
+      return []; // Fallback para array vazio
     }
   }, [getHeaders]);
 
