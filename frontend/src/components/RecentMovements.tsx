@@ -33,29 +33,31 @@ const MovementItem: React.FC<{ movement: StockMovement; stockLevel: StockLevel }
     };
 
     return (
-        <div className="flex items-center justify-between py-4">
-            <div className="flex items-center">
-                {isEntrada ? (
-                    <PlusCircleIcon className="w-8 h-8 text-brand-green" />
-                ) : (
-                    <MinusCircleIcon className="w-8 h-8 text-brand-red" />
-                )}
-                <div className="ml-4">
-                    <div className="flex items-center">
+        <div className="flex items-center justify-between py-4 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors duration-200">
+            <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${isEntrada ? 'bg-gradient-to-br from-green-50 to-green-100 ring-1 ring-green-200/50' : 'bg-gradient-to-br from-red-50 to-red-100 ring-1 ring-red-200/50'}`}>
+                    {isEntrada ? (
+                        <PlusCircleIcon className="w-5 h-5 text-green-600" />
+                    ) : (
+                        <MinusCircleIcon className="w-5 h-5 text-red-600" />
+                    )}
+                </div>
+                <div>
+                    <div className="flex items-center gap-2">
                         <span 
-                            className={`w-2.5 h-2.5 rounded-full mr-2 ${stockLevelColor[stockLevel]}`}
+                            className={`w-2 h-2 rounded-full ${stockLevelColor[stockLevel]}`}
                             title={`Nível de Estoque: ${stockLevelText[stockLevel]}`}
                         ></span>
-                        <p className="font-semibold text-brand-gray-800">{movement.product.name}</p>
+                        <p className="font-semibold text-gray-900">{movement.product.name}</p>
                     </div>
-                    <p className="text-sm text-brand-gray-500 pl-5">{movement.quantity} unidades</p>
+                    <p className="text-sm text-gray-500 ml-4">{movement.quantity} unidades</p>
                 </div>
             </div>
             <div className="text-right">
-                <span className={`px-3 py-1 text-xs font-medium rounded-full ${isEntrada ? 'bg-brand-gray-800 text-white' : 'bg-brand-gray-200 text-brand-gray-600'}`}>
+                <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg shadow-sm ${isEntrada ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}>
                     {movement.type}
                 </span>
-                <p className="text-xs text-brand-gray-400 mt-1">{movement.date}</p>
+                <p className="text-xs text-gray-400 mt-2">{movement.date}</p>
             </div>
         </div>
     );
@@ -86,14 +88,14 @@ const RecentMovements: React.FC<RecentMovementsProps> = ({ movements, materials 
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-gray-200">
-            <div className="flex items-center text-brand-gray-800 mb-4">
-                <div className="bg-gradient-to-br from-brand-purple to-purple-600 p-2 rounded-lg mr-3">
-                    <MovementIcon className="w-5 h-5 text-white" />
+        <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 hover:border-gray-200 card-hover transition-all duration-300">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shadow-sm ring-1 ring-purple-200/50">
+                    <MovementIcon className="w-5 h-5 text-purple-600" />
                 </div>
-                <h2 className="text-lg font-bold">Movimentações Recentes</h2>
+                <h2 className="text-lg font-bold text-gray-900">Movimentações Recentes</h2>
             </div>
-            <div className="divide-y divide-brand-gray-100">
+            <div className="divide-y divide-gray-100">
                 {recentMovementsData.map((movement) => (
                     <MovementItem 
                       key={movement.id} 

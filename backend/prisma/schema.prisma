@@ -32,18 +32,18 @@ model User {
 // ============================================
 
 model Cliente {
-  id            String   @id @default(uuid())
-  nome          String
-  cpfCnpj       String   @unique
-  email         String?
-  telefone      String?
-  endereco      String?
-  cidade        String?
-  estado        String?
-  cep           String?
-  ativo         Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(uuid())
+  nome      String
+  cpfCnpj   String   @unique
+  email     String?
+  telefone  String?
+  endereco  String?
+  cidade    String?
+  estado    String?
+  cep       String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   orcamentos Orcamento[]
   projetos   Projeto[]
@@ -63,9 +63,9 @@ model Fornecedor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  materiais    Material[]
-  compras      Compra[]
-  contasPagar  ContaPagar[]
+  materiais   Material[]
+  compras     Compra[]
+  contasPagar ContaPagar[]
 
   @@map("fornecedores")
 }
@@ -75,58 +75,58 @@ model Fornecedor {
 // ============================================
 
 model Material {
-  id              String   @id @default(uuid())
-  nome            String
-  sku             String   @unique
-  tipo            String   // Tipo do material
-  categoria       String   // MaterialEletrico, Insumo, Ferramenta
-  descricao       String?
-  estoque         Float    @default(0)
-  estoqueMinimo   Float    @default(5)
-  unidadeMedida   String   @default("un")
-  localizacao     String?
-  preco           Float?   // Preço de referência
-  fornecedorId    String?
-  ativo           Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(uuid())
+  nome          String
+  sku           String   @unique
+  tipo          String // Tipo do material
+  categoria     String // MaterialEletrico, Insumo, Ferramenta
+  descricao     String?
+  estoque       Float    @default(0)
+  estoqueMinimo Float    @default(5)
+  unidadeMedida String   @default("un")
+  localizacao   String?
+  preco         Float? // Preço de referência
+  fornecedorId  String?
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  fornecedor      Fornecedor?          @relation(fields: [fornecedorId], references: [id])
-  kitItems        KitItem[]
-  orcamentoItems  OrcamentoItem[]
-  compraItems     CompraItem[]
-  movimentacoes   MovimentacaoEstoque[]
+  fornecedor     Fornecedor?           @relation(fields: [fornecedorId], references: [id])
+  kitItems       KitItem[]
+  orcamentoItems OrcamentoItem[]
+  compraItems    CompraItem[]
+  movimentacoes  MovimentacaoEstoque[]
 
   @@map("materiais")
 }
 
 model Servico {
-  id            String   @id @default(uuid())
-  nome          String
-  codigo        String   @unique
-  descricao     String?
-  tipo          String   // Instalacao, Manutencao, Consultoria, LaudoTecnico
-  preco         Float
-  unidade       String   @default("un") // un, hora, m2, etc
-  ativo         Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(uuid())
+  nome      String
+  codigo    String   @unique
+  descricao String?
+  tipo      String // Instalacao, Manutencao, Consultoria, LaudoTecnico
+  preco     Float
+  unidade   String   @default("un") // un, hora, m2, etc
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("servicos")
 }
 
 model Kit {
-  id          String   @id @default(uuid())
-  nome        String
-  descricao   String?
-  preco       Float
-  tipo        String   // medidores, comando, quadro-eletrico, subestacoes
-  ativo       Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  nome      String
+  descricao String?
+  preco     Float
+  tipo      String // medidores, comando, quadro-eletrico, subestacoes
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  items           KitItem[]
-  orcamentoItems  OrcamentoItem[]
+  items          KitItem[]
+  orcamentoItems OrcamentoItem[]
 
   @@map("kits")
 }
@@ -148,24 +148,24 @@ model KitItem {
 // ============================================
 
 model Orcamento {
-  id                String   @id @default(uuid())
-  clienteId         String
-  titulo            String
-  descricao         String?  // HTML do Quill editor
-  validade          DateTime
-  status            String   @default("Rascunho") // Rascunho, Enviado, Aprovado, Rejeitado
-  bdi               Float    @default(0) // Margem de lucro
-  custoTotal        Float    @default(0)
-  precoVenda        Float    @default(0)
-  observacoes       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  aprovedAt         DateTime?
+  id          String    @id @default(uuid())
+  clienteId   String
+  titulo      String
+  descricao   String? // HTML do Quill editor
+  validade    DateTime
+  status      String    @default("Rascunho") // Rascunho, Enviado, Aprovado, Rejeitado
+  bdi         Float     @default(0) // Margem de lucro
+  custoTotal  Float     @default(0)
+  precoVenda  Float     @default(0)
+  observacoes String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  aprovedAt   DateTime?
 
-  cliente Cliente           @relation(fields: [clienteId], references: [id])
+  cliente Cliente         @relation(fields: [clienteId], references: [id])
   items   OrcamentoItem[]
   projeto Projeto?
-  venda   Venda?            // Relação 1:1 com venda (quando orçamento é vendido)
+  venda   Venda? // Relação 1:1 com venda (quando orçamento é vendido)
 
   @@map("orcamentos")
 }
@@ -173,7 +173,7 @@ model Orcamento {
 model OrcamentoItem {
   id          String  @id @default(uuid())
   orcamentoId String
-  tipo        String  // MATERIAL, KIT, SERVICO
+  tipo        String // MATERIAL, KIT, SERVICO
   materialId  String?
   kitId       String?
   servicoNome String? // Para serviços avulsos
@@ -194,18 +194,18 @@ model OrcamentoItem {
 // ============================================
 
 model Projeto {
-  id           String   @id @default(uuid())
-  orcamentoId  String   @unique
+  id           String    @id @default(uuid())
+  orcamentoId  String    @unique
   clienteId    String
   titulo       String
   descricao    String?
   valorTotal   Float
-  dataInicio   DateTime @default(now())
+  dataInicio   DateTime  @default(now())
   dataPrevisao DateTime?
   dataFim      DateTime?
-  status       String   @default("EmAndamento") // EmAndamento, Concluido, Cancelado
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  status       String    @default("EmAndamento") // EmAndamento, Concluido, Cancelado
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   orcamento    Orcamento      @relation(fields: [orcamentoId], references: [id])
   cliente      Cliente        @relation(fields: [clienteId], references: [id])
@@ -213,22 +213,45 @@ model Projeto {
   notasFiscais NotaFiscal[]
   vendas       Venda[]
   alocacoes    AlocacaoObra[]
+  etapasAdmin  EtapaAdmin[]
 
   @@map("projetos")
 }
 
+model EtapaAdmin {
+  id             String    @id @default(uuid())
+  projetoId      String
+  tipo           String // ABERTURA_SR, EMITIR_ART, etc.
+  ordem          Int // Ordem de execução (1-10)
+  concluida      Boolean   @default(false)
+  dataInicio     DateTime? // Quando foi iniciada
+  dataPrevista   DateTime // Prazo previsto (24h por padrão)
+  dataConclusao  DateTime? // Quando foi concluída
+  observacoes    String?
+  motivoExtensao String? // Motivo para extensão de prazo
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@index([projetoId])
+  @@index([tipo])
+  @@index([concluida])
+  @@map("etapas_admin")
+}
+
 model Task {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   projetoId   String
   titulo      String
   descricao   String?
-  status      String   @default("ToDo") // ToDo, Doing, Done
-  prioridade  String   @default("Media") // Baixa, Media, Alta
+  status      String    @default("ToDo") // ToDo, Doing, Done
+  prioridade  String    @default("Media") // Baixa, Media, Alta
   prazo       DateTime?
   responsavel String?
-  ordem       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ordem       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
@@ -240,40 +263,40 @@ model Task {
 // ============================================
 
 model Compra {
-  id               String   @id @default(uuid())
-  fornecedorId     String
-  fornecedorNome   String
-  fornecedorCNPJ   String
-  fornecedorTel    String?
-  numeroNF         String
-  dataEmissaoNF    DateTime
-  dataCompra       DateTime
-  dataRecebimento  DateTime?
-  valorSubtotal    Float
-  valorFrete       Float    @default(0)
-  outrasDespesas   Float    @default(0)
-  valorTotal       Float
-  status           String   @default("Pendente") // Pendente, Recebido, Cancelado
-  xmlData          String?  // JSON string com dados completos do XML
-  observacoes      String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String    @id @default(uuid())
+  fornecedorId    String
+  fornecedorNome  String
+  fornecedorCNPJ  String
+  fornecedorTel   String?
+  numeroNF        String
+  dataEmissaoNF   DateTime
+  dataCompra      DateTime
+  dataRecebimento DateTime?
+  valorSubtotal   Float
+  valorFrete      Float     @default(0)
+  outrasDespesas  Float     @default(0)
+  valorTotal      Float
+  status          String    @default("Pendente") // Pendente, Recebido, Cancelado
+  xmlData         String? // JSON string com dados completos do XML
+  observacoes     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id])
+  fornecedor Fornecedor   @relation(fields: [fornecedorId], references: [id])
   items      CompraItem[]
 
   @@map("compras")
 }
 
 model CompraItem {
-  id            String @id @default(uuid())
-  compraId      String
-  materialId    String?
-  nomeProduto   String
-  ncm           String?
-  quantidade    Float
-  valorUnit     Float
-  valorTotal    Float
+  id          String  @id @default(uuid())
+  compraId    String
+  materialId  String?
+  nomeProduto String
+  ncm         String?
+  quantidade  Float
+  valorUnit   Float
+  valorTotal  Float
 
   compra   Compra    @relation(fields: [compraId], references: [id], onDelete: Cascade)
   material Material? @relation(fields: [materialId], references: [id])
@@ -288,10 +311,10 @@ model CompraItem {
 model MovimentacaoEstoque {
   id          String   @id @default(uuid())
   materialId  String
-  tipo        String   // ENTRADA, SAIDA, AJUSTE
+  tipo        String // ENTRADA, SAIDA, AJUSTE
   quantidade  Float
-  motivo      String   // COMPRA, VENDA, PROJETO, DEVOLUCAO, AJUSTE
-  referencia  String?  // ID da compra, projeto, etc
+  motivo      String // COMPRA, VENDA, PROJETO, DEVOLUCAO, AJUSTE
+  referencia  String? // ID da compra, projeto, etc
   observacoes String?
   data        DateTime @default(now())
   createdAt   DateTime @default(now())
@@ -306,42 +329,42 @@ model MovimentacaoEstoque {
 // ============================================
 
 model Venda {
-  id              String   @id @default(uuid())
-  numeroVenda     String   @unique
-  orcamentoId     String   @unique // Vínculo com orçamento aprovado
-  dataVenda       DateTime @default(now())
-  valorTotal      Float
-  status          String   @default("Pendente") // Pendente, Concluida, Cancelada
-  clienteId       String
-  projetoId       String?
-  formaPagamento  String   @default("À vista") // À vista, Parcelado, Boleto, PIX
-  parcelas        Int      @default(1)
-  valorEntrada    Float    @default(0)
-  observacoes     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  numeroVenda    String   @unique
+  orcamentoId    String   @unique // Vínculo com orçamento aprovado
+  dataVenda      DateTime @default(now())
+  valorTotal     Float
+  status         String   @default("Pendente") // Pendente, Concluida, Cancelada
+  clienteId      String
+  projetoId      String?
+  formaPagamento String   @default("À vista") // À vista, Parcelado, Boleto, PIX
+  parcelas       Int      @default(1)
+  valorEntrada   Float    @default(0)
+  observacoes    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  orcamento Orcamento        @relation(fields: [orcamentoId], references: [id])
-  cliente   Cliente           @relation(fields: [clienteId], references: [id])
-  projeto   Projeto?          @relation(fields: [projetoId], references: [id])
+  orcamento     Orcamento      @relation(fields: [orcamentoId], references: [id])
+  cliente       Cliente        @relation(fields: [clienteId], references: [id])
+  projeto       Projeto?       @relation(fields: [projetoId], references: [id])
   contasReceber ContaReceber[]
 
   @@map("vendas")
 }
 
 model ContaReceber {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   vendaId        String
   descricao      String
   valorParcela   Float
   dataVencimento DateTime
   dataPagamento  DateTime?
-  status         String   @default("Pendente") // Pendente, Pago, Atrasado, Cancelado
+  status         String    @default("Pendente") // Pendente, Pago, Atrasado, Cancelado
   numeroParcela  Int?
   totalParcelas  Int?
   observacoes    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   venda Venda @relation(fields: [vendaId], references: [id], onDelete: Cascade)
 
@@ -349,19 +372,19 @@ model ContaReceber {
 }
 
 model ContaPagar {
-  id             String   @id @default(uuid())
-  fornecedorId   String?  // Opcional para permitir despesas sem fornecedor específico
+  id             String    @id @default(uuid())
+  fornecedorId   String? // Opcional para permitir despesas sem fornecedor específico
   compraId       String?
   descricao      String
-  valorParcela   Float    // Valor da parcela/despesa
+  valorParcela   Float // Valor da parcela/despesa
   dataVencimento DateTime
   dataPagamento  DateTime?
-  status         String   @default("Pendente") // Pendente, Pago, Atrasado, Cancelado
+  status         String    @default("Pendente") // Pendente, Pago, Atrasado, Cancelado
   numeroParcela  Int?
   totalParcelas  Int?
   observacoes    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   fornecedor Fornecedor? @relation(fields: [fornecedorId], references: [id])
 
@@ -373,27 +396,27 @@ model ContaPagar {
 // ============================================
 
 model EmpresaFiscal {
-  id                    String   @id @default(uuid())
-  cnpj                  String   @unique
-  inscricaoEstadual     String
-  razaoSocial           String
-  nomeFantasia          String?
-  endereco              String   // Logradouro
-  numero                String
-  complemento           String?
-  bairro                String
-  cidade                String
-  estado                String
-  cep                   String
-  telefone              String?
-  email                 String?
-  regimeTributario      String   // SimplesNacional, RegimeNormal, MEI
-  certificadoPath       String?  // Caminho do arquivo .pfx no servidor
-  certificadoSenha      String?  // Senha criptografada
-  certificadoValidade   DateTime?
-  ativo                 Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                  String    @id @default(uuid())
+  cnpj                String    @unique
+  inscricaoEstadual   String
+  razaoSocial         String
+  nomeFantasia        String?
+  endereco            String // Logradouro
+  numero              String
+  complemento         String?
+  bairro              String
+  cidade              String
+  estado              String
+  cep                 String
+  telefone            String?
+  email               String?
+  regimeTributario    String // SimplesNacional, RegimeNormal, MEI
+  certificadoPath     String? // Caminho do arquivo .pfx no servidor
+  certificadoSenha    String? // Senha criptografada
+  certificadoValidade DateTime?
+  ativo               Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@map("empresas_fiscais")
 }
@@ -405,19 +428,19 @@ model EmpresaFiscal {
 model NotaFiscal {
   id              String   @id @default(uuid())
   projetoId       String?
-  empresaFiscalId String?  // CNPJ emissor
+  empresaFiscalId String? // CNPJ emissor
   numero          String   @unique
   serie           String
   chaveAcesso     String?  @unique
-  tipo            String   // PRODUTO, SERVICO
-  natureza        String   // Venda de produção, Remessa, etc
+  tipo            String // PRODUTO, SERVICO
+  natureza        String // Venda de produção, Remessa, etc
   cfop            String
   valorProdutos   Float
   valorServicos   Float    @default(0)
   valorTotal      Float
   dataEmissao     DateTime @default(now())
   status          String   @default("Pendente") // Pendente, Autorizada, Cancelada
-  xmlNFe          String?  // XML gerado/autorizado
+  xmlNFe          String? // XML gerado/autorizado
   observacoes     String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -438,13 +461,13 @@ enum TipoEquipe {
 }
 
 model Equipe {
-  id        String      @id @default(uuid())
-  nome      String      @unique // Ex: Equipe A, Equipe B, Equipe C
+  id        String     @id @default(uuid())
+  nome      String     @unique // Ex: Equipe A, Equipe B, Equipe C
   tipo      TipoEquipe
-  membros   String[]    // Array de IDs de usuários
-  ativa     Boolean     @default(true)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  membros   String[] // Array de IDs de usuários
+  ativa     Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   alocacoes AlocacaoObra[]
 
@@ -452,16 +475,16 @@ model Equipe {
 }
 
 model AlocacaoObra {
-  id               String    @id @default(uuid())
-  equipeId         String
-  projetoId        String    // Relacionado com Projeto (Obra)
-  dataInicio       DateTime
-  dataFimPrevisto  DateTime
-  dataFimReal      DateTime?
-  status           String    @default("Planejada") // Planejada, EmAndamento, Concluida, Cancelada
-  observacoes      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  equipeId        String
+  projetoId       String // Relacionado com Projeto (Obra)
+  dataInicio      DateTime
+  dataFimPrevisto DateTime
+  dataFimReal     DateTime?
+  status          String    @default("Planejada") // Planejada, EmAndamento, Concluida, Cancelada
+  observacoes     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   equipe  Equipe  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
   projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
@@ -473,14 +496,14 @@ model HistoryLog {
   id        String   @id @default(uuid())
   userId    String
   userName  String
-  action    String   // CREATE, UPDATE, DELETE, VIEW
-  module    String   // Orcamentos, Clientes, Materiais, etc
-  entityId  String?  // ID do registro afetado
-  details   String?  // JSON com detalhes da ação
+  action    String // CREATE, UPDATE, DELETE, VIEW
+  module    String // Orcamentos, Clientes, Materiais, etc
+  entityId  String? // ID do registro afetado
+  details   String? // JSON com detalhes da ação
   ip        String?
   timestamp DateTime @default(now())
 
-  @@map("history_logs")
   @@index([module, timestamp])
   @@index([userId, timestamp])
+  @@map("history_logs")
 }

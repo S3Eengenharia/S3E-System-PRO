@@ -276,3 +276,48 @@ export const deleteFornecedor = async (req: Request, res: Response): Promise<voi
     });
   }
 };
+
+// Reativar fornecedor
+export const reativarFornecedor = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Verificar se fornecedor existe
+    const fornecedor = await prisma.fornecedor.findUnique({
+      where: { id }
+    });
+
+    if (!fornecedor) {
+      res.status(404).json({
+        success: false,
+        error: 'Fornecedor não encontrado'
+      });
+      return;
+    }
+
+    if (fornecedor.ativo) {
+      res.status(400).json({
+        success: false,
+        error: 'Fornecedor já está ativo'
+      });
+      return;
+    }
+
+    // Reativar fornecedor
+    await prisma.fornecedor.update({
+      where: { id },
+      data: { ativo: true }
+    });
+
+    res.json({
+      success: true,
+      message: 'Fornecedor reativado com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao reativar fornecedor:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Erro ao reativar fornecedor' 
+    });
+  }
+};

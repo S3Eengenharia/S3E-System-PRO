@@ -15,10 +15,13 @@ import Compras from './components/Compras';
 import Materiais from './components/Materiais';
 import Fornecedores from './components/Fornecedores';
 import FornecedoresAPI from './components/FornecedoresAPI';
+import FornecedoresModerno from './components/FornecedoresModerno';
 import Clientes from './components/Clientes';
 import ClientesAPI from './components/ClientesAPI';
+import ClientesModerno from './components/ClientesModerno';
 import Projetos from './components/Projetos';
 import ProjetosAPI from './components/ProjetosAPI';
+import ProjetosModerno from './components/ProjetosModerno';
 import Obras from './components/Obras';
 import ServicosAPI from './components/ServicosAPI';
 import Financeiro from './components/Financeiro';
@@ -26,7 +29,7 @@ import EmissaoNFe from './components/EmissaoNFe';
 import ComparacaoPrecos from './components/ComparacaoPrecos';
 import Vendas from './components/Vendas';
 import SettingsModal from './components/SettingsModal';
-import GerenciamentoObras from './pages/Obras/Gerenciamento';
+import GestaoObras from './components/GestaoObras';
 import { type Project } from './types';
 
 const MainApp: React.FC = () => {
@@ -64,11 +67,7 @@ const MainApp: React.FC = () => {
       case 'Dashboard':
         return <Dashboard toggleSidebar={toggleSidebar} onNavigate={handleNavigate} projects={projects} />;
       case 'Orçamentos':
-        return <Orcamentos 
-                 toggleSidebar={toggleSidebar} 
-                 initialBudgetId={initialBudgetId}
-                 clearInitialBudgetId={() => setInitialBudgetId(null)}
-               />;
+        return <Orcamentos toggleSidebar={toggleSidebar} />;
       case 'Catálogo':
         return <Catalogo toggleSidebar={toggleSidebar} />;
       case 'Movimentações':
@@ -77,23 +76,20 @@ const MainApp: React.FC = () => {
         return <Historico toggleSidebar={toggleSidebar} />;
       case 'Compras':
         return <Compras toggleSidebar={toggleSidebar} />;
+      case 'Estoque':
       case 'Materiais':
         return <Materiais toggleSidebar={toggleSidebar} />;
       case 'Comparação de Preços':
         return <ComparacaoPrecos toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
       case 'Fornecedores':
-        return <FornecedoresAPI toggleSidebar={toggleSidebar} />;
+        return <FornecedoresModerno toggleSidebar={toggleSidebar} />;
       case 'Clientes':
-        return <ClientesAPI toggleSidebar={toggleSidebar} />;
+        return <ClientesModerno toggleSidebar={toggleSidebar} />;
       case 'Projetos':
-        return <ProjetosAPI 
+        return <ProjetosModerno 
                  toggleSidebar={toggleSidebar} 
                  onNavigate={handleNavigate}
                  onViewBudget={handleViewBudget}
-                 initialProjectId={initialProjectId}
-                 clearInitialProjectId={() => setInitialProjectId(null)}
-                 projects={projects}
-                 setProjects={setProjects}
                />;
       case 'Obras':
         return <Obras 
@@ -103,7 +99,7 @@ const MainApp: React.FC = () => {
                  setProjects={setProjects}
                />;
       case 'Gestão de Obras':
-        return <GerenciamentoObras toggleSidebar={toggleSidebar} />;
+        return <GestaoObras toggleSidebar={toggleSidebar} />;
       case 'Financeiro':
         return <Financeiro toggleSidebar={toggleSidebar} />;
       case 'Vendas':

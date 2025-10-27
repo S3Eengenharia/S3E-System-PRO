@@ -269,7 +269,7 @@ export const navLinks = [
     // ========== SUPRIMENTOS / ESTOQUE ==========
     { name: 'Fornecedores', icon: SupplierIcon },
     { name: 'Compras', icon: ShoppingBagIcon },
-    { name: 'Materiais', icon: CubeIcon },
+    { name: 'Estoque', icon: CubeIcon },
     { name: 'Catálogo', icon: CatalogIcon },
     { name: 'Comparação de Preços', icon: CompareIcon },
     

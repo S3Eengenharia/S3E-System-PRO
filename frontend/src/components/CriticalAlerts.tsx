@@ -19,31 +19,33 @@ interface CriticalAlertsProps {
 
 const CriticalAlerts: React.FC<CriticalAlertsProps> = ({ materials }) => {
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-orange-200">
-            <div className="flex items-center text-orange-600 mb-4">
-                <ExclamationTriangleIcon className="w-5 h-5 mr-2"/>
-                <h2 className="text-lg font-bold">Alertas Críticos</h2>
+        <div className="bg-white p-6 rounded-2xl shadow-soft border border-orange-100 hover:border-orange-200 card-hover transition-all duration-300">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shadow-sm ring-1 ring-orange-200/50">
+                    <ExclamationTriangleIcon className="w-5 h-5 text-orange-600"/>
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">Alertas Críticos</h2>
             </div>
             {materials.length === 0 ? (
                 <div className="text-center py-8">
-                    <div className="inline-block p-4 bg-green-100 rounded-full">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-sm ring-1 ring-green-200/50">
                         <CubeTransparentIcon className="w-8 h-8 text-green-600"/>
                     </div>
-                    <h3 className="mt-4 text-xl font-semibold text-brand-gray-800">Tudo em ordem!</h3>
-                    <p className="mt-1 text-sm text-brand-gray-500">Nenhum item com estoque crítico</p>
+                    <h3 className="mt-4 text-lg font-bold text-gray-900">Tudo em ordem!</h3>
+                    <p className="mt-1.5 text-sm text-gray-500">Nenhum item com estoque crítico</p>
                 </div>
             ) : (
                 <div className="space-y-3">
-                    <p className='text-sm text-brand-gray-500 mb-4'>Os seguintes itens precisam de atenção imediata:</p>
+                    <p className='text-sm text-gray-500 mb-4'>Os seguintes itens precisam de atenção imediata:</p>
                     {materials.map(item => (
-                        <div key={item.id} className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                        <div key={item.id} className="flex justify-between items-center p-3.5 bg-gradient-to-br from-orange-50 to-orange-50/50 rounded-xl border border-orange-100 hover:border-orange-200 transition-colors duration-200">
                             <div>
-                                <p className="font-semibold text-sm text-brand-gray-800">{item.name}</p>
-                                <p className="text-xs text-brand-gray-500">SKU: {item.sku}</p>
+                                <p className="font-semibold text-sm text-gray-900">{item.name}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">SKU: {item.sku}</p>
                             </div>
                             <div className="text-right">
-                                <span className="font-bold text-lg text-red-600">{item.stock}</span>
-                                <p className="text-xs text-red-500">{item.unitOfMeasure}.</p>
+                                <span className="font-bold text-xl text-red-600">{item.stock}</span>
+                                <p className="text-xs text-red-500 font-medium">{item.unitOfMeasure}.</p>
                             </div>
                         </div>
                     ))}

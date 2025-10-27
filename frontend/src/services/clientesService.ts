@@ -58,6 +58,10 @@ class ClientesService {
   async desativar(id: string) {
     return apiService.delete<Cliente>(`/api/clientes/${id}`);
   }
+
+  async reativar(id: string) {
+    return apiService.put<Cliente>(`/api/clientes/${id}/reativar`);
+  }
 }
 
 export const clientesService = new ClientesService();

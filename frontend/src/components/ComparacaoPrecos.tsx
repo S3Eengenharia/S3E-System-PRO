@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { PriceComparisonItem, PriceComparisonStatus, PriceComparisonImport } from '../types';
 import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
+import { axiosApiService } from '../services/axiosApi';
 
 interface ComparacaoPrecosProps {
     toggleSidebar: () => void;
@@ -46,27 +47,14 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
             formData.append('csvFile', selectedFile);
 
             // Fazer upload e processar CSV
-            const response = await fetch('/api/comparacao-precos/upload-csv', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
-            });
+            const response = await axiosApiService.post('/api/comparacao-precos/upload-csv', formData);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Erro ao processar CSV');
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao processar CSV');
+            if (!response.success) {
+                throw new Error(response.error || 'Erro ao processar CSV');
             }
 
             // Converter dados do backend para o formato do frontend
-            const mockItems: PriceComparisonItem[] = result.data.items.map((item: any, index: number) => ({
+            const mockItems: PriceComparisonItem[] = response.data.items.map((item: any, index: number) => ({
                 id: index.toString(),
                 materialCode: item.codigo,
                 materialName: item.nome,
