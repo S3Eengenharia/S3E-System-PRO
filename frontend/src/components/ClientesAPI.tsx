@@ -183,7 +183,7 @@ const ClientesAPI: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         try {
             const response = await clientesService.desativar(clienteToDelete.id);
             if (response.success) {
-                setClientes(prev => prev.filter(c => c.id !== clienteToDelete.id));
+                await loadClientes(); // Recarregar para atualizar status
                 setClienteToDelete(null);
             } else {
                 alert(response.message || 'Erro ao desativar cliente');
@@ -191,6 +191,23 @@ const ClientesAPI: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         } catch (err) {
             alert('Erro ao desativar cliente');
             console.error('Erro ao desativar cliente:', err);
+        }
+    };
+
+    const handleReativar = async (cliente: Cliente) => {
+        if (window.confirm(`Deseja reativar o cliente "${cliente.nome}"?`)) {
+            try {
+                const response = await clientesService.reativar(cliente.id);
+                if (response.success) {
+                    await loadClientes(); // Recarregar para atualizar status
+                    alert('✅ Cliente reativado com sucesso!');
+                } else {
+                    alert(response.message || 'Erro ao reativar cliente');
+                }
+            } catch (err) {
+                alert('Erro ao reativar cliente');
+                console.error('Erro ao reativar cliente:', err);
+            }
         }
     };
 

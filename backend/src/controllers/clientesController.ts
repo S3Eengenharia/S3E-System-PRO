@@ -283,3 +283,48 @@ export const deleteCliente = async (req: Request, res: Response): Promise<void> 
     });
   }
 };
+
+// Reativar cliente
+export const reativarCliente = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Verificar se cliente existe
+    const cliente = await prisma.cliente.findUnique({
+      where: { id }
+    });
+
+    if (!cliente) {
+      res.status(404).json({
+        success: false,
+        error: 'Cliente não encontrado'
+      });
+      return;
+    }
+
+    if (cliente.ativo) {
+      res.status(400).json({
+        success: false,
+        error: 'Cliente já está ativo'
+      });
+      return;
+    }
+
+    // Reativar cliente
+    await prisma.cliente.update({
+      where: { id },
+      data: { ativo: true }
+    });
+
+    res.json({
+      success: true,
+      message: 'Cliente reativado com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao reativar cliente:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Erro ao reativar cliente' 
+    });
+  }
+};

@@ -27,9 +27,28 @@ export const ENDPOINTS = {
   HISTORICO: '/api/historico',
   NFE: '/api/nfe',
   EMPRESAS: '/api/empresas',
+  MATERIAIS: '/api/materiais',
+  CATALOGO: {
+    // Usando materiais como base para o catálogo
+    ITENS: '/api/materiais',
+    SERVICOS: '/api/servicos',
+  },
   DASHBOARD: {
     ESTATISTICAS: '/api/dashboard/estatisticas',
     GRAFICOS: '/api/dashboard/graficos',
     ALERTAS: '/api/dashboard/alertas',
+  },
+  OBRAS: {
+    EQUIPES: '/api/obras/equipes',
+    ALOCACOES: '/api/obras/alocacoes',
+    CALENDARIO: '/api/obras/alocacoes/calendario',
+  },
+  ORCAMENTOS: '/api/orcamentos',
+  RELATORIOS: {
+    FINANCEIRO: '/api/relatorios/financeiro',
+    FINANCEIRO_RESUMO: '/api/relatorios/financeiro/resumo',
+  },
+  COMPARACAO_PRECOS: {
+    UPLOAD_CSV: '/api/comparacao-precos/upload-csv',
   },
 };

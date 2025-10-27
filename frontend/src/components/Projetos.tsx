@@ -14,7 +14,8 @@ import {
     type ProjectAttachment,
 } from '../types';
 import { ClientsIcon, CubeIcon } from '../constants';
-import { apiService } from '../services/api';
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 
 // Icons
@@ -132,10 +133,10 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             setError(null);
             
             const [projectsRes, clientsRes, materialsRes, budgetsRes] = await Promise.all([
-                apiService.get<Project[]>('/api/projetos'),
-                apiService.get<Client[]>('/api/clientes'),
-                apiService.get<MaterialItem[]>('/api/materiais'),
-                apiService.get<Budget[]>('/api/orcamentos')
+                axiosApiService.get<Project[]>(ENDPOINTS.PROJETOS),
+                axiosApiService.get<Client[]>(ENDPOINTS.CLIENTES),
+                axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS),
+                axiosApiService.get<Budget[]>('/api/orcamentos')
             ]);
 
             if (projectsRes.success && projectsRes.data) {

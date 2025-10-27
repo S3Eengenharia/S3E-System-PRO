@@ -3,130 +3,16 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="./public/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./src/index.css">
+
     <title>S3E Engenharia Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              'brand-s3e': '#0a1a2f',
-              'brand-blue': '#3B82F6',
-              'brand-blue-light': '#EFF6FF',
-              'brand-green': '#10B981',
-              'brand-purple': '#8B5CF6',
-              'brand-orange': '#F97316',
-              'brand-red': '#EF4444',
-              'brand-gray': {
-                '50': '#F9FAFB',
-                '100': '#F3F4F6',
-                '200': '#E5E7EB',
-                '300': '#D1D5DB',
-                '400': '#9CA3AF',
-                '500': '#6B7280',
-                '600': '#4B5563',
-                '700': '#374151',
-                '800': '#1F2937',
-                '900': '#11182C',
-              },
-            },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' }
-              },
-              slideUp: {
-                '0%': { 
-                  transform: 'translateY(20px)',
-                  opacity: '0'
-                },
-                '100%': {
-                  transform: 'translateY(0)',
-                  opacity: '1'
-                }
-              },
-              scaleIn: {
-                '0%': {
-                  transform: 'scale(0.95)',
-                  opacity: '0'
-                },
-                '100%': {
-                  transform: 'scale(1)',
-                  opacity: '1'
-                }
-              }
-            },
-            animation: {
-              fadeIn: 'fadeIn 0.2s ease-out',
-              slideUp: 'slideUp 0.3s ease-out',
-              scaleIn: 'scaleIn 0.2s ease-out'
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      /* Dark Theme Styles */
-      body.dark {
-        background: linear-gradient(to bottom right, #0a1a2f, #000000);
-        min-height: 100vh;
-      }
-      
-      body.dark .bg-brand-gray-50 {
-        background: transparent;
-      }
-      
-      body.dark .bg-white {
-        background-color: rgba(15, 23, 42, 0.8);
-        backdrop-filter: blur(10px);
-      }
-      
-      body.dark .text-brand-gray-800,
-      body.dark .text-brand-gray-700,
-      body.dark .text-brand-gray-600 {
-        color: #e2e8f0;
-      }
-      
-      body.dark .text-brand-gray-500,
-      body.dark .text-brand-gray-400 {
-        color: #94a3b8;
-      }
-      
-      body.dark .border-brand-gray-200,
-      body.dark .border-brand-gray-300 {
-        border-color: rgba(51, 65, 85, 0.5);
-      }
-      
-      body.dark input,
-      body.dark textarea,
-      body.dark select {
-        background-color: rgba(30, 41, 59, 0.5);
-        color: #e2e8f0;
-        border-color: rgba(71, 85, 105, 0.5);
-      }
-      
-      body.dark input::placeholder,
-      body.dark textarea::placeholder {
-        color: #64748b;
-      }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/index.tsx"></script>
+    <script type="module" src="./src/index.tsx"></script>
   </body>
 </html>
 

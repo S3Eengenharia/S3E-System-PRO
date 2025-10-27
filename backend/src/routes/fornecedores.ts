@@ -4,7 +4,8 @@ import {
   getFornecedorById,
   createFornecedor,
   updateFornecedor,
-  deleteFornecedor
+  deleteFornecedor,
+  reativarFornecedor
 } from '../controllers/fornecedoresController.js';
 import { authenticate } from '../middlewares/auth.js';
 
@@ -41,6 +42,13 @@ router.post('/', createFornecedor);
  * @access Private
  */
 router.put('/:id', updateFornecedor);
+
+/**
+ * @route PUT /api/fornecedores/:id/reativar
+ * @desc Reativar fornecedor inativo
+ * @access Private
+ */
+router.put('/:id/reativar', reativarFornecedor);
 
 /**
  * @route DELETE /api/fornecedores/:id

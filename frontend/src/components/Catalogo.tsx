@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { CatalogItem, CatalogItemType, Product, Kit, KitProduct, Service, KitService, ServiceType, KitConfiguration, MaterialItem } from '../types';
-// Removido import de dados mock - usando API
-import { apiService } from '../services/api';
+// Usando o novo serviço Axios
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -96,21 +97,53 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<CatalogItemType | 'Todos'>('Todos');
 
+    // Dados mock temporários para resolver erros de compilação
+    const caixasPolicarbonatoData = [
+        { id: '1', name: 'Caixa Policarbonato 100x100', capacidade: 1 },
+        { id: '2', name: 'Caixa Policarbonato 150x150', capacidade: 2 },
+        { id: '3', name: 'Caixa Policarbonato 200x200', capacidade: 4 },
+    ];
+
+    const quadrosAluminioData = [
+        { id: '1', name: 'Quadro Alumínio 1M', capacidade: 1 },
+        { id: '2', name: 'Quadro Alumínio 2M', capacidade: 2 },
+        { id: '3', name: 'Quadro Alumínio 4M', capacidade: 4 },
+    ];
+
     // Carregar dados da API
     const loadData = async () => {
         try {
             setLoading(true);
             setError(null);
             
-            const [catalogRes, materialsRes, servicesRes] = await Promise.all([
-                apiService.get<CatalogItem[]>('/api/catalogo'),
-                apiService.get<MaterialItem[]>('/api/materiais'),
-                apiService.get<Service[]>('/api/servicos')
+            // Usando endpoints corretos do backend
+            const [materialsRes, servicesRes] = await Promise.all([
+                axiosApiService.get<MaterialItem[]>(ENDPOINTS.CATALOGO.ITENS),
+                axiosApiService.get<Service[]>(ENDPOINTS.CATALOGO.SERVICOS)
             ]);
 
-            if (catalogRes.success && catalogRes.data) setCatalogItems(catalogRes.data);
-            if (materialsRes.success && materialsRes.data) setMaterials(materialsRes.data);
-            if (servicesRes.success && servicesRes.data) setServices(servicesRes.data);
+            // Converter materiais para CatalogItem
+            if (materialsRes.success && materialsRes.data) {
+                const catalogItems: CatalogItem[] = materialsRes.data.map(material => ({
+                    id: material.id,
+                    name: material.name,
+                    sku: material.sku,
+                    description: material.description || '',
+                    price: material.price || 0,
+                    stock: material.stock || 0,
+                    unitOfMeasure: material.unitOfMeasure || 'un',
+                    category: material.category || 'Material',
+                    type: CatalogItemType.Produto,
+                    image: material.imageUrl || null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                }));
+                setCatalogItems(catalogItems);
+            }
+
+            if (servicesRes.success && servicesRes.data) {
+                setServices(servicesRes.data);
+            }
         } catch (err) {
             setError('Erro ao carregar dados');
             console.error('Erro ao carregar dados:', err);

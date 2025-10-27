@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 // Removido import de dados mock - usando API
 import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts';
 
 // Icons
@@ -87,16 +89,8 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
         try {
             // Tentar buscar dados reais do backend
             const [dadosMensais, resumo] = await Promise.all([
-                fetch('http://localhost:3001/api/relatorios/financeiro', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                    }
-                }).then(res => res.json()).catch(() => null),
-                fetch('http://localhost:3001/api/relatorios/financeiro/resumo', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                    }
-                }).then(res => res.json()).catch(() => null)
+                axiosApiService.get('/api/relatorios/financeiro'),
+                axiosApiService.get('/api/relatorios/financeiro/resumo')
             ]);
 
             if (dadosMensais?.success) {

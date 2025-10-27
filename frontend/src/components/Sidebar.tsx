@@ -63,33 +63,34 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
     };
 
     return (
-        <aside className={`w-64 flex flex-col bg-white border-r border-brand-gray-200 fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            <div className="p-4 border-b border-brand-gray-200 flex justify-between items-center">
+        <aside className={`w-64 flex flex-col bg-white/95 backdrop-blur-xl border-r border-gray-200 fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 shadow-xl lg:shadow-none ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-white to-gray-50">
                 <div className="flex items-center space-x-3">
                     {companyLogo ? (
-                        <div className="w-10 h-10 rounded-lg shadow-md overflow-hidden flex-shrink-0">
+                        <div className="w-11 h-11 rounded-xl shadow-medium overflow-hidden flex-shrink-0 ring-2 ring-gray-100">
                             <img src={companyLogo} alt="Logo da Empresa" className="w-full h-full object-contain" />
                         </div>
                     ) : (
-                        <div className="bg-gradient-to-br from-brand-s3e to-blue-900 rounded-lg p-2 shadow-md">
+                        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-2.5 shadow-medium ring-2 ring-blue-100">
                             <S3ELogoIcon className="w-6 h-6 text-white" />
                         </div>
                     )}
                     <div>
-                        <h1 className="font-bold text-base text-brand-gray-800">S3E System</h1>
-                        <p className="text-xs text-brand-gray-500">Gestão Empresarial</p>
+                        <h1 className="font-bold text-base text-gray-900">S3E Engenharia</h1>
+                        <p className="text-xs text-gray-500 font-medium">Gestão de Estoque & Vendas</p>
                     </div>
                 </div>
-                <button onClick={toggleSidebar} className="lg:hidden p-1 -mr-2 text-brand-gray-500 rounded-md hover:bg-brand-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue" aria-label="Close sidebar">
-                    <XMarkIcon className="w-6 h-6" />
+                <button onClick={toggleSidebar} className="lg:hidden p-2 -mr-2 text-gray-500 rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200" aria-label="Close sidebar">
+                    <XMarkIcon className="w-5 h-5" />
                 </button>
             </div>
 
-            <nav className="flex-1 px-2 py-4 overflow-y-auto">
-                {/* GERAL / INÍCIO */}
-                <div className="mb-4">
-                    <span className="px-2 text-xs font-semibold text-brand-gray-400 uppercase tracking-wider">Geral</span>
-                    <ul className="mt-2 space-y-1">
+            <nav className="flex-1 px-3 py-5 overflow-y-auto">
+                {/* MÓDULOS PRINCIPAIS */}
+                <div className="mb-6">
+                    <span className="block px-2 mb-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Módulos Principais</span>
+                    <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 rounded-lg">Geral</span>
+                    <ul className="space-y-1">
                         {navLinks.slice(0, 1).map((link) => (
                             <li key={link.name}>
                                 <a
@@ -98,10 +99,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                         e.preventDefault();
                                         onNavigate(link.name);
                                     }}
-                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                    className={`flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
                                         ${activeView === link.name
-                                            ? 'bg-brand-blue text-white'
-                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                         }`}
                                 >
                                     <link.icon className="w-5 h-5 mr-3" />
@@ -113,9 +114,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 </div>
 
                 {/* COMERCIAL / VENDAS */}
-                <div className="mb-4">
-                    <span className="px-2 text-xs font-semibold text-green-600 uppercase tracking-wider">Comercial</span>
-                    <ul className="mt-2 space-y-1">
+                <div className="mb-6">
+                    <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-green-600 uppercase tracking-wider bg-green-50 rounded-lg">Comercial</span>
+                    <ul className="space-y-1">
                         {navLinks.slice(1, 4).map((link) => (
                             <li key={link.name}>
                                 <a
@@ -124,10 +125,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                         e.preventDefault();
                                         onNavigate(link.name);
                                     }}
-                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                    className={`flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
                                         ${activeView === link.name
-                                            ? 'bg-brand-blue text-white'
-                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                         }`}
                                 >
                                     <link.icon className="w-5 h-5 mr-3" />
@@ -139,9 +140,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 </div>
 
                 {/* SUPRIMENTOS / ESTOQUE */}
-                <div className="mb-4">
-                    <span className="px-2 text-xs font-semibold text-orange-600 uppercase tracking-wider">Suprimentos</span>
-                    <ul className="mt-2 space-y-1">
+                <div className="mb-6">
+                    <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-orange-600 uppercase tracking-wider bg-orange-50 rounded-lg">Suprimentos</span>
+                    <ul className="space-y-1">
                         {navLinks.slice(4, 9).map((link) => (
                             <li key={link.name}>
                                 <a
@@ -150,10 +151,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                         e.preventDefault();
                                         onNavigate(link.name);
                                     }}
-                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                    className={`flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
                                         ${activeView === link.name
-                                            ? 'bg-brand-blue text-white'
-                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                         }`}
                                 >
                                     <link.icon className="w-5 h-5 mr-3" />
@@ -165,9 +166,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 </div>
 
                 {/* OPERACIONAL / PROJETOS */}
-                <div className="mb-4">
-                    <span className="px-2 text-xs font-semibold text-purple-600 uppercase tracking-wider">Operacional</span>
-                    <ul className="mt-2 space-y-1">
+                <div className="mb-6">
+                    <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-purple-600 uppercase tracking-wider bg-purple-50 rounded-lg">Operacional</span>
+                    <ul className="space-y-1">
                         {navLinks.slice(9, 12).map((link) => (
                             <li key={link.name}>
                                 <a
@@ -176,10 +177,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                         e.preventDefault();
                                         onNavigate(link.name);
                                     }}
-                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                    className={`flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
                                         ${activeView === link.name
-                                            ? 'bg-brand-blue text-white'
-                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                         }`}
                                 >
                                     <link.icon className="w-5 h-5 mr-3" />
@@ -191,9 +192,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 </div>
 
                 {/* FINANCEIRO / CONTÁBIL */}
-                <div className="mb-4">
-                    <span className="px-2 text-xs font-semibold text-blue-600 uppercase tracking-wider">Financeiro</span>
-                    <ul className="mt-2 space-y-1">
+                <div className="mb-6">
+                    <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-blue-600 uppercase tracking-wider bg-blue-50 rounded-lg">Financeiro</span>
+                    <ul className="space-y-1">
                         {navLinks.slice(12).map((link) => (
                             <li key={link.name}>
                                 <a
@@ -202,10 +203,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                         e.preventDefault();
                                         onNavigate(link.name);
                                     }}
-                                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150
+                                    className={`flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
                                         ${activeView === link.name
-                                            ? 'bg-brand-blue text-white'
-                                            : 'text-brand-gray-600 hover:bg-brand-gray-100'
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                         }`}
                                 >
                                     <link.icon className="w-5 h-5 mr-3" />
@@ -217,34 +218,40 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 </div>
             </nav>
 
-            <div className="p-4 border-t border-brand-gray-200">
-                <span className="px-2 text-xs font-semibold text-brand-gray-400 uppercase tracking-wider">Status do Sistema</span>
-                <div className="mt-3 space-y-2">
-                    <div className="flex items-center justify-between text-sm text-brand-gray-600">
-                        <div className="flex items-center">
-                            <span className="w-2 h-2 rounded-full bg-brand-green mr-2"></span>
-                            Sistema Online
+            <div className="p-4 border-t border-gray-100 bg-gray-50">
+                <span className="block px-3 py-1.5 mb-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status do Sistema</span>
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-lg shadow-soft border border-gray-100">
+                        <div className="flex items-center gap-2">
+                            <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                            </span>
+                            <span className="text-xs font-semibold text-gray-700">Sistema Online</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="p-4 border-t border-brand-gray-200">
+            <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                        <img className="w-10 h-10 rounded-full object-cover" src={user?.avatar || "https://picsum.photos/100"} alt="User Avatar" />
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <img className="w-11 h-11 rounded-xl object-cover shadow-medium ring-2 ring-gray-100" src={user?.avatar || "https://picsum.photos/100"} alt="User Avatar" />
+                            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></span>
+                        </div>
                         <div>
-                            <p className="font-semibold text-sm text-brand-gray-800">{user?.name || 'Usuário'}</p>
-                            <p className="text-xs text-brand-gray-500">{user?.role || 'Admin'}</p>
+                            <p className="font-bold text-sm text-gray-900">{user?.name || 'Usuário'}</p>
+                            <p className="text-xs text-gray-500 font-medium">{user?.role || 'Admin'}</p>
                         </div>
                     </div>
-                    <button onClick={onOpenSettings} className="p-2 rounded-full text-brand-gray-400 hover:bg-brand-gray-100 hover:text-brand-gray-600" title="Configurações da Conta">
+                    <button onClick={onOpenSettings} className="p-2 rounded-xl text-gray-400 hover:bg-white hover:text-gray-600 hover:shadow-soft transition-all duration-200" title="Configurações da Conta">
                         <Cog6ToothIcon className="w-5 h-5" />
                     </button>
                 </div>
                 <button 
                     onClick={handleLogout}
-                    className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors duration-150"
+                    className="w-full flex items-center justify-center px-4 py-2.5 text-sm font-bold text-red-600 bg-red-50 rounded-xl hover:bg-red-100 hover:text-red-700 transition-all duration-200 border border-red-100 hover:border-red-200 shadow-soft hover:shadow-medium"
                 >
                     <ArrowRightOnRectangleIcon className="w-4 h-4 mr-2" />
                     Sair
