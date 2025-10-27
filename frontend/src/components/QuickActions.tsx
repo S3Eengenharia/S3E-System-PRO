@@ -14,54 +14,64 @@ interface QuickActionsProps {
 
 const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-gray-200">
-            <div className="flex items-center text-brand-gray-800 mb-5">
-                <BoltIcon className="w-6 h-6 mr-3 text-brand-blue" />
-                <h2 className="text-lg font-bold">Ações Rápidas</h2>
+        <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 hover:border-gray-200 card-hover transition-all duration-300">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm ring-1 ring-blue-200/50">
+                    <BoltIcon className="w-5 h-5 text-blue-600" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">Ações Rápidas</h2>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2.5">
                 <button 
-                    onClick={() => onNavigate('Materiais')} 
-                    className="w-full flex justify-between items-center p-3 bg-brand-blue text-white rounded-lg hover:bg-brand-blue/90 transition-all hover:shadow-md group"
+                    onClick={() => onNavigate('Estoque')} 
+                    className="w-full flex justify-between items-center p-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all hover:shadow-medium group shadow-sm"
                 >
                     <div className="flex items-center gap-3">
-                        <CubeIcon className="w-5 h-5" />
-                        <span className="font-medium">Gerenciar Materiais</span>
+                        <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                            <CubeIcon className="w-4.5 h-4.5" />
+                        </div>
+                        <span className="font-semibold">Gerenciar Estoque</span>
                     </div>
-                    <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
                 </button>
                 
                 <button 
                     onClick={() => onNavigate('Projetos')} 
-                    className="w-full flex justify-between items-center p-3 bg-brand-gray-100 text-brand-gray-700 rounded-lg hover:bg-brand-gray-200 transition-all hover:shadow-sm group"
+                    className="w-full flex justify-between items-center p-3.5 bg-gray-50 text-gray-700 rounded-xl hover:bg-gray-100 transition-all hover:shadow-soft group border border-gray-100 hover:border-gray-200"
                 >
                     <div className="flex items-center gap-3">
-                        <PlusCircleIcon className="w-5 h-5 text-brand-green" />
-                        <span className="font-medium">Novo Projeto</span>
+                        <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                            <PlusCircleIcon className="w-4.5 h-4.5 text-green-600" />
+                        </div>
+                        <span className="font-semibold">Novo Projeto</span>
                     </div>
-                    <ArrowRightIcon className="w-4 h-4 text-brand-green group-hover:translate-x-1 transition-transform" />
+                    <ArrowRightIcon className="w-4 h-4 text-green-600 group-hover:translate-x-1 transition-transform duration-200" />
                 </button>
                 
                 <button 
                     onClick={() => onNavigate('Orçamentos')} 
-                    className="w-full flex justify-between items-center p-3 bg-brand-gray-100 text-brand-gray-700 rounded-lg hover:bg-brand-gray-200 transition-all hover:shadow-sm group"
+                    className="w-full flex justify-between items-center p-3.5 bg-gray-50 text-gray-700 rounded-xl hover:bg-gray-100 transition-all hover:shadow-soft group border border-gray-100 hover:border-gray-200"
                 >
                     <div className="flex items-center gap-3">
-                        <BudgetIcon className="w-5 h-5 text-brand-purple" />
-                        <span className="font-medium">Criar Orçamento</span>
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                            <BudgetIcon className="w-4.5 h-4.5 text-purple-600" />
+                        </div>
+                        <span className="font-semibold">Criar Orçamento</span>
                     </div>
-                    <ArrowRightIcon className="w-4 h-4 text-brand-purple group-hover:translate-x-1 transition-transform" />
+                    <ArrowRightIcon className="w-4 h-4 text-purple-600 group-hover:translate-x-1 transition-transform duration-200" />
                 </button>
                 
                 <button 
                     onClick={() => onNavigate('Fornecedores')} 
-                    className="w-full flex justify-between items-center p-3 bg-brand-gray-100 text-brand-gray-700 rounded-lg hover:bg-brand-gray-200 transition-all hover:shadow-sm group"
+                    className="w-full flex justify-between items-center p-3.5 bg-gray-50 text-gray-700 rounded-xl hover:bg-gray-100 transition-all hover:shadow-soft group border border-gray-100 hover:border-gray-200"
                 >
                     <div className="flex items-center gap-3">
-                        <SupplierIcon className="w-5 h-5 text-brand-orange" />
-                        <span className="font-medium">Gerenciar Fornecedores</span>
+                        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                            <SupplierIcon className="w-4.5 h-4.5 text-orange-600" />
+                        </div>
+                        <span className="font-semibold">Gerenciar Fornecedores</span>
                     </div>
-                    <ArrowRightIcon className="w-4 h-4 text-brand-orange group-hover:translate-x-1 transition-transform" />
+                    <ArrowRightIcon className="w-4 h-4 text-orange-600 group-hover:translate-x-1 transition-transform duration-200" />
                 </button>
             </div>
         </div>

@@ -14,6 +14,8 @@ import {
     CatalogIcon,
     BoltIcon
 } from '../constants';
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 // Removido import de dados mock - usando API
 
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -43,17 +45,12 @@ const Dashboard: React.FC<DashboardProps> = ({ toggleSidebar, onNavigate, projec
     // Função para testar autenticação
     const testAuth = async () => {
         try {
-            const response = await fetch('http://localhost:3001/api/clientes', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            console.log('🔐 Teste de autenticação:', response.status, response.statusText);
-            if (response.ok) {
+            const response = await axiosApiService.get(ENDPOINTS.CLIENTES);
+            console.log('🔐 Teste de autenticação:', response.statusCode, response.success);
+            if (response.success) {
                 alert('✅ Autenticação funcionando!');
             } else {
-                alert('❌ Erro na autenticação: ' + response.status);
+                alert('❌ Erro na autenticação: ' + response.statusCode);
             }
         } catch (error) {
             console.error('❌ Erro no teste:', error);
@@ -66,82 +63,78 @@ const Dashboard: React.FC<DashboardProps> = ({ toggleSidebar, onNavigate, projec
         { 
             title: 'Itens no Catálogo', 
             value: totalCatalogItems.toString(), 
-            subtitle: 'Produtos e Kits Elétricos', 
+            subtitle: 'Produtos e Kits', 
             color: 'bg-blue-500', 
-            subtitleIcon: <CatalogIcon className="w-4 h-4" />, 
-            icon: <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center"><CatalogIcon className="w-7 h-7 text-blue-500" /></div> 
+            subtitleIcon: <CatalogIcon className="w-3.5 h-3.5" />, 
+            icon: <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm ring-1 ring-blue-200/50"><CatalogIcon className="w-7 h-7 text-blue-600" /></div> 
         },
         { 
             title: 'Projetos Ativos', 
             value: activeProjectsCount.toString(), 
-            subtitle: 'Em execução e planejamento', 
+            subtitle: 'Em andamento/planejamento', 
             color: 'bg-green-500', 
-            subtitleIcon: <BoltIcon className="w-4 h-4" />, 
-            icon: <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center"><BlueprintIcon className="w-7 h-7 text-green-500" /></div> 
+            subtitleIcon: <BoltIcon className="w-3.5 h-3.5" />, 
+            icon: <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center shadow-sm ring-1 ring-green-200/50"><BlueprintIcon className="w-7 h-7 text-green-600" /></div> 
         },
         { 
             title: 'Valor do Estoque', 
             value: `R$ ${totalStockValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
             subtitle: 'Total em materiais', 
             color: 'bg-purple-500', 
-            subtitleIcon: <TrendingUpIcon className="w-4 h-4" />, 
-            icon: <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center"><CurrencyDollarIcon className="w-7 h-7 text-purple-500" /></div> 
+            subtitleIcon: <TrendingUpIcon className="w-3.5 h-3.5" />, 
+            icon: <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shadow-sm ring-1 ring-purple-200/50"><CurrencyDollarIcon className="w-7 h-7 text-purple-600" /></div> 
         },
         { 
             title: 'Alertas Críticos', 
             value: criticalAlertsCount.toString(), 
             subtitle: 'Estoque abaixo do mínimo', 
             color: 'bg-orange-500', 
-            subtitleIcon: <ExclamationTriangleIcon className="w-4 h-4" />, 
-            icon: <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center"><ExclamationTriangleIcon className="w-7 h-7 text-orange-500" /></div> 
+            subtitleIcon: <ExclamationTriangleIcon className="w-3.5 h-3.5" />, 
+            icon: <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shadow-sm ring-1 ring-orange-200/50"><ExclamationTriangleIcon className="w-7 h-7 text-orange-600" /></div> 
         },
     ];
     const lastUpdate = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium'});
 
     return (
-        <div className="p-4 sm:p-8">
-            <header className="flex justify-between items-center mb-8">
-                <div className="flex items-center">
-                    <button onClick={toggleSidebar} className="lg:hidden mr-4 p-1 text-brand-gray-500 rounded-md hover:bg-brand-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue" aria-label="Open sidebar">
+        <div className="min-h-screen p-4 sm:p-8">
+            {/* Header Modernizado */}
+            <header className="flex justify-between items-start mb-8 animate-fade-in">
+                <div className="flex items-center gap-4">
+                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 rounded-xl hover:bg-white hover:shadow-soft focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200" aria-label="Open sidebar">
                         <Bars3Icon className="w-6 h-6" />
                     </button>
                     <div>
-                        <h1 className="text-xl sm:text-3xl font-bold text-brand-gray-800">Dashboard Executivo</h1>
-                        <p className="text-sm sm:text-base text-brand-gray-500">Visão geral do sistema de gestão S3E</p>
+                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">Dashboard Executivo</h1>
+                        <p className="text-sm sm:text-base text-gray-500 mt-1">Visão geral do sistema de gestão S3E</p>
                     </div>
                 </div>
-                 <div className="flex items-center space-x-2 sm:space-x-4">
+                 <div className="flex items-center gap-3 sm:gap-4">
                     <div className="text-right hidden sm:block">
-                        <p className="text-xs text-brand-gray-500">Última atualização</p>
-                        <p className="text-sm font-medium text-brand-gray-700">{lastUpdate}</p>
+                        <p className="text-xs text-gray-500 font-medium">Última atualização</p>
+                        <p className="text-sm font-semibold text-gray-700 mt-0.5">{lastUpdate}</p>
                     </div>
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-brand-gray-200 flex-shrink-0">
-                         <img className="w-full h-full rounded-full object-cover" src="https://picsum.photos/100" alt="User Avatar" />
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-100 to-purple-100 flex-shrink-0 ring-2 ring-white shadow-medium overflow-hidden">
+                         <img className="w-full h-full object-cover" src="https://picsum.photos/100" alt="User Avatar" />
                     </div>
                 </div>
             </header>
 
-            <div className="mb-4">
-                <button
-                    onClick={testAuth}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                    🔐 Testar Autenticação
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Stats Cards Grid com animação */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
                 {statCardsData.map((card, index) => (
-                    <StatCard key={index} data={card} />
+                    <div key={index} style={{ animationDelay: `${index * 0.1}s` }}>
+                        <StatCard data={card} />
+                    </div>
                 ))}
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                <div className="lg:col-span-2 space-y-6 sm:space-y-8">
                     <RecentMovements movements={[]} materials={[]} />
                     <OngoingProjects projects={projects} />
                 </div>
-                <div className="lg:col-span-1 space-y-8">
+                <div className="lg:col-span-1 space-y-6 sm:space-y-8">
                     <CriticalAlerts materials={criticalItems} />
                     <QuickActions onNavigate={onNavigate} />
                 </div>

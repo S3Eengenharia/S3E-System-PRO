@@ -4,7 +4,8 @@ import {
   getClienteById,
   createCliente,
   updateCliente,
-  deleteCliente
+  deleteCliente,
+  reativarCliente
 } from '../controllers/clientesController.js';
 import { authenticate } from '../middlewares/auth.js';
 
@@ -41,6 +42,13 @@ router.post('/', createCliente);
  * @access Private
  */
 router.put('/:id', updateCliente);
+
+/**
+ * @route PUT /api/clientes/:id/reativar
+ * @desc Reativar cliente inativo
+ * @access Private
+ */
+router.put('/:id/reativar', reativarCliente);
 
 /**
  * @route DELETE /api/clientes/:id

@@ -6,7 +6,8 @@ import {
     type Opportunity, OpportunityStatus, type Interaction, InteractionType,
     type Budget, BudgetStatus, ProjectType
 } from '../types';
-import { apiService } from '../services/api';
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -124,7 +125,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await apiService.get<Client[]>('/api/clientes');
+            const response = await axiosApiService.get<Client[]>(ENDPOINTS.CLIENTES);
             if (response.success && response.data) {
                 setClients(response.data);
             } else {
@@ -210,7 +211,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         try {
             if (clientToEdit) {
                 // Editar cliente existente
-                const response = await apiService.put(`/api/clientes/${clientToEdit.id}`, formState);
+                const response = await axiosApiService.put(`${ENDPOINTS.CLIENTES}/${clientToEdit.id}`, formState);
                 if (response.success) {
                     await loadClients(); // Recarregar lista
                 } else {
@@ -218,7 +219,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                 }
             } else {
                 // Criar novo cliente
-                const response = await apiService.post('/api/clientes', formState);
+                const response = await axiosApiService.post(ENDPOINTS.CLIENTES, formState);
                 if (response.success) {
                     await loadClients(); // Recarregar lista
                 } else {
@@ -237,7 +238,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
     const handleConfirmDelete = async () => {
         if (clientToDelete) {
             try {
-                const response = await apiService.delete(`/api/clientes/${clientToDelete.id}`);
+                const response = await axiosApiService.delete(`${ENDPOINTS.CLIENTES}/${clientToDelete.id}`);
                 if (response.success) {
                     await loadClients(); // Recarregar lista
                 } else {
@@ -280,7 +281,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             placeholder="Buscar por nome ou CPF/CNPJ..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
+                            className="w-full pl-10 pr-4 py-2 border border-brand-gray-200 rounded-lg focus:ring-brand-blue focus:border-brand-blue transition-all duration-200"
                         />
                         <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray-400" />
                     </div>
@@ -290,7 +291,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value as ClientStatus | 'Todos')}
-                                className="border border-brand-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue"
+                                className="border border-brand-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue transition-all duration-200"
                             >
                                 <option value="Todos">Todos</option>
                                 {Object.values(ClientStatus).map(s => <option key={s} value={s}>{s}</option>)}
@@ -301,7 +302,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             <select
                                 value={sourceFilter}
                                 onChange={(e) => setSourceFilter(e.target.value as ClientSource | 'Todos')}
-                                className="border border-brand-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue"
+                                className="border border-brand-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue transition-all duration-200"
                             >
                                 <option value="Todos">Todas</option>
                                 {Object.values(ClientSource).map(s => <option key={s} value={s}>{s}</option>)}
@@ -312,7 +313,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             <select
                                 value={preferenceFilter}
                                 onChange={(e) => setPreferenceFilter(e.target.value as ContactPreference | 'Todos')}
-                                className="border border-brand-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue"
+                                className="border border-brand-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue transition-all duration-200"
                             >
                                 <option value="Todos">Todas</option>
                                 {Object.values(ContactPreference).map(cp => <option key={cp} value={cp}>{cp}</option>)}
@@ -357,7 +358,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                 {!loading && !error && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredClients.map((client) => (
-                        <div key={client.id} className={`bg-white rounded-lg border border-brand-gray-200 shadow-sm flex flex-col p-4 transition-shadow hover:shadow-lg ${getStatusBorderClass(client.status)}`}>
+                        <div key={client.id} className={`bg-white rounded-lg border border-brand-gray-100 shadow-sm flex flex-col p-4 transition-all duration-200 hover:shadow-md hover:border-brand-gray-200 ${getStatusBorderClass(client.status)}`}>
                              <div className="flex justify-between items-start mb-2">
                                 <h3 className="font-bold text-lg text-brand-gray-800 leading-tight flex-1 pr-2">{client.name}</h3>
                                 <div className="relative">
@@ -411,7 +412,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-brand-gray-700 mb-1">Status do Cliente</label>
-                                    <select name="status" value={formState.status} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white">
+                                    <select name="status" value={formState.status} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-200 rounded-lg bg-white transition-all duration-200 focus:ring-brand-blue focus:border-brand-blue">
                                         {Object.values(ClientStatus).map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
@@ -419,7 +420,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-brand-gray-700 mb-1">Tipo</label>
-                                    <select name="type" value={formState.type} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white">
+                                    <select name="type" value={formState.type} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-200 rounded-lg bg-white transition-all duration-200 focus:ring-brand-blue focus:border-brand-blue">
                                         <option value={ClientType.PessoaJuridica}>Pessoa Jurídica</option>
                                         <option value={ClientType.PessoaFisica}>Pessoa Física</option>
                                     </select>
@@ -452,7 +453,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-brand-gray-700 mb-1">Preferência de Contato</label>
-                                    <select name="contactPreference" value={formState.contactPreference} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg bg-white">
+                                    <select name="contactPreference" value={formState.contactPreference} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-200 rounded-lg bg-white transition-all duration-200 focus:ring-brand-blue focus:border-brand-blue">
                                         {Object.values(ContactPreference).map(cp => <option key={cp} value={cp}>{cp}</option>)}
                                     </select>
                                 </div>

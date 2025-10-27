@@ -46,7 +46,7 @@ export interface MaterialMaisVendido {
 
 export interface Graficos {
   vendasPorMes: GraficoVendas[];
-  projetosPorStatus: GraficoProjeto[];
+  projetosPorStatus: GraficoProjetos[];
   materiaisMaisVendidos: MaterialMaisVendido[];
 }
 

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type Supplier, SupplierCategory } from '../types';
 import { SupplierIcon } from '../constants';
-import { apiService } from '../services/api';
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -102,7 +103,7 @@ const Fornecedores: React.FC<FornecedoresProps> = ({ toggleSidebar }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await apiService.get<Supplier[]>('/api/fornecedores');
+            const response = await axiosApiService.get<Supplier[]>(ENDPOINTS.FORNECEDORES);
             if (response.success && response.data) {
                 setSuppliers(response.data);
             } else {

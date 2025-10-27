@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { type StockMovement, MovementType, type Product, CatalogItemType } from '../types';
-// Removido import de dados mock - usando API
+import { type StockMovement, MovementType, type MaterialItem } from '../types';
+import { axiosApiService } from '../services/axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -59,7 +60,9 @@ interface MovimentacoesProps {
 
 const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
     const [movements, setMovements] = useState<StockMovement[]>([]);
-    const [products, setProducts] = useState<Product[]>(catalogData.filter(item => item.type === CatalogItemType.Produto) as Product[]);
+    const [materials, setMaterials] = useState<MaterialItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<MovementType | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -67,20 +70,64 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
     const [isSaidaModalOpen, setIsSaidaModalOpen] = useState(false);
     
     // Form state
-    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [productSearchTerm, setProductSearchTerm] = useState('');
-    const [isProductListOpen, setIsProductListOpen] = useState(false);
+    const [selectedMaterial, setSelectedMaterial] = useState<MaterialItem | null>(null);
+    const [materialSearchTerm, setMaterialSearchTerm] = useState('');
+    const [isMaterialListOpen, setIsMaterialListOpen] = useState(false);
     const [quantity, setQuantity] = useState('');
     const [reason, setReason] = useState('');
     const [responsible, setResponsible] = useState('Admin');
     const [notes, setNotes] = useState('');
     
-    const productDropdownRef = useRef<HTMLDivElement>(null);
-    
+    const materialDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Carregar dados da API
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [movementsRes, materialsRes] = await Promise.all([
+                axiosApiService.get<StockMovement[]>(ENDPOINTS.MOVIMENTACOES),
+                axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS)
+            ]);
+
+            console.log('📊 Resposta da API - Movimentações:', movementsRes);
+            console.log('📦 Resposta da API - Materiais:', materialsRes);
+
+            // Validação robusta para movements
+            if (movementsRes.success && movementsRes.data && Array.isArray(movementsRes.data)) {
+                setMovements(movementsRes.data);
+            } else {
+                console.warn('Dados de movimentações inválidos:', movementsRes);
+                setMovements([]);
+            }
+
+            // Validação robusta para materials
+            if (materialsRes.success && materialsRes.data && Array.isArray(materialsRes.data)) {
+                setMaterials(materialsRes.data);
+            } else {
+                console.warn('Dados de materiais inválidos:', materialsRes);
+                setMaterials([]);
+            }
+        } catch (err) {
+            console.error('Erro ao carregar dados:', err);
+            setError('Erro ao carregar dados');
+            // Garantir que os estados sejam arrays vazios em caso de erro
+            setMovements([]);
+            setMaterials([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (productDropdownRef.current && !productDropdownRef.current.contains(event.target as Node)) {
-                setIsProductListOpen(false);
+            if (materialDropdownRef.current && !materialDropdownRef.current.contains(event.target as Node)) {
+                setIsMaterialListOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -88,9 +135,9 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
     }, []);
     
     const resetForm = () => {
-        setSelectedProduct(null);
-        setProductSearchTerm('');
-        setIsProductListOpen(false);
+        setSelectedMaterial(null);
+        setMaterialSearchTerm('');
+        setIsMaterialListOpen(false);
         setQuantity('');
         setReason('');
         setNotes('');
@@ -106,58 +153,57 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
         setIsSaidaModalOpen(true);
     };
 
-    const handleSelectProduct = (product: Product) => {
-        setSelectedProduct(product);
-        setProductSearchTerm(product.name);
-        setIsProductListOpen(false);
+    const handleSelectMaterial = (material: MaterialItem) => {
+        setSelectedMaterial(material);
+        setMaterialSearchTerm(material.name);
+        setIsMaterialListOpen(false);
     };
 
-    const handleConfirmMovement = (type: MovementType) => {
-        if (!selectedProduct || !quantity || parseInt(quantity) <= 0 || !reason) {
-            alert('Por favor, preencha todos os campos obrigatórios (produto, quantidade e motivo).');
+    const handleConfirmMovement = async (type: MovementType) => {
+        if (!selectedMaterial || !quantity || parseInt(quantity) <= 0 || !reason) {
+            alert('Por favor, preencha todos os campos obrigatórios (material, quantidade e motivo).');
             return;
         }
 
         const movementQuantity = parseInt(quantity);
         
-        if (type === MovementType.Saida && movementQuantity > selectedProduct.stock) {
-            alert(`Quantidade de saída excede o estoque disponível (${selectedProduct.stock} unidades).`);
+        if (type === MovementType.Saida && movementQuantity > selectedMaterial.stock) {
+            alert(`Quantidade de saída excede o estoque disponível (${selectedMaterial.stock} unidades).`);
             return;
         }
 
-        const newMovement: StockMovement = {
-            id: `MOV-${String(movements.length + 1).padStart(3, '0')}`,
-            product: {
-                id: selectedProduct.id,
-                name: selectedProduct.name,
-                sku: selectedProduct.sku,
-            },
-            quantity: movementQuantity,
-            type,
-            date: new Date().toLocaleDateString('pt-BR'),
-            responsible,
-            notes,
-            reason,
-        };
-        
-        // Update movements list
-        setMovements(prev => [newMovement, ...prev]);
+        try {
+            const movementData = {
+                materialId: selectedMaterial.id,
+                quantity: movementQuantity,
+                type: type === MovementType.Entrada ? 'entrada' : 'saida',
+                reason,
+                responsible,
+                notes,
+                date: new Date().toISOString()
+            };
 
-        // Update product stock
-        setProducts(prevProducts => prevProducts.map(p => {
-            if (p.id === selectedProduct.id) {
-                const newStock = type === MovementType.Entrada ? p.stock + movementQuantity : p.stock - movementQuantity;
-                return { ...p, stock: newStock };
+            const response = await axiosApiService.post(ENDPOINTS.MOVIMENTACOES, movementData);
+            
+            if (response.success) {
+                await loadData(); // Recarregar dados
+                resetForm();
+                if (type === MovementType.Entrada) setIsEntradaModalOpen(false);
+                if (type === MovementType.Saida) setIsSaidaModalOpen(false);
+            } else {
+                alert('Erro ao registrar movimentação');
             }
-            return p;
-        }));
-        
-        // Close modal
-        if (type === MovementType.Entrada) setIsEntradaModalOpen(false);
-        if (type === MovementType.Saida) setIsSaidaModalOpen(false);
+        } catch (err) {
+            console.error('Erro ao registrar movimentação:', err);
+            alert('Erro ao registrar movimentação');
+        }
     };
 
     const filteredMovements = useMemo(() => {
+        if (!Array.isArray(movements)) {
+            return [];
+        }
+        
         return movements
             .filter(mov => filter === 'Todos' || mov.type === filter)
             .filter(mov =>
@@ -167,10 +213,13 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
             );
     }, [movements, filter, searchTerm]);
     
-    const filteredProducts = useMemo(() => {
-        return products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
-    }, [products, productSearchTerm]);
-
+    const filteredMaterials = useMemo(() => {
+        if (!Array.isArray(materials)) {
+            return [];
+        }
+        
+        return materials.filter(m => m.name.toLowerCase().includes(materialSearchTerm.toLowerCase()));
+    }, [materials, materialSearchTerm]);
 
     const renderMovementModal = (type: MovementType) => {
         const isOpen = type === MovementType.Entrada ? isEntradaModalOpen : isSaidaModalOpen;
@@ -187,25 +236,25 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                         <button type="button" onClick={closeModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6" /></button>
                     </div>
                     <div className="p-6 space-y-4">
-                        <div className="relative" ref={productDropdownRef}>
-                            <label className="block text-sm font-medium text-brand-gray-700 mb-1">Produto *</label>
+                        <div className="relative" ref={materialDropdownRef}>
+                            <label className="block text-sm font-medium text-brand-gray-700 mb-1">Material *</label>
                             <input 
                                 type="text"
                                 placeholder="Busque por nome..."
-                                value={productSearchTerm}
+                                value={materialSearchTerm}
                                 onChange={e => {
-                                    setProductSearchTerm(e.target.value);
-                                    setSelectedProduct(null);
-                                    setIsProductListOpen(true);
+                                    setMaterialSearchTerm(e.target.value);
+                                    setSelectedMaterial(null);
+                                    setIsMaterialListOpen(true);
                                 }}
-                                onFocus={() => setIsProductListOpen(true)}
+                                onFocus={() => setIsMaterialListOpen(true)}
                                 className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
                             />
-                            {isProductListOpen && filteredProducts.length > 0 && (
+                            {isMaterialListOpen && Array.isArray(filteredMaterials) && filteredMaterials.length > 0 && (
                                 <ul className="absolute z-10 w-full bg-white border border-brand-gray-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
-                                    {filteredProducts.map(p => (
-                                        <li key={p.id} onClick={() => handleSelectProduct(p)} className="px-3 py-2 cursor-pointer hover:bg-brand-gray-100">
-                                            {p.name} <span className="text-xs text-brand-gray-500">(Estoque: {p.stock})</span>
+                                    {filteredMaterials.map(m => (
+                                        <li key={m.id} onClick={() => handleSelectMaterial(m)} className="px-3 py-2 cursor-pointer hover:bg-brand-gray-100">
+                                            {m.name} <span className="text-xs text-brand-gray-500">(Estoque: {m.stock})</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -272,7 +321,34 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
             </div>
         )
     };
-    
+
+    if (loading) {
+        return (
+            <div className="p-4 sm:p-8">
+                <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue"></div>
+                    <span className="ml-3 text-brand-gray-600">Carregando movimentações...</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="p-4 sm:p-8">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-red-800">Erro ao carregar movimentações</h3>
+                    <p className="mt-2 text-sm text-red-700">{error}</p>
+                    <button
+                        onClick={loadData}
+                        className="mt-4 bg-red-100 px-3 py-2 rounded-md text-sm font-medium text-red-800 hover:bg-red-200 transition-colors"
+                    >
+                        Tentar novamente
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 sm:p-8">
@@ -304,7 +380,7 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                     <div className="relative w-full sm:max-w-xs">
                         <input
                             type="text"
-                            placeholder="Buscar por produto, SKU..."
+                            placeholder="Buscar por material, SKU..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
@@ -330,7 +406,7 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                     <table className="min-w-full divide-y divide-brand-gray-200">
                         <thead className="bg-brand-gray-50">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Produto</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Material</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Tipo</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Quantidade</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Motivo</th>
@@ -339,23 +415,31 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-brand-gray-200">
-                            {filteredMovements.map((mov) => (
-                                <tr key={mov.id} className="hover:bg-brand-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-900">
-                                        <div className="font-semibold">{mov.product.name}</div>
-                                        <div className="text-xs text-brand-gray-500">SKU: {mov.product.sku}</div>
+                            {Array.isArray(filteredMovements) && filteredMovements.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-brand-gray-500">
+                                        Nenhuma movimentação encontrada
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeClass(mov.type)}`}>
-                                            {mov.type}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-brand-gray-800">{mov.quantity}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.reason || 'N/A'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.date}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.responsible}</td>
                                 </tr>
-                            ))}
+                            ) : (
+                                Array.isArray(filteredMovements) && filteredMovements.map((mov) => (
+                                    <tr key={mov.id} className="hover:bg-brand-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-900">
+                                            <div className="font-semibold">{mov.product.name}</div>
+                                            <div className="text-xs text-brand-gray-500">SKU: {mov.product.sku}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeClass(mov.type)}`}>
+                                                {mov.type}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-brand-gray-800">{mov.quantity}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.reason || 'N/A'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.date}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.responsible}</td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

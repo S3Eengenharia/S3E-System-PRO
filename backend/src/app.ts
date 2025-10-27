@@ -1,7 +1,11 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+
 
 // Routes
 import authRoutes from './routes/auth.js';
@@ -17,6 +21,7 @@ import alocacaoRoutes from './routes/alocacao.routes.js';
 import comparacaoPrecosRoutes from './routes/comparacaoPrecos.routes.js';
 import equipesRoutes from './routes/equipes.routes.js';
 import pdfRoutes from './routes/pdf.routes.js';
+import etapasAdminRoutes from './routes/etapasAdmin.routes.js';
 import clientesRoutes from './routes/clientes.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
 import projetosRoutes from './routes/projetos.js';
@@ -28,7 +33,7 @@ import empresasRoutes from './routes/empresas.js';
 import dashboardRoutes from './routes/dashboard.js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Middlewares
 app.use(helmet());
@@ -92,6 +97,7 @@ app.use('/api/obras', alocacaoRoutes);
 app.use('/api/comparacao-precos', comparacaoPrecosRoutes);
 app.use('/api/equipes', equipesRoutes);
 app.use('/api/pdf', pdfRoutes);
+app.use('/api/projetos/etapas-admin', etapasAdminRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/projetos', projetosRoutes);
@@ -118,8 +124,8 @@ app.use((_req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀 Servidor Rodando na porta ${PORT} por favor acesse: http://localhost:${PORT}`);
+  console.log(`📝 Ambiente: ${process.env.NODE_ENV || 'development'}`);
 });
 
 export default app;

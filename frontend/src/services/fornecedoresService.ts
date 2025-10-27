@@ -58,6 +58,10 @@ class FornecedoresService {
   async desativar(id: string) {
     return apiService.delete<Fornecedor>(`/api/fornecedores/${id}`);
   }
+
+  async reativar(id: string) {
+    return apiService.put<Fornecedor>(`/api/fornecedores/${id}/reativar`);
+  }
 }
 
 export const fornecedoresService = new FornecedoresService();
