@@ -193,19 +193,26 @@ model OrcamentoItem {
 // PROJETOS E KANBAN
 // ============================================
 
+enum ProjetoStatus {
+  PROPOSTA
+  APROVADO
+  EXECUCAO
+  CONCLUIDO
+}
+
 model Projeto {
-  id           String    @id @default(uuid())
-  orcamentoId  String    @unique
+  id           String        @id @default(uuid())
+  orcamentoId  String        @unique
   clienteId    String
   titulo       String
   descricao    String?
   valorTotal   Float
-  dataInicio   DateTime  @default(now())
+  dataInicio   DateTime      @default(now())
   dataPrevisao DateTime?
   dataFim      DateTime?
-  status       String    @default("EmAndamento") // EmAndamento, Concluido, Cancelado
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  status       ProjetoStatus @default(PROPOSTA)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   orcamento    Orcamento      @relation(fields: [orcamentoId], references: [id])
   cliente      Cliente        @relation(fields: [clienteId], references: [id])
@@ -214,6 +221,7 @@ model Projeto {
   vendas       Venda[]
   alocacoes    AlocacaoObra[]
   etapasAdmin  EtapaAdmin[]
+  tarefasCampo TarefaCampo[]
 
   @@map("projetos")
 }
@@ -229,6 +237,11 @@ model EtapaAdmin {
   dataConclusao  DateTime? // Quando foi concluída
   observacoes    String?
   motivoExtensao String? // Motivo para extensão de prazo
+  // Campos compatíveis com especificação solicitada
+  nome           String? // alias para exibição
+  dataExpiracao  DateTime? // espelha dataPrevista
+  realizada      Boolean? // espelha concluida
+  justificativa  String? // alias para motivo de adiamento
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -238,6 +251,12 @@ model EtapaAdmin {
   @@index([tipo])
   @@index([concluida])
   @@map("etapas_admin")
+}
+
+enum TarefaCampoStatus {
+  A_FAZER
+  EM_ANDAMENTO
+  CONCLUIDO
 }
 
 model Task {
@@ -256,6 +275,46 @@ model Task {
   projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
   @@map("tasks")
+}
+
+model TarefaCampo {
+  id            String            @id @default(uuid())
+  projetoId     String
+  titulo        String
+  descricao     String?
+  status        TarefaCampoStatus @default(A_FAZER)
+  responsavelId String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@index([projetoId])
+  @@map("tarefas_campo")
+}
+
+// ============================================
+// PESSOAS / TÉCNICOS DE CAMPO
+// ============================================
+
+enum FuncaoPessoa {
+  TECNICO_1
+  ELETRICISTA_2
+  ENGENHEIRO
+  AUXILIAR
+}
+
+model Pessoa {
+  id         String       @id @default(uuid())
+  nome       String
+  email      String?      @unique
+  funcao     FuncaoPessoa
+  disponivel Boolean      @default(true)
+  ativo      Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@map("pessoas")
 }
 
 // ============================================
