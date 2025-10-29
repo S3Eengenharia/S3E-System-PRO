@@ -25,6 +25,7 @@ import etapasAdminRoutes from './routes/etapasAdmin.routes.js';
 import clientesRoutes from './routes/clientes.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
 import projetosRoutes from './routes/projetos.js';
+import pessoasRoutes from './routes/pessoa.routes.js';
 import servicosRoutes from './routes/servicos.js';
 import movimentacoesRoutes from './routes/movimentacoes.js';
 import historicoRoutes from './routes/historico.js';
@@ -33,7 +34,7 @@ import empresasRoutes from './routes/empresas.js';
 import dashboardRoutes from './routes/dashboard.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // Middlewares
 app.use(helmet());
@@ -98,6 +99,7 @@ app.use('/api/comparacao-precos', comparacaoPrecosRoutes);
 app.use('/api/equipes', equipesRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/projetos/etapas-admin', etapasAdminRoutes);
+app.use('/api/pessoas', pessoasRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/projetos', projetosRoutes);

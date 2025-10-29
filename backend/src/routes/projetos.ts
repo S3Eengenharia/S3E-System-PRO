@@ -5,7 +5,9 @@ import {
   createProjeto,
   updateProjeto,
   updateProjetoStatus,
-  deleteProjeto
+  deleteProjeto,
+  criarProjetoDeOrcamento,
+  listarProjetosAvancado
 } from '../controllers/projetosController.js';
 import { authenticate } from '../middlewares/auth.js';
 
@@ -21,6 +23,8 @@ router.use(authenticate);
  * @access Private
  */
 router.get('/', getProjetos);
+// endpoint com agregação/kanban opcional (?view=kanban)
+router.get('/_avancado', listarProjetosAvancado);
 
 /**
  * @route GET /api/projetos/:id
@@ -35,6 +39,8 @@ router.get('/:id', getProjetoById);
  * @access Private
  */
 router.post('/', createProjeto);
+// criar projeto a partir de orçamento
+router.post('/criar-de-orcamento', criarProjetoDeOrcamento);
 
 /**
  * @route PUT /api/projetos/:id
@@ -48,7 +54,7 @@ router.put('/:id', updateProjeto);
  * @desc Atualizar status do projeto (EmAndamento, Concluido, Cancelado)
  * @access Private
  */
-router.patch('/:id/status', updateProjetoStatus);
+router.put('/:id/status', updateProjetoStatus);
 
 /**
  * @route DELETE /api/projetos/:id

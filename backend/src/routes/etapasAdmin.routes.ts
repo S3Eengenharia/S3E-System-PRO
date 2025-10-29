@@ -54,5 +54,9 @@ router.put('/:projetoId/:etapaId/estender-prazo', EtapasAdminController.estender
  */
 router.put('/:projetoId/:etapaId/reabrir', EtapasAdminController.reabrirEtapa);
 
+// Aliases compatíveis com especificação solicitada (sem projetoId)
+router.put('/:etapaId/concluir', EtapasAdminController.concluirEtapa);
+router.put('/:etapaId/adiar', EtapasAdminController.estenderPrazo);
+
 export default router;
 

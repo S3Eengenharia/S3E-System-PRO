@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ProjetoStatus } from '@prisma/client';
+import { projetosService } from '../services/projetos.service.js';
 
 const prisma = new PrismaClient();
 
@@ -273,51 +274,16 @@ export const updateProjeto = async (req: Request, res: Response): Promise<void> 
 export const updateProjetoStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status } = req.body as { status: ProjetoStatus };
 
-    const statusValidos = ['EmAndamento', 'Concluido', 'Cancelado'];
-    if (!statusValidos.includes(status)) {
-      res.status(400).json({
-        success: false,
-        error: 'Status inválido. Use: EmAndamento, Concluido ou Cancelado'
-      });
+    if (!['PROPOSTA','APROVADO','EXECUCAO','CONCLUIDO'].includes(String(status))) {
+      res.status(400).json({ success: false, error: 'Status inválido. Use: PROPOSTA, APROVADO, EXECUCAO, CONCLUIDO' });
       return;
     }
 
-    // Verificar se projeto existe
-    const projeto = await prisma.projeto.findUnique({
-      where: { id }
-    });
+    const atualizado = await projetosService.atualizarStatus(id, status as ProjetoStatus);
 
-    if (!projeto) {
-      res.status(404).json({
-        success: false,
-        error: 'Projeto não encontrado'
-      });
-      return;
-    }
-
-    const updateData: any = { status };
-    
-    // Se está sendo concluído, definir dataFim
-    if (status === 'Concluido') {
-      updateData.dataFim = new Date();
-    }
-
-    const projetoAtualizado = await prisma.projeto.update({
-      where: { id },
-      data: updateData,
-      include: {
-        cliente: { select: { nome: true } },
-        orcamento: { select: { precoVenda: true } }
-      }
-    });
-
-    res.json({
-      success: true,
-      data: projetoAtualizado,
-      message: `Projeto ${status.toLowerCase()} com sucesso`
-    });
+    res.json({ success: true, data: atualizado, message: `Status atualizado para ${status}` });
   } catch (error) {
     console.error('Erro ao atualizar status do projeto:', error);
     res.status(500).json({ 
@@ -380,5 +346,31 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
       success: false,
       error: 'Erro ao cancelar projeto' 
     });
+  }
+};
+
+// Criar projeto a partir de orçamento
+export const criarProjetoDeOrcamento = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orcamentoId } = req.body as { orcamentoId: string };
+    if (!orcamentoId) {
+      res.status(400).json({ success: false, error: 'orcamentoId é obrigatório' });
+      return;
+    }
+    const projeto = await projetosService.criarProjetoAPartirDoOrcamento(orcamentoId);
+    res.status(201).json({ success: true, data: projeto, message: 'Projeto criado a partir do orçamento' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Erro ao criar projeto do orçamento' });
+  }
+};
+
+// Listar projetos com suporte a modo kanban
+export const listarProjetosAvancado = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { view } = req.query as { view?: 'kanban' | 'lista' };
+    const data = await projetosService.listarProjetos(req.query, view === 'kanban' ? 'kanban' : 'lista');
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro ao listar projetos' });
   }
 };
