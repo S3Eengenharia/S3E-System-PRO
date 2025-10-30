@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import ModalVizualizacaoProjeto from './ModalVizualizacaoProjeto';
+import TeamManagerModal from './TeamManagerModal';
 import { projetosService, type Projeto, type CreateProjetoData, type UpdateProjetoData } from '../services/projetosService';
 import { clientesService, type Cliente } from '../services/clientesService';
 import { etapasAdminService, type EtapaAdmin } from '../services/etapasAdminService';
@@ -67,6 +69,12 @@ const XCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
 );
+const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+);
 const PaperClipIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
@@ -129,7 +137,6 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     // ==================== ESTADOS ====================
     const [projetos, setProjetos] = useState<Projeto[]>([]);
     const [clientes, setClientes] = useState<Cliente[]>([]);
-    const [usuarios, setUsuarios] = useState<Usuario[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -222,19 +229,21 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             ]);
 
             if (projetosRes.success && projetosRes.data) {
-                setProjetos(projetosRes.data);
+                // Garantir que sempre seja um array
+                const projetosArray = Array.isArray(projetosRes.data) ? projetosRes.data : [];
+                setProjetos(projetosArray);
+            } else {
+                setProjetos([]);
             }
 
             if (clientesRes.success && clientesRes.data) {
-                setClientes(clientesRes.data);
+                // Garantir que sempre seja um array
+                const clientesArray = Array.isArray(clientesRes.data) ? clientesRes.data : [];
+                setClientes(clientesArray);
+            } else {
+                setClientes([]);
             }
 
-            // Carregar usuários mockados (pode ser substituído por API real)
-            setUsuarios([
-                { id: '1', nome: 'João Silva', email: 'joao@s3e.com', funcao: 'Engenheiro Elétrico' },
-                { id: '2', nome: 'Maria Santos', email: 'maria@s3e.com', funcao: 'Técnica em Elétrica' },
-                { id: '3', nome: 'Pedro Costa', email: 'pedro@s3e.com', funcao: 'Gerente de Projetos' }
-            ]);
         } catch (err) {
             setError('Erro ao carregar dados');
             console.error(err);
@@ -245,6 +254,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 
     // ==================== FILTROS ====================
     const filteredProjetos = useMemo(() => {
+        // Garantir que projetos seja sempre um array
+        if (!Array.isArray(projetos)) {
+            return [];
+        }
+        
         return projetos.filter(projeto => {
             const matchesSearch = 
                 projeto.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -712,9 +726,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         >
                             <option value="Todos">Todos Responsáveis</option>
-                            {usuarios.map(usuario => (
-                                <option key={usuario.id} value={usuario.id}>{usuario.nome}</option>
-                            ))}
+                            {/* opções de responsáveis poderão ser carregadas via API futura */}
                         </select>
                     </div>
                 </div>
@@ -821,7 +833,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs text-gray-500">Responsável:</span>
                                         <span className="text-sm font-medium text-gray-700">
-                                            {usuarios.find(u => u.id === projeto.responsavelId)?.nome || 'N/A'}
+                                            {projeto.responsavel?.nome || 'N/A'}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -930,9 +942,6 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="">Selecione o responsável</option>
-                                        {usuarios.map(usuario => (
-                                            <option key={usuario.id} value={usuario.id}>{usuario.nome}</option>
-                                        ))}
                                     </select>
                                 </div>
 
@@ -1015,10 +1024,21 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 
             {/* MODAL DE VISUALIZAÇÃO DE PROJETO (Hub Completo) */}
             {isViewModalOpen && projetoToView && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-6xl w-full max-h-[95vh] overflow-y-auto animate-slide-in-up my-8">
-                        {/* Header */}
-                        <div className="sticky top-0 bg-white z-10 border-b border-gray-100 p-6">
+                <ModalVizualizacaoProjeto
+                    projeto={projetoToView as any}
+                    isOpen={isViewModalOpen}
+                    onClose={() => setIsViewModalOpen(false)}
+                    onRefresh={loadData}
+                    initialTab={
+                        viewModalActiveTab === 'geral' ? 'Visão Geral' :
+                        viewModalActiveTab === 'materiais' ? 'Materiais' :
+                        viewModalActiveTab === 'etapasAdmin' ? 'EtapasAdmin' :
+                        viewModalActiveTab === 'etapas' ? 'Kanban' : 'Qualidade'
+                    }
+                />
+            )}
+            {false && (<>
+            {/* MODAL DE TAREFA/ETAPA */}
                             <div className="flex justify-between items-start">
                                 <div className="flex-1">
                                     <h2 className="text-3xl font-bold text-gray-900 mb-2">{projetoToView.titulo}</h2>
@@ -1064,7 +1084,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                     ))}
                                 </nav>
                             </div>
-                        </div>
+                        {/* </div> */}
 
                         {/* Conteúdo das Tabs */}
                         <div className="p-6">
@@ -1087,7 +1107,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                                 <div>
                                                     <dt className="text-xs text-gray-500 font-medium">Responsável</dt>
                                                     <dd className="text-sm text-gray-900 mt-1">
-                                                        {usuarios.find(u => u.id === projetoToView.responsavelId)?.nome || 'N/A'}
+                                                        {projetoToView?.responsavel?.nome || 'N/A'}
                                                     </dd>
                                                 </div>
                                                 {projetoToView.orcamentoId && (
@@ -1609,9 +1629,8 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
-            )}
+                    {/* </div> */}
+            </>)}
 
             {/* MODAL DE TAREFA/ETAPA */}
             {isTaskModalOpen && (
@@ -1691,6 +1710,14 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* MODAL: GERENCIAR EQUIPE */}
+            {isTeamModalOpen && (
+                <TeamManagerModal
+                    isOpen={isTeamModalOpen}
+                    onClose={() => setIsTeamModalOpen(false)}
+                />
             )}
 
             {/* MODAL DE GESTÃO DE EQUIPE */}

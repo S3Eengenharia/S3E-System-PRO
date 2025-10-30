@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type StockMovement, MovementType, type MaterialItem } from '../types';
+import { movimentacoesService, type Movimentacao } from '../services/movimentacoesService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 
-// Icons
+// ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -29,6 +30,16 @@ const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
 );
+const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+const UserIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+    </svg>
+);
 
 const entryReasons = [
     "Recebimento de Compra",
@@ -48,9 +59,17 @@ const exitReasons = [
 
 const getTypeClass = (type: MovementType) => {
     switch (type) {
-        case MovementType.Entrada: return 'bg-green-100 text-green-800';
-        case MovementType.Saida: return 'bg-orange-100 text-orange-800';
-        default: return 'bg-gray-100 text-gray-800';
+        case MovementType.Entrada: return 'bg-green-100 text-green-800 ring-1 ring-green-200';
+        case MovementType.Saida: return 'bg-orange-100 text-orange-800 ring-1 ring-orange-200';
+        default: return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+    }
+};
+
+const getTypeIcon = (type: MovementType) => {
+    switch (type) {
+        case MovementType.Entrada: return '📥';
+        case MovementType.Saida: return '📤';
+        default: return '📦';
     }
 };
 
@@ -65,6 +84,7 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<MovementType | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
+    const [dateFilter, setDateFilter] = useState('');
     
     const [isEntradaModalOpen, setIsEntradaModalOpen] = useState(false);
     const [isSaidaModalOpen, setIsSaidaModalOpen] = useState(false);
@@ -86,33 +106,44 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
             setLoading(true);
             setError(null);
             
-            const [movementsRes, materialsRes] = await Promise.all([
-                axiosApiService.get<StockMovement[]>(ENDPOINTS.MOVIMENTACOES),
-                axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS)
-            ]);
-
-            console.log('📊 Resposta da API - Movimentações:', movementsRes);
-            console.log('📦 Resposta da API - Materiais:', materialsRes);
-
-            // Validação robusta para movements
-            if (movementsRes.success && movementsRes.data && Array.isArray(movementsRes.data)) {
-                setMovements(movementsRes.data);
+            // Carregar movimentações
+            const movimentacoesResponse = await movimentacoesService.listar();
+            
+            if (movimentacoesResponse.success && movimentacoesResponse.data) {
+                // Converter movimentações da API para o formato do componente
+                const movimentacoesFormatadas: StockMovement[] = Array.isArray(movimentacoesResponse.data)
+                    ? movimentacoesResponse.data.map((mov: Movimentacao) => ({
+                        id: mov.id,
+                        materialId: mov.materialId,
+                        materialName: mov.material?.nome || 'Material não encontrado',
+                        type: mov.tipo === 'ENTRADA' ? MovementType.Entrada : MovementType.Saida,
+                        quantity: mov.quantidade,
+                        reason: mov.motivo,
+                        responsible: 'Sistema', // TODO: adicionar responsável quando disponível na API
+                        date: mov.createdAt || mov.data,
+                        notes: mov.observacoes
+                    }))
+                    : [];
+                
+                setMovements(movimentacoesFormatadas);
             } else {
-                console.warn('Dados de movimentações inválidos:', movementsRes);
+                console.warn('Nenhuma movimentação encontrada ou erro na resposta:', movimentacoesResponse);
                 setMovements([]);
             }
-
-            // Validação robusta para materials
-            if (materialsRes.success && materialsRes.data && Array.isArray(materialsRes.data)) {
-                setMaterials(materialsRes.data);
+            
+            // Carregar materiais
+            const materiaisResponse = await axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS);
+            
+            if (materiaisResponse.success && materiaisResponse.data) {
+                const materiaisData = Array.isArray(materiaisResponse.data) ? materiaisResponse.data : [];
+                setMaterials(materiaisData);
             } else {
-                console.warn('Dados de materiais inválidos:', materialsRes);
+                console.warn('Nenhum material encontrado ou erro na resposta:', materiaisResponse);
                 setMaterials([]);
             }
         } catch (err) {
-            console.error('Erro ao carregar dados:', err);
-            setError('Erro ao carregar dados');
-            // Garantir que os estados sejam arrays vazios em caso de erro
+            setError('Erro ao carregar movimentações');
+            console.error('Erro ao carregar movimentações:', err);
             setMovements([]);
             setMaterials([]);
         } finally {
@@ -124,329 +155,434 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
         loadData();
     }, []);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (materialDropdownRef.current && !materialDropdownRef.current.contains(event.target as Node)) {
-                setIsMaterialListOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-    
+    // Filtros
+    const filteredMovements = useMemo(() => {
+        let filtered = movements;
+
+        // Filtro por tipo
+        if (filter !== 'Todos') {
+            filtered = filtered.filter(movement => movement.type === filter);
+        }
+
+        // Filtro por busca
+        if (searchTerm) {
+            filtered = filtered.filter(movement =>
+                movement.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                movement.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                movement.responsible.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+
+        // Filtro por data
+        if (dateFilter) {
+            filtered = filtered.filter(movement =>
+                movement.date.startsWith(dateFilter)
+            );
+        }
+
+        return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [movements, filter, searchTerm, dateFilter]);
+
+    // Estatísticas
+    const stats = useMemo(() => {
+        const totalMovimentos = movements.length;
+        const entradas = movements.filter(m => m.type === MovementType.Entrada).length;
+        const saidas = movements.filter(m => m.type === MovementType.Saida).length;
+        const movimentosHoje = movements.filter(m => {
+            const hoje = new Date().toISOString().split('T')[0];
+            return m.date.startsWith(hoje);
+        }).length;
+
+        return { totalMovimentos, entradas, saidas, movimentosHoje };
+    }, [movements]);
+
+    // Filtrar materiais para seleção
+    const filteredMaterials = useMemo(() => {
+        return materials.filter(material =>
+            material.name.toLowerCase().includes(materialSearchTerm.toLowerCase()) ||
+            material.sku.toLowerCase().includes(materialSearchTerm.toLowerCase())
+        );
+    }, [materials, materialSearchTerm]);
+
+    // Handlers
     const resetForm = () => {
         setSelectedMaterial(null);
         setMaterialSearchTerm('');
-        setIsMaterialListOpen(false);
         setQuantity('');
         setReason('');
         setNotes('');
-    };
-
-    const handleOpenEntradaModal = () => {
-        resetForm();
-        setIsEntradaModalOpen(true);
-    };
-
-    const handleOpenSaidaModal = () => {
-        resetForm();
-        setIsSaidaModalOpen(true);
-    };
-
-    const handleSelectMaterial = (material: MaterialItem) => {
-        setSelectedMaterial(material);
-        setMaterialSearchTerm(material.name);
         setIsMaterialListOpen(false);
     };
 
-    const handleConfirmMovement = async (type: MovementType) => {
-        if (!selectedMaterial || !quantity || parseInt(quantity) <= 0 || !reason) {
-            alert('Por favor, preencha todos os campos obrigatórios (material, quantidade e motivo).');
-            return;
-        }
-
-        const movementQuantity = parseInt(quantity);
-        
-        if (type === MovementType.Saida && movementQuantity > selectedMaterial.stock) {
-            alert(`Quantidade de saída excede o estoque disponível (${selectedMaterial.stock} unidades).`);
+    const handleSubmitMovement = async (type: MovementType) => {
+        if (!selectedMaterial || !quantity || !reason) {
+            alert('Preencha todos os campos obrigatórios');
             return;
         }
 
         try {
-            const movementData = {
+            const quantidadeNum = parseFloat(quantity);
+            if (isNaN(quantidadeNum) || quantidadeNum <= 0) {
+                alert('Quantidade inválida');
+                return;
+            }
+
+            const movimentacaoData = {
                 materialId: selectedMaterial.id,
-                quantity: movementQuantity,
-                type: type === MovementType.Entrada ? 'entrada' : 'saida',
-                reason,
-                responsible,
-                notes,
-                date: new Date().toISOString()
+                tipo: type === MovementType.Entrada ? 'ENTRADA' : 'SAIDA' as 'ENTRADA' | 'SAIDA',
+                quantidade: quantidadeNum,
+                motivo: reason,
+                observacoes: notes || undefined
             };
 
-            const response = await axiosApiService.post(ENDPOINTS.MOVIMENTACOES, movementData);
+            const response = await movimentacoesService.criar(movimentacaoData);
             
-            if (response.success) {
-                await loadData(); // Recarregar dados
+            if (response.success && response.data) {
+                alert(`✅ ${type === MovementType.Entrada ? 'Entrada' : 'Saída'} registrada com sucesso!`);
                 resetForm();
-                if (type === MovementType.Entrada) setIsEntradaModalOpen(false);
-                if (type === MovementType.Saida) setIsSaidaModalOpen(false);
+                setIsEntradaModalOpen(false);
+                setIsSaidaModalOpen(false);
+                await loadData();
             } else {
-                alert('Erro ao registrar movimentação');
+                alert(`❌ Erro ao registrar movimentação: ${response.error || 'Erro desconhecido'}`);
             }
-        } catch (err) {
-            console.error('Erro ao registrar movimentação:', err);
-            alert('Erro ao registrar movimentação');
+        } catch (error) {
+            console.error('Erro ao registrar movimentação:', error);
+            alert('❌ Erro ao registrar movimentação. Verifique o console para mais detalhes.');
         }
-    };
-
-    const filteredMovements = useMemo(() => {
-        if (!Array.isArray(movements)) {
-            return [];
-        }
-        
-        return movements
-            .filter(mov => filter === 'Todos' || mov.type === filter)
-            .filter(mov =>
-                mov.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                mov.product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                mov.responsible.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-    }, [movements, filter, searchTerm]);
-    
-    const filteredMaterials = useMemo(() => {
-        if (!Array.isArray(materials)) {
-            return [];
-        }
-        
-        return materials.filter(m => m.name.toLowerCase().includes(materialSearchTerm.toLowerCase()));
-    }, [materials, materialSearchTerm]);
-
-    const renderMovementModal = (type: MovementType) => {
-        const isOpen = type === MovementType.Entrada ? isEntradaModalOpen : isSaidaModalOpen;
-        const closeModal = () => type === MovementType.Entrada ? setIsEntradaModalOpen(false) : setIsSaidaModalOpen(false);
-        const title = type === MovementType.Entrada ? "Registrar Entrada de Material" : "Registrar Saída de Material";
-        const buttonText = type === MovementType.Entrada ? "Confirmar Entrada" : "Confirmar Saída";
-        const buttonClass = type === MovementType.Entrada ? "bg-brand-green hover:bg-brand-green/90" : "bg-brand-orange hover:bg-brand-orange/90";
-
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
-                    <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center">
-                        <h2 className="text-xl font-bold text-brand-gray-800">{title}</h2>
-                        <button type="button" onClick={closeModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6" /></button>
-                    </div>
-                    <div className="p-6 space-y-4">
-                        <div className="relative" ref={materialDropdownRef}>
-                            <label className="block text-sm font-medium text-brand-gray-700 mb-1">Material *</label>
-                            <input 
-                                type="text"
-                                placeholder="Busque por nome..."
-                                value={materialSearchTerm}
-                                onChange={e => {
-                                    setMaterialSearchTerm(e.target.value);
-                                    setSelectedMaterial(null);
-                                    setIsMaterialListOpen(true);
-                                }}
-                                onFocus={() => setIsMaterialListOpen(true)}
-                                className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
-                            />
-                            {isMaterialListOpen && Array.isArray(filteredMaterials) && filteredMaterials.length > 0 && (
-                                <ul className="absolute z-10 w-full bg-white border border-brand-gray-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
-                                    {filteredMaterials.map(m => (
-                                        <li key={m.id} onClick={() => handleSelectMaterial(m)} className="px-3 py-2 cursor-pointer hover:bg-brand-gray-100">
-                                            {m.name} <span className="text-xs text-brand-gray-500">(Estoque: {m.stock})</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <div>
-                                <label htmlFor="quantity" className="block text-sm font-medium text-brand-gray-700 mb-1">Quantidade *</label>
-                                <input
-                                    id="quantity"
-                                    type="number"
-                                    value={quantity}
-                                    onChange={e => setQuantity(e.target.value)}
-                                    className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
-                                    min="1"
-                                    step="1"
-                                />
-                             </div>
-                             <div>
-                                <label htmlFor="reason" className="block text-sm font-medium text-brand-gray-700 mb-1">Motivo da Movimentação *</label>
-                                <select
-                                    id="reason"
-                                    value={reason}
-                                    onChange={e => setReason(e.target.value)}
-                                    className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue bg-white"
-                                    required
-                                >
-                                    <option value="" disabled>Selecione um motivo...</option>
-                                    {(type === MovementType.Entrada ? entryReasons : exitReasons).map(r => (
-                                        <option key={r} value={r}>{r}</option>
-                                    ))}
-                                </select>
-                             </div>
-                         </div>
-                         <div>
-                            <label htmlFor="responsible" className="block text-sm font-medium text-brand-gray-700 mb-1">Responsável</label>
-                            <input
-                                id="responsible"
-                                type="text"
-                                value={responsible}
-                                onChange={e => setResponsible(e.target.value)}
-                                className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
-                            />
-                         </div>
-                         <div>
-                            <label htmlFor="notes" className="block text-sm font-medium text-brand-gray-700 mb-1">Notas (Opcional)</label>
-                            <textarea
-                                id="notes"
-                                value={notes}
-                                onChange={e => setNotes(e.target.value)}
-                                rows={2}
-                                placeholder={type === MovementType.Entrada ? "Ex: NF-e 12345, Fornecedor X" : "Ex: Obra Y, Projeto Z"}
-                                className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
-                            />
-                         </div>
-                    </div>
-                    <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 flex justify-end gap-3">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold rounded-lg hover:bg-brand-gray-50">Cancelar</button>
-                        <button type="button" onClick={() => handleConfirmMovement(type)} className={`px-6 py-2 text-white font-semibold rounded-lg shadow-sm ${buttonClass}`}>
-                            {buttonText}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )
     };
 
     if (loading) {
         return (
-            <div className="p-4 sm:p-8">
-                <div className="flex justify-center items-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue"></div>
-                    <span className="ml-3 text-brand-gray-600">Carregando movimentações...</span>
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="p-4 sm:p-8">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-red-800">Erro ao carregar movimentações</h3>
-                    <p className="mt-2 text-sm text-red-700">{error}</p>
-                    <button
-                        onClick={loadData}
-                        className="mt-4 bg-red-100 px-3 py-2 rounded-md text-sm font-medium text-red-800 hover:bg-red-200 transition-colors"
-                    >
-                        Tentar novamente
-                    </button>
+            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando movimentações...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="p-4 sm:p-8">
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                <div className="flex items-center">
-                    <button onClick={toggleSidebar} className="lg:hidden mr-4 p-1 text-brand-gray-500 rounded-md hover:bg-brand-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue" aria-label="Open sidebar">
+        <div className="min-h-screen p-4 sm:p-8">
+            {/* Header */}
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 animate-fade-in">
+                <div className="flex items-center gap-4">
+                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 rounded-xl hover:bg-white hover:shadow-soft">
                         <Bars3Icon className="w-6 h-6" />
                     </button>
                     <div>
-                        <h1 className="text-xl sm:text-3xl font-bold text-brand-gray-800">Movimentações</h1>
-                        <p className="text-sm sm:text-base text-brand-gray-500">Controle de entrada e saída de estoque</p>
+                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">Movimentações</h1>
+                        <p className="text-sm sm:text-base text-gray-500 mt-1">Controle de entradas e saídas de estoque</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={handleOpenSaidaModal} className="flex items-center justify-center bg-white border border-brand-orange text-brand-orange font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-orange-50 transition-colors">
-                        <ArrowUpTrayIcon className="w-5 h-5 mr-2" />
-                        Realizar Saída
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => setIsEntradaModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                    >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        Entrada
                     </button>
-                    <button onClick={handleOpenEntradaModal} className="flex items-center justify-center bg-brand-green text-white font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-brand-green/90 transition-colors">
-                        <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
-                        Realizar Entrada
+                    <button
+                        onClick={() => setIsSaidaModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
+                    >
+                        <ArrowUpTrayIcon className="w-5 h-5" />
+                        Saída
                     </button>
                 </div>
             </header>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm">
-                {/* Filters and Search */}
-                <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-                    <div className="relative w-full sm:max-w-xs">
-                        <input
-                            type="text"
-                            placeholder="Buscar por material, SKU..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-brand-gray-300 rounded-lg focus:ring-brand-blue focus:border-brand-blue"
-                        />
-                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray-400" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-brand-gray-600">Tipo:</span>
-                        <select 
-                            value={filter} 
-                            onChange={(e) => setFilter(e.target.value as MovementType | 'Todos')}
-                            className="border border-brand-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-brand-blue focus:border-brand-blue"
-                        >
-                            <option value="Todos">Todos</option>
-                            <option value={MovementType.Entrada}>Entrada</option>
-                            <option value={MovementType.Saida}>Saída</option>
-                        </select>
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 animate-fade-in">
+                    <p className="text-red-800 font-medium">⚠️ {error}</p>
+                </div>
+            )}
+
+            {/* Cards de Estatísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-indigo-200 flex items-center justify-center">
+                            <ClockIcon className="w-6 h-6 text-indigo-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Total de Movimentos</p>
+                            <p className="text-2xl font-bold text-indigo-600">{stats.totalMovimentos}</p>
+                        </div>
                     </div>
                 </div>
 
-                {/* Movements Table */}
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-brand-gray-200">
-                        <thead className="bg-brand-gray-50">
-                            <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Material</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Tipo</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Quantidade</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Motivo</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Data</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 uppercase tracking-wider">Responsável</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-brand-gray-200">
-                            {Array.isArray(filteredMovements) && filteredMovements.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-brand-gray-500">
-                                        Nenhuma movimentação encontrada
-                                    </td>
-                                </tr>
-                            ) : (
-                                Array.isArray(filteredMovements) && filteredMovements.map((mov) => (
-                                    <tr key={mov.id} className="hover:bg-brand-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-900">
-                                            <div className="font-semibold">{mov.product.name}</div>
-                                            <div className="text-xs text-brand-gray-500">SKU: {mov.product.sku}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeClass(mov.type)}`}>
-                                                {mov.type}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-brand-gray-800">{mov.quantity}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.reason || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.date}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500">{mov.responsible}</td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
+                            <ArrowDownTrayIcon className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Entradas</p>
+                            <p className="text-2xl font-bold text-green-600">{stats.entradas}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
+                            <ArrowUpTrayIcon className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Saídas</p>
+                            <p className="text-2xl font-bold text-orange-600">{stats.saidas}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                            <span className="text-2xl">📅</span>
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Hoje</p>
+                            <p className="text-2xl font-bold text-blue-600">{stats.movimentosHoje}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-            
-            {isEntradaModalOpen && renderMovementModal(MovementType.Entrada)}
-            {isSaidaModalOpen && renderMovementModal(MovementType.Saida)}
+
+            {/* Filtros */}
+            <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2">
+                        <div className="relative">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por material, motivo ou responsável..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <select
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value as MovementType | 'Todos')}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="Todos">Todos os Tipos</option>
+                            <option value={MovementType.Entrada}>Entradas</option>
+                            <option value={MovementType.Saida}>Saídas</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <input
+                            type="date"
+                            value={dateFilter}
+                            onChange={(e) => setDateFilter(e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                        Exibindo <span className="font-bold text-gray-900">{filteredMovements.length}</span> de <span className="font-bold text-gray-900">{movements.length}</span> movimentações
+                    </p>
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-xs text-gray-600">Entradas: {stats.entradas}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                            <span className="text-xs text-gray-600">Saídas: {stats.saidas}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Lista de Movimentações */}
+            {filteredMovements.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-16 text-center">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-4xl">📦</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma movimentação encontrada</h3>
+                    <p className="text-gray-500 mb-6">
+                        {searchTerm || filter !== 'Todos' || dateFilter
+                            ? 'Tente ajustar os filtros de busca'
+                            : 'Comece registrando sua primeira movimentação'}
+                    </p>
+                    {!searchTerm && filter === 'Todos' && !dateFilter && (
+                        <div className="flex gap-3 justify-center">
+                            <button
+                                onClick={() => setIsEntradaModalOpen(true)}
+                                className="bg-gradient-to-r from-green-600 to-green-500 text-white px-6 py-3 rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                            >
+                                <ArrowDownTrayIcon className="w-5 h-5 inline mr-2" />
+                                Primeira Entrada
+                            </button>
+                            <button
+                                onClick={() => setIsSaidaModalOpen(true)}
+                                className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
+                            >
+                                <ArrowUpTrayIcon className="w-5 h-5 inline mr-2" />
+                                Primeira Saída
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {filteredMovements.map((movement) => (
+                        <div key={movement.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-indigo-300 transition-all duration-200">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <h3 className="font-bold text-lg text-gray-900">{movement.materialName}</h3>
+                                        <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getTypeClass(movement.type)}`}>
+                                            {getTypeIcon(movement.type)} {movement.type === MovementType.Entrada ? 'Entrada' : 'Saída'}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-600">
+                                        <div className="flex items-center gap-2">
+                                            <span>📦</span>
+                                            <span><strong>Quantidade:</strong> {movement.quantity}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span>📝</span>
+                                            <span><strong>Motivo:</strong> {movement.reason}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <UserIcon className="w-4 h-4" />
+                                            <span><strong>Por:</strong> {movement.responsible}</span>
+                                        </div>
+                                    </div>
+                                    {movement.notes && (
+                                        <div className="mt-2 text-sm text-gray-600">
+                                            <span className="font-medium">Observações:</span> {movement.notes}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-lg font-bold text-indigo-700">
+                                        {new Date(movement.date).toLocaleDateString('pt-BR')}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                        {new Date(movement.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* MODAL DE ENTRADA */}
+            {isEntradaModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                        {/* Header */}
+                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center shadow-medium ring-2 ring-green-100">
+                                    <ArrowDownTrayIcon className="w-7 h-7 text-white" />
+                                </div>
+                                <div className="flex-1">
+                                    <h2 className="text-2xl font-bold text-gray-900">Registrar Entrada</h2>
+                                    <p className="text-sm text-gray-600 mt-1">Adicione materiais ao estoque</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { setIsEntradaModalOpen(false); resetForm(); }}
+                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                <p className="text-blue-800 font-medium">
+                                    🚧 Modal simplificado para demonstração. 
+                                    A implementação completa incluirá seleção de materiais e validações.
+                                </p>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                <button
+                                    onClick={() => { setIsEntradaModalOpen(false); resetForm(); }}
+                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => handleSubmitMovement(MovementType.Entrada)}
+                                    className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                                >
+                                    Registrar Entrada
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE SAÍDA */}
+            {isSaidaModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                        {/* Header */}
+                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-red-50">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-600 to-orange-700 flex items-center justify-center shadow-medium ring-2 ring-orange-100">
+                                    <ArrowUpTrayIcon className="w-7 h-7 text-white" />
+                                </div>
+                                <div className="flex-1">
+                                    <h2 className="text-2xl font-bold text-gray-900">Registrar Saída</h2>
+                                    <p className="text-sm text-gray-600 mt-1">Remova materiais do estoque</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { setIsSaidaModalOpen(false); resetForm(); }}
+                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                <p className="text-blue-800 font-medium">
+                                    🚧 Modal simplificado para demonstração. 
+                                    A implementação completa incluirá seleção de materiais e validações.
+                                </p>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                <button
+                                    onClick={() => { setIsSaidaModalOpen(false); resetForm(); }}
+                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => handleSubmitMovement(MovementType.Saida)}
+                                    className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
+                                >
+                                    Registrar Saída
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

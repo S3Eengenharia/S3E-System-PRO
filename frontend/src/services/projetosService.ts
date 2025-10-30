@@ -1,4 +1,5 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 export interface Projeto {
   id: string;
@@ -55,23 +56,27 @@ export interface ProjetoFilters {
 
 class ProjetosService {
   async listar(filters?: ProjetoFilters) {
-    return apiService.get<Projeto[]>('/api/projetos', filters);
+    return axiosApiService.get<Projeto[]>(ENDPOINTS.PROJETOS, filters);
   }
 
   async buscar(id: string) {
-    return apiService.get<Projeto>(`/api/projetos/${id}`);
+    return axiosApiService.get<Projeto>(`${ENDPOINTS.PROJETOS}/${id}`);
   }
 
   async criar(data: CreateProjetoData) {
-    return apiService.post<Projeto>('/api/projetos', data);
+    return axiosApiService.post<Projeto>(ENDPOINTS.PROJETOS, data);
   }
 
   async atualizar(id: string, data: UpdateProjetoData) {
-    return apiService.put<Projeto>(`/api/projetos/${id}`, data);
+    return axiosApiService.put<Projeto>(`${ENDPOINTS.PROJETOS}/${id}`, data);
+  }
+
+  async atualizarStatus(id: string, status: string) {
+    return axiosApiService.put<Projeto>(`${ENDPOINTS.PROJETOS}/${id}/status`, { status });
   }
 
   async desativar(id: string) {
-    return apiService.delete<Projeto>(`/api/projetos/${id}`);
+    return axiosApiService.delete<Projeto>(`${ENDPOINTS.PROJETOS}/${id}`);
   }
 }
 
