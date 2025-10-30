@@ -1,4 +1,5 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 export interface Cliente {
   id: string;
@@ -39,28 +40,288 @@ export interface ClienteFilters {
 }
 
 class ClientesService {
+  /**
+   * Lista todos os clientes com filtros opcionais
+   */
   async listar(filters?: ClienteFilters) {
-    return apiService.get<Cliente[]>('/api/clientes', filters);
+    try {
+      console.log('👥 Carregando lista de clientes...', filters);
+      
+      const response = await axiosApiService.get<Cliente[]>(ENDPOINTS.CLIENTES, filters);
+      
+      if (response.success && response.data) {
+        // Verificar se os dados estão em response.data.data ou diretamente em response.data
+        const clientesData = Array.isArray(response.data) ? response.data : response.data.data || [];
+        console.log(`✅ ${clientesData.length} clientes carregados`);
+        
+        return {
+          success: true,
+          data: clientesData,
+          message: `${clientesData.length} clientes carregados`
+        };
+      } else {
+        console.warn('⚠️ Resposta inválida da API de clientes:', response);
+        return {
+          success: false,
+          error: response.error || 'Erro ao carregar clientes',
+          data: []
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar clientes:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao carregar clientes',
+        data: []
+      };
+    }
   }
 
+  /**
+   * Busca um cliente específico por ID
+   */
   async buscar(id: string) {
-    return apiService.get<Cliente>(`/api/clientes/${id}`);
+    try {
+      console.log(`👤 Buscando cliente ${id}...`);
+      
+      const response = await axiosApiService.get<Cliente>(`${ENDPOINTS.CLIENTES}/${id}`);
+      
+      if (response.success && response.data) {
+        console.log('✅ Cliente encontrado:', response.data);
+        return {
+          success: true,
+          data: response.data
+        };
+      } else {
+        console.warn('⚠️ Cliente não encontrado:', response);
+        return {
+          success: false,
+          error: response.error || 'Cliente não encontrado'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar cliente:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao buscar cliente'
+      };
+    }
   }
 
+  /**
+   * Cria um novo cliente
+   */
   async criar(data: CreateClienteData) {
-    return apiService.post<Cliente>('/api/clientes', data);
+    try {
+      console.log('➕ Criando novo cliente...', data);
+      
+      // Validações básicas antes de enviar
+      if (!data.nome || !data.cpfCnpj || !data.email) {
+        return {
+          success: false,
+          error: 'Nome, CPF/CNPJ e email são obrigatórios'
+        };
+      }
+
+      const response = await axiosApiService.post<Cliente>(ENDPOINTS.CLIENTES, data);
+      
+      if (response.success && response.data) {
+        console.log('✅ Cliente criado com sucesso:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: 'Cliente criado com sucesso'
+        };
+      } else {
+        console.warn('⚠️ Erro ao criar cliente:', response);
+        return {
+          success: false,
+          error: response.error || 'Erro ao criar cliente'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao criar cliente:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao criar cliente'
+      };
+    }
   }
 
+  /**
+   * Atualiza um cliente existente
+   */
   async atualizar(id: string, data: UpdateClienteData) {
-    return apiService.put<Cliente>(`/api/clientes/${id}`, data);
+    try {
+      console.log(`✏️ Atualizando cliente ${id}...`, data);
+      
+      const response = await axiosApiService.put<Cliente>(`${ENDPOINTS.CLIENTES}/${id}`, data);
+      
+      if (response.success && response.data) {
+        console.log('✅ Cliente atualizado com sucesso:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: 'Cliente atualizado com sucesso'
+        };
+      } else {
+        console.warn('⚠️ Erro ao atualizar cliente:', response);
+        return {
+          success: false,
+          error: response.error || 'Erro ao atualizar cliente'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao atualizar cliente:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao atualizar cliente'
+      };
+    }
   }
 
+  /**
+   * Desativa um cliente (soft delete)
+   */
   async desativar(id: string) {
-    return apiService.delete<Cliente>(`/api/clientes/${id}`);
+    try {
+      console.log(`🗑️ Desativando cliente ${id}...`);
+      
+      const response = await axiosApiService.delete<Cliente>(`${ENDPOINTS.CLIENTES}/${id}`);
+      
+      if (response.success) {
+        console.log('✅ Cliente desativado com sucesso');
+        return {
+          success: true,
+          message: 'Cliente desativado com sucesso'
+        };
+      } else {
+        console.warn('⚠️ Erro ao desativar cliente:', response);
+        return {
+          success: false,
+          error: response.error || 'Erro ao desativar cliente'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao desativar cliente:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao desativar cliente'
+      };
+    }
   }
 
+  /**
+   * Reativa um cliente desativado
+   */
   async reativar(id: string) {
-    return apiService.put<Cliente>(`/api/clientes/${id}/reativar`);
+    try {
+      console.log(`🔄 Reativando cliente ${id}...`);
+      
+      const response = await axiosApiService.put<Cliente>(`${ENDPOINTS.CLIENTES}/${id}/reativar`);
+      
+      if (response.success && response.data) {
+        console.log('✅ Cliente reativado com sucesso:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: 'Cliente reativado com sucesso'
+        };
+      } else {
+        console.warn('⚠️ Erro ao reativar cliente:', response);
+        return {
+          success: false,
+          error: response.error || 'Erro ao reativar cliente'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao reativar cliente:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao reativar cliente'
+      };
+    }
+  }
+
+  /**
+   * Valida CPF/CNPJ antes de criar/atualizar
+   */
+  async validarCpfCnpj(cpfCnpj: string, excludeId?: string) {
+    try {
+      console.log(`🔍 Validando CPF/CNPJ: ${cpfCnpj}...`);
+      
+      const params = excludeId ? { excludeId } : {};
+      const response = await axiosApiService.get(`${ENDPOINTS.CLIENTES}/validar-cpf-cnpj/${cpfCnpj}`, params);
+      
+      return {
+        success: response.success,
+        available: response.data?.available || false,
+        message: response.message || response.error
+      };
+    } catch (error) {
+      console.error('❌ Erro ao validar CPF/CNPJ:', error);
+      return {
+        success: false,
+        available: false,
+        message: 'Erro ao validar CPF/CNPJ'
+      };
+    }
+  }
+
+  /**
+   * Busca clientes por termo de pesquisa
+   */
+  async pesquisar(termo: string, tipo?: 'PF' | 'PJ', ativo?: boolean) {
+    try {
+      console.log(`🔍 Pesquisando clientes: "${termo}"...`);
+      
+      const filters: ClienteFilters = {
+        search: termo
+      };
+      
+      if (tipo) filters.tipo = tipo;
+      if (ativo !== undefined) filters.ativo = ativo;
+      
+      return this.listar(filters);
+    } catch (error) {
+      console.error('❌ Erro ao pesquisar clientes:', error);
+      return {
+        success: false,
+        error: 'Erro ao pesquisar clientes',
+        data: []
+      };
+    }
+  }
+
+  /**
+   * Estatísticas de clientes para dashboard
+   */
+  async getEstatisticas() {
+    try {
+      console.log('📊 Carregando estatísticas de clientes...');
+      
+      const response = await axiosApiService.get(`${ENDPOINTS.CLIENTES}/estatisticas`);
+      
+      if (response.success && response.data) {
+        console.log('✅ Estatísticas de clientes carregadas:', response.data);
+        return {
+          success: true,
+          data: response.data
+        };
+      } else {
+        console.warn('⚠️ Erro ao carregar estatísticas:', response);
+        return {
+          success: false,
+          error: 'Erro ao carregar estatísticas'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar estatísticas de clientes:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao carregar estatísticas'
+      };
+    }
   }
 }
 

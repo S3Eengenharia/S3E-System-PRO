@@ -7,7 +7,7 @@ export class EquipesController {
    */
   async criarEquipe(req: Request, res: Response) {
     try {
-      const { nome, tipo, descricao, ativa } = req.body;
+      const { nome, tipo, descricao, ativa, membrosIds } = req.body;
 
       // Validações
       if (!nome || !tipo) {
@@ -17,7 +17,7 @@ export class EquipesController {
         });
       }
 
-      if (!['MONTAGEM', 'MANUTENCAO', 'INSTALACAO'].includes(tipo)) {
+      if (!['MONTAGEM', 'MANUTENCAO', 'INSTALACAO', 'CAMPO', 'DISTINTA'].includes(tipo)) {
         return res.status(400).json({
           success: false,
           message: 'Tipo deve ser MONTAGEM, MANUTENCAO ou INSTALACAO'
@@ -28,7 +28,8 @@ export class EquipesController {
         nome,
         tipo,
         descricao,
-        ativa
+        ativa,
+        membrosIds: Array.isArray(membrosIds) ? membrosIds : []
       });
 
       res.status(201).json({
@@ -109,10 +110,10 @@ export class EquipesController {
   async atualizarEquipe(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { nome, tipo, descricao, ativa } = req.body;
+      const { nome, tipo, descricao, ativa, membrosIds } = req.body;
 
       // Validações
-      if (tipo && !['MONTAGEM', 'MANUTENCAO', 'INSTALACAO'].includes(tipo)) {
+      if (tipo && !['MONTAGEM', 'MANUTENCAO', 'INSTALACAO', 'CAMPO', 'DISTINTA'].includes(tipo)) {
         return res.status(400).json({
           success: false,
           message: 'Tipo deve ser MONTAGEM, MANUTENCAO ou INSTALACAO'
@@ -123,7 +124,8 @@ export class EquipesController {
         nome,
         tipo,
         descricao,
-        ativa
+        ativa,
+        membrosIds: Array.isArray(membrosIds) ? membrosIds : undefined
       });
 
       res.json({
@@ -170,26 +172,16 @@ export class EquipesController {
   async adicionarMembro(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { nome, funcao, telefone, email } = req.body;
+      const { pessoaId } = req.body;
 
-      // Validações
-      if (!nome || !funcao) {
-        return res.status(400).json({
-          success: false,
-          message: 'Nome e função são obrigatórios'
-        });
+      if (!pessoaId) {
+        return res.status(400).json({ success: false, message: 'pessoaId é obrigatório' });
       }
 
-      const membro = await equipesService.adicionarMembro(id, {
-        nome,
-        funcao,
-        telefone,
-        email
-      });
+      await equipesService.adicionarMembro(id, pessoaId);
 
       res.status(201).json({
         success: true,
-        data: membro,
         message: 'Membro adicionado com sucesso'
       });
 

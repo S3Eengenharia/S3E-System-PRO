@@ -1,4 +1,5 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 export interface Servico {
   id: string;
@@ -34,23 +35,23 @@ export interface ServicoFilters {
 
 class ServicosService {
   async listar(filters?: ServicoFilters) {
-    return apiService.get<Servico[]>('/api/servicos', filters);
+    return axiosApiService.get<Servico[]>(ENDPOINTS.SERVICOS, filters);
   }
 
   async buscar(id: string) {
-    return apiService.get<Servico>(`/api/servicos/${id}`);
+    return axiosApiService.get<Servico>(`${ENDPOINTS.SERVICOS}/${id}`);
   }
 
   async criar(data: CreateServicoData) {
-    return apiService.post<Servico>('/api/servicos', data);
+    return axiosApiService.post<Servico>(ENDPOINTS.SERVICOS, data);
   }
 
   async atualizar(id: string, data: UpdateServicoData) {
-    return apiService.put<Servico>(`/api/servicos/${id}`, data);
+    return axiosApiService.put<Servico>(`${ENDPOINTS.SERVICOS}/${id}`, data);
   }
 
   async desativar(id: string) {
-    return apiService.delete<Servico>(`/api/servicos/${id}`);
+    return axiosApiService.delete<{ message: string }>(`${ENDPOINTS.SERVICOS}/${id}`);
   }
 }
 

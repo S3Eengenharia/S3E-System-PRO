@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type Service, ServiceType } from '../types';
+import { servicosService, type Servico } from '../services/servicosService';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>;
@@ -9,14 +10,6 @@ const PencilIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xml
 const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.124-2.038-2.124H9.038c-1.128 0-2.038.944-2.038 2.124v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>;
 const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
 const EllipsisVerticalIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" /></svg>;
-
-// Mock Data
-const initialServicesData: Service[] = [
-    { id: 'SERV-001', name: 'Visita Técnica de Avaliação', internalCode: 'VT-AVAL', description: 'Visita para levantamento e avaliação técnica de necessidades elétricas.', type: ServiceType.Consultoria, price: 150.00 },
-    { id: 'SERV-002', name: 'Instalação Padrão (ponto)', internalCode: 'INST-PAD', description: 'Instalação de um ponto elétrico padrão, incluindo fiação e tomada.', type: ServiceType.Instalacao, price: 80.00 },
-    { id: 'SERV-003', name: 'Consultoria de Projeto (hora)', internalCode: 'CONS-PROJ', description: 'Hora técnica de consultoria para desenvolvimento e revisão de projetos elétricos.', type: ServiceType.Consultoria, price: 250.00 },
-    { id: 'SERV-004', name: 'Manutenção Preventiva', internalCode: 'MANU-PREV', description: 'Serviço de manutenção preventiva em quadros elétricos.', type: ServiceType.Manutencao, price: 350.00 },
-];
 
 const getTypeClass = (type: ServiceType) => {
     switch (type) {
@@ -37,7 +30,8 @@ interface ServicosProps {
 type ServiceFormState = Omit<Service, 'id' | 'price'> & { price: string };
 
 const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
-    const [services, setServices] = useState<Service[]>(initialServicesData);
+    const [services, setServices] = useState<Service[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState<ServiceType | 'Todos'>('Todos');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,6 +43,41 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
     const [formState, setFormState] = useState<ServiceFormState>({
         name: '', internalCode: '', description: '', type: ServiceType.Instalacao, price: ''
     });
+
+    // Carregar serviços do backend
+    useEffect(() => {
+        loadServices();
+    }, []);
+
+    const loadServices = async () => {
+        try {
+            setLoading(true);
+            const response = await servicosService.listar();
+            
+            if (response.success && response.data) {
+                // Converter serviços da API para o formato do componente
+                const servicosArray = Array.isArray(response.data) ? response.data : [];
+                const servicesFormatados: Service[] = servicosArray.map((serv: Servico) => ({
+                    id: serv.id,
+                    name: serv.nome,
+                    internalCode: serv.codigo,
+                    description: serv.descricao || '',
+                    type: serv.tipo as ServiceType,
+                    price: serv.preco
+                }));
+                
+                setServices(servicesFormatados);
+            } else {
+                console.warn('Nenhum serviço encontrado ou erro na resposta:', response);
+                setServices([]);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar serviços:', error);
+            setServices([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -119,14 +148,93 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
         handleCloseModal();
     };
 
-    const handleOpenDeleteModal = (service: Service) => { setServiceToDelete(service); setOpenDropdownId(null); };
-    const handleCloseDeleteModal = () => setServiceToDelete(null);
-    const handleConfirmDelete = () => {
-        if (serviceToDelete) {
-            setServices(prev => prev.filter(s => s.id !== serviceToDelete.id));
-            handleCloseDeleteModal();
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const priceValue = parseFloat(formState.price);
+        if (isNaN(priceValue) || priceValue < 0) {
+            alert("O preço deve ser um número válido.");
+            return;
+        }
+
+        try {
+            if (serviceToEdit) {
+                // Atualizar serviço existente
+                const servicoData = {
+                    nome: formState.name,
+                    codigo: formState.internalCode,
+                    descricao: formState.description,
+                    tipo: formState.type,
+                    preco: priceValue,
+                    unidade: 'un'
+                };
+                
+                const response = await servicosService.atualizar(serviceToEdit.id, servicoData);
+                
+                if (response.success) {
+                    alert('✅ Serviço atualizado com sucesso!');
+                    handleCloseModal();
+                    await loadServices();
+                } else {
+                    alert(`❌ Erro ao atualizar serviço: ${response.error || 'Erro desconhecido'}`);
+                }
+            } else {
+                // Criar novo serviço
+                const servicoData = {
+                    nome: formState.name,
+                    codigo: formState.internalCode,
+                    descricao: formState.description,
+                    tipo: formState.type,
+                    preco: priceValue,
+                    unidade: 'un'
+                };
+                
+                const response = await servicosService.criar(servicoData);
+                
+                if (response.success) {
+                    alert('✅ Serviço criado com sucesso!');
+                    handleCloseModal();
+                    await loadServices();
+                } else {
+                    alert(`❌ Erro ao criar serviço: ${response.error || 'Erro desconhecido'}`);
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao salvar serviço:', error);
+            alert('❌ Erro ao salvar serviço. Verifique o console para mais detalhes.');
         }
     };
+
+    const handleOpenDeleteModal = (service: Service) => { setServiceToDelete(service); setOpenDropdownId(null); };
+    const handleCloseDeleteModal = () => setServiceToDelete(null);
+    const handleConfirmDelete = async () => {
+        if (!serviceToDelete) return;
+        
+        try {
+            const response = await servicosService.desativar(serviceToDelete.id);
+            
+            if (response.success) {
+                alert('✅ Serviço removido com sucesso!');
+                handleCloseDeleteModal();
+                await loadServices();
+            } else {
+                alert(`❌ Erro ao remover serviço: ${response.error || 'Erro desconhecido'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao remover serviço:', error);
+            alert('❌ Erro ao remover serviço. Verifique o console para mais detalhes.');
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-blue mx-auto mb-4"></div>
+                    <p className="text-brand-gray-600">Carregando serviços...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 sm:p-8">
@@ -182,40 +290,47 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-brand-gray-200">
-                            {filteredServices.map((service) => (
-                                <tr key={service.id} className="hover:bg-brand-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="font-semibold text-brand-gray-800">{service.name}</div>
-                                        <div className="text-xs text-brand-gray-500">Cód: {service.internalCode}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeClass(service.type)}`}>
-                                            {service.type}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-brand-gray-800">
-                                        R$ {service.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="relative inline-block text-left">
-                                            <button onClick={() => setOpenDropdownId(service.id === openDropdownId ? null : service.id)} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100">
-                                                <EllipsisVerticalIcon className="w-5 h-5" />
-                                            </button>
-                                            {openDropdownId === service.id && (
-                                                // FIX: Corrected callback ref implementation. The arrow function was implicitly returning the assigned element, which is not a valid return type for a ref callback. Encapsulating the assignment in a block ensures an implicit `undefined` return, satisfying TypeScript's type requirements for refs.
-                                                <div ref={el => { dropdownRefs.current[service.id] = el; }} className="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                                                    <a href="#" onClick={(e) => { e.preventDefault(); handleOpenModal(service); }} className="flex items-center gap-2 px-4 py-2 text-sm text-brand-gray-700 hover:bg-brand-gray-100">
-                                                        <PencilIcon className="w-4 h-4" /> Editar
-                                                    </a>
-                                                    <a href="#" onClick={(e) => { e.preventDefault(); handleOpenDeleteModal(service); }} className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
-                                                        <TrashIcon className="w-4 h-4" /> Excluir
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </div>
+                            {filteredServices.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-8 text-center text-brand-gray-500">
+                                        Nenhum serviço encontrado
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                filteredServices.map((service) => (
+                                    <tr key={service.id} className="hover:bg-brand-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="font-semibold text-brand-gray-800">{service.name}</div>
+                                            <div className="text-xs text-brand-gray-500">Cód: {service.internalCode}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeClass(service.type)}`}>
+                                                {service.type}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-brand-gray-800">
+                                            R$ {service.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="relative inline-block text-left">
+                                                <button onClick={() => setOpenDropdownId(service.id === openDropdownId ? null : service.id)} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100">
+                                                    <EllipsisVerticalIcon className="w-5 h-5" />
+                                                </button>
+                                                {openDropdownId === service.id && (
+                                                    <div ref={el => { dropdownRefs.current[service.id] = el; }} className="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                                                        <a href="#" onClick={(e) => { e.preventDefault(); handleOpenModal(service); }} className="flex items-center gap-2 px-4 py-2 text-sm text-brand-gray-700 hover:bg-brand-gray-100">
+                                                            <PencilIcon className="w-4 h-4" /> Editar
+                                                        </a>
+                                                        <a href="#" onClick={(e) => { e.preventDefault(); handleOpenDeleteModal(service); }} className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                                            <TrashIcon className="w-4 h-4" /> Excluir
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

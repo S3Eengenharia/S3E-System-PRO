@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
+import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 
@@ -74,6 +76,9 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     // Estados para modal de equipe
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [equipeToEdit, setEquipeToEdit] = useState<Equipe | null>(null);
+    const [isEquipeManagerOpen, setIsEquipeManagerOpen] = useState(false);
+    const [isAlocacaoModalOpen, setIsAlocacaoModalOpen] = useState(false);
+    const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null);
     const [formState, setFormState] = useState({
         nome: '',
         tipo: '' as '' | 'MONTAGEM' | 'CAMPO' | 'DISTINTA',
@@ -274,13 +279,22 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                         <p className="text-sm sm:text-base text-gray-500 mt-1">Gerenciamento de equipes e alocações de projetos</p>
                     </div>
                 </div>
-                <button 
-                    onClick={() => handleOpenModal()} 
-                    className="flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold px-6 py-3 rounded-xl shadow-medium hover:from-blue-700 hover:to-blue-600 transition-all duration-200"
-                >
-                    <PlusIcon className="w-5 h-5 mr-2" />
-                    Nova Equipe
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setIsEquipeManagerOpen(true)} 
+                        className="flex items-center justify-center bg-white border-2 border-blue-600 text-blue-600 font-semibold px-4 py-3 rounded-xl shadow-soft hover:bg-blue-50 transition-all duration-200"
+                    >
+                        <UsersIcon className="w-5 h-5 mr-2" />
+                        Equipes (Pessoas)
+                    </button>
+                    <button 
+                        onClick={() => handleOpenModal()} 
+                        className="flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold px-6 py-3 rounded-xl shadow-medium hover:from-blue-700 hover:to-blue-600 transition-all duration-200"
+                    >
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        Nova Equipe
+                    </button>
+                </div>
             </header>
 
             {error && (
@@ -859,6 +873,19 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                     </div>
                 </div>
             )}
+
+        {/* Modal de Formação de Equipes com Pessoas Disponíveis */}
+        {isEquipeManagerOpen && (
+            <ModalEquipesDeObra isOpen={isEquipeManagerOpen} onClose={() => setIsEquipeManagerOpen(false)} />
+        )}
+
+        {isAlocacaoModalOpen && projetoSelecionadoId && (
+            <ModalAlocacaoEquipe
+                isOpen={isAlocacaoModalOpen}
+                onClose={() => setIsAlocacaoModalOpen(false)}
+                projetoId={projetoSelecionadoId}
+            />
+        )}
 
             {/* Modal de Equipe */}
             {isModalOpen && (

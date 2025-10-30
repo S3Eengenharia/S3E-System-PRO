@@ -4,23 +4,23 @@ const prisma = new PrismaClient();
 
 export interface EquipeData {
   nome: string;
-  tipo: 'MONTAGEM' | 'MANUTENCAO' | 'INSTALACAO';
+  tipo: 'MONTAGEM' | 'MANUTENCAO' | 'INSTALACAO' | 'CAMPO' | 'DISTINTA';
   descricao?: string;
   ativa?: boolean;
+  membrosIds?: string[]; // IDs de Pessoa
 }
 
 export interface EquipeMembro {
   id: string;
   nome: string;
   funcao: string;
-  telefone?: string;
-  email?: string;
+  email?: string | null;
 }
 
 export interface EquipeComMembros {
   id: string;
   nome: string;
-  tipo: 'MONTAGEM' | 'MANUTENCAO' | 'INSTALACAO';
+  tipo: 'MONTAGEM' | 'MANUTENCAO' | 'INSTALACAO' | 'CAMPO' | 'DISTINTA';
   descricao: string | null;
   ativa: boolean;
   createdAt: Date;
@@ -41,29 +41,54 @@ export class EquipesService {
    */
   async criarEquipe(data: EquipeData): Promise<EquipeComMembros> {
     try {
-      const equipe = await prisma.equipe.create({
-        data: {
-          nome: data.nome,
-          tipo: data.tipo,
-          descricao: data.descricao || '',
-          ativa: data.ativa !== false // Default true
-        },
-        include: {
-          alocacoes: {
-            select: {
-              id: true,
-              obraId: true,
-              dataInicio: true,
-              dataFimPrevisto: true,
-              status: true
+      const membrosIds = Array.isArray(data.membrosIds) ? Array.from(new Set(data.membrosIds)) : [];
+
+      const result = await prisma.$transaction(async (tx) => {
+        const equipe = await tx.equipe.create({
+          data: {
+            nome: data.nome,
+            tipo: data.tipo,
+            descricao: data.descricao || '',
+            ativa: data.ativa !== false,
+            membros: membrosIds
+          },
+          include: {
+            alocacoes: {
+              select: {
+                id: true,
+                obraId: true,
+                dataInicio: true,
+                dataFimPrevisto: true,
+                status: true
+              }
             }
           }
+        });
+
+        if (membrosIds.length > 0) {
+          await tx.pessoa.updateMany({
+            where: { id: { in: membrosIds } },
+            data: { disponivel: false }
+          });
         }
+
+        const pessoas = membrosIds.length
+          ? await tx.pessoa.findMany({ where: { id: { in: membrosIds } } })
+          : [];
+
+        const membros: EquipeMembro[] = pessoas.map((p) => ({
+          id: p.id,
+          nome: p.nome,
+          funcao: p.funcao as unknown as string,
+          email: p.email ?? null
+        }));
+
+        return { equipe, membros };
       });
 
       return {
-        ...equipe,
-        membros: [] // Equipes começam sem membros
+        ...result.equipe,
+        membros: result.membros
       };
 
     } catch (error) {
@@ -93,11 +118,27 @@ export class EquipesService {
         orderBy: { nome: 'asc' }
       });
 
-      // Simular membros (em produção, viria de tabela relacionada)
-      return equipes.map(equipe => ({
-        ...equipe,
-        membros: this.getMockMembros(equipe.id)
-      }));
+      const allPessoaIds = Array.from(
+        new Set(equipes.flatMap((e) => e.membros))
+      );
+
+      const pessoas = allPessoaIds.length
+        ? await prisma.pessoa.findMany({ where: { id: { in: allPessoaIds } } })
+        : [];
+      const pessoaById = new Map(pessoas.map((p) => [p.id, p]));
+
+      return equipes.map((equipe) => {
+        const membros: EquipeMembro[] = equipe.membros
+          .map((id) => pessoaById.get(id))
+          .filter(Boolean)
+          .map((p) => ({
+            id: (p as any).id,
+            nome: (p as any).nome,
+            funcao: (p as any).funcao as unknown as string,
+            email: (p as any).email ?? null
+          }));
+        return { ...equipe, membros };
+      });
 
     } catch (error) {
       console.error('Erro ao listar equipes:', error);
@@ -129,10 +170,17 @@ export class EquipesService {
         return null;
       }
 
-      return {
-        ...equipe,
-        membros: this.getMockMembros(equipe.id)
-      };
+      const pessoas = equipe.membros.length
+        ? await prisma.pessoa.findMany({ where: { id: { in: equipe.membros } } })
+        : [];
+      const membros: EquipeMembro[] = pessoas.map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        funcao: p.funcao as unknown as string,
+        email: p.email ?? null
+      }));
+
+      return { ...equipe, membros };
 
     } catch (error) {
       console.error('Erro ao buscar equipe:', error);
@@ -145,29 +193,63 @@ export class EquipesService {
    */
   async atualizarEquipe(id: string, data: Partial<EquipeData>): Promise<EquipeComMembros> {
     try {
-      const equipe = await prisma.equipe.update({
-        where: { id },
-        data: {
-          ...data,
-          updatedAt: new Date()
-        },
-        include: {
-          alocacoes: {
-            select: {
-              id: true,
-              obraId: true,
-              dataInicio: true,
-              dataFimPrevisto: true,
-              status: true
+      const current = await prisma.equipe.findUnique({ where: { id } });
+      if (!current) {
+        throw new Error('Equipe não encontrada');
+      }
+
+      const newMembros = Array.isArray(data.membrosIds)
+        ? Array.from(new Set(data.membrosIds))
+        : current.membros;
+
+      const removed = current.membros.filter((m) => !newMembros.includes(m));
+      const added = newMembros.filter((m) => !current.membros.includes(m));
+
+      const result = await prisma.$transaction(async (tx) => {
+        const equipe = await tx.equipe.update({
+          where: { id },
+          data: {
+            nome: data.nome ?? current.nome,
+            tipo: (data.tipo as any) ?? current.tipo,
+            descricao: data.descricao ?? current.descricao,
+            ativa: data.ativa ?? current.ativa,
+            membros: newMembros,
+            updatedAt: new Date()
+          },
+          include: {
+            alocacoes: {
+              select: {
+                id: true,
+                obraId: true,
+                dataInicio: true,
+                dataFimPrevisto: true,
+                status: true
+              }
             }
           }
+        });
+
+        if (removed.length > 0) {
+          await tx.pessoa.updateMany({ where: { id: { in: removed } }, data: { disponivel: true } });
         }
+        if (added.length > 0) {
+          await tx.pessoa.updateMany({ where: { id: { in: added } }, data: { disponivel: false } });
+        }
+
+        const pessoas = newMembros.length
+          ? await tx.pessoa.findMany({ where: { id: { in: newMembros } } })
+          : [];
+        const membros: EquipeMembro[] = pessoas.map((p) => ({
+          id: p.id,
+          nome: p.nome,
+          funcao: p.funcao as unknown as string,
+          email: p.email ?? null
+        }));
+
+        return { equipe, membros };
       });
 
-      return {
-        ...equipe,
-        membros: this.getMockMembros(equipe.id)
-      };
+      return { ...result.equipe, membros: result.membros };
 
     } catch (error) {
       console.error('Erro ao atualizar equipe:', error);
@@ -194,12 +276,23 @@ export class EquipesService {
         throw new Error('Não é possível desativar equipe com alocações ativas');
       }
 
-      await prisma.equipe.update({
-        where: { id },
-        data: {
-          ativa: false,
-          updatedAt: new Date()
+      await prisma.$transaction(async (tx) => {
+        const equipe = await tx.equipe.findUnique({ where: { id } });
+        if (!equipe) {
+          throw new Error('Equipe não encontrada');
         }
+
+        if (equipe.membros.length > 0) {
+          await tx.pessoa.updateMany({
+            where: { id: { in: equipe.membros } },
+            data: { disponivel: true }
+          });
+        }
+
+        await tx.equipe.update({
+          where: { id },
+          data: { ativa: false, updatedAt: new Date() }
+        });
       });
 
       return true;
@@ -213,24 +306,26 @@ export class EquipesService {
   /**
    * Adicionar membro à equipe
    */
-  async adicionarMembro(equipeId: string, membroData: Omit<EquipeMembro, 'id'>): Promise<EquipeMembro> {
+  async adicionarMembro(equipeId: string, pessoaId: string): Promise<boolean> {
     try {
-      // Verificar se equipe existe e está ativa
-      const equipe = await prisma.equipe.findUnique({
-        where: { id: equipeId, ativa: true }
-      });
-
-      if (!equipe) {
+      const equipe = await prisma.equipe.findUnique({ where: { id: equipeId } });
+      if (!equipe || !equipe.ativa) {
         throw new Error('Equipe não encontrada ou inativa');
       }
 
-      // Em produção, isso seria uma tabela separada
-      const membro: EquipeMembro = {
-        id: `membro_${Date.now()}`,
-        ...membroData
-      };
+      if (equipe.membros.includes(pessoaId)) {
+        return true;
+      }
 
-      return membro;
+      await prisma.$transaction(async (tx) => {
+        await tx.equipe.update({
+          where: { id: equipeId },
+          data: { membros: [...equipe.membros, pessoaId], updatedAt: new Date() }
+        });
+        await tx.pessoa.update({ where: { id: pessoaId }, data: { disponivel: false } });
+      });
+
+      return true;
 
     } catch (error) {
       console.error('Erro ao adicionar membro:', error);
@@ -241,18 +336,25 @@ export class EquipesService {
   /**
    * Remover membro da equipe
    */
-  async removerMembro(equipeId: string, membroId: string): Promise<boolean> {
+  async removerMembro(equipeId: string, pessoaId: string): Promise<boolean> {
     try {
-      // Verificar se equipe existe
-      const equipe = await prisma.equipe.findUnique({
-        where: { id: equipeId }
-      });
-
+      const equipe = await prisma.equipe.findUnique({ where: { id: equipeId } });
       if (!equipe) {
         throw new Error('Equipe não encontrada');
       }
 
-      // Em produção, isso seria uma operação na tabela de membros
+      if (!equipe.membros.includes(pessoaId)) {
+        return true;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.equipe.update({
+          where: { id: equipeId },
+          data: { membros: equipe.membros.filter((m) => m !== pessoaId), updatedAt: new Date() }
+        });
+        await tx.pessoa.update({ where: { id: pessoaId }, data: { disponivel: true } });
+      });
+
       return true;
 
     } catch (error) {
@@ -302,10 +404,24 @@ export class EquipesService {
         orderBy: { nome: 'asc' }
       });
 
-      return equipes.map(equipe => ({
-        ...equipe,
-        membros: this.getMockMembros(equipe.id)
-      }));
+      const allPessoaIds = Array.from(new Set(equipes.flatMap((e) => e.membros)));
+      const pessoas = allPessoaIds.length
+        ? await prisma.pessoa.findMany({ where: { id: { in: allPessoaIds } } })
+        : [];
+      const pessoaById = new Map(pessoas.map((p) => [p.id, p]));
+
+      return equipes.map((equipe) => {
+        const membros: EquipeMembro[] = equipe.membros
+          .map((id) => pessoaById.get(id))
+          .filter(Boolean)
+          .map((p) => ({
+            id: (p as any).id,
+            nome: (p as any).nome,
+            funcao: (p as any).funcao as unknown as string,
+            email: (p as any).email ?? null
+          }));
+        return { ...equipe, membros };
+      });
 
     } catch (error) {
       console.error('Erro ao buscar equipes disponíveis:', error);
@@ -313,26 +429,7 @@ export class EquipesService {
     }
   }
 
-  /**
-   * Mock de membros (em produção, viria do banco)
-   */
-  private getMockMembros(equipeId: string): EquipeMembro[] {
-    const mockMembros = {
-      'equipe-1': [
-        { id: 'm1', nome: 'João Silva', funcao: 'Eletricista Senior', telefone: '(11) 99999-1111', email: 'joao@email.com' },
-        { id: 'm2', nome: 'Maria Santos', funcao: 'Ajudante', telefone: '(11) 99999-2222', email: 'maria@email.com' }
-      ],
-      'equipe-2': [
-        { id: 'm3', nome: 'Pedro Costa', funcao: 'Eletricista', telefone: '(11) 99999-3333', email: 'pedro@email.com' },
-        { id: 'm4', nome: 'Ana Lima', funcao: 'Técnica', telefone: '(11) 99999-4444', email: 'ana@email.com' }
-      ],
-      'equipe-3': [
-        { id: 'm5', nome: 'Carlos Oliveira', funcao: 'Supervisor', telefone: '(11) 99999-5555', email: 'carlos@email.com' }
-      ]
-    };
-
-    return mockMembros[equipeId as keyof typeof mockMembros] || [];
-  }
+  // Removido mock: agora os membros vêm de Pessoa
 
   /**
    * Estatísticas das equipes

@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
-import { axiosApiService } from '../../services/axiosApi';
-import { ENDPOINTS } from '../../config/api';
+import { alocacaoObraService, type AlocacaoDTO } from '../../services/AlocacaoObraService';
 
 // Icons
 const CalendarIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -22,88 +21,27 @@ const ExclamationTriangleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-interface Equipe {
-  id: string;
-  nome: string;
-  membros: string[];
-  tipo: string;
-  especialidades: string[];
-  status: 'ativo' | 'inativo';
-}
-
-interface Alocacao {
-  id: string;
-  equipeId: string;
-  obraId: string;
-  dataInicio: string;
-  dataFim: string;
-  status: 'planejada' | 'em_andamento' | 'concluida' | 'cancelada';
-  progresso: number;
-  observacoes?: string;
-}
-
-interface Obra {
-  id: string;
-  nome: string;
-  cliente: string;
-  endereco: string;
-  dataInicio: string;
-  dataFim: string;
-  status: 'planejada' | 'em_andamento' | 'concluida' | 'cancelada';
-  progresso: number;
-}
+type StatusLabel = 'Planejada' | 'EmAndamento' | 'Concluida' | 'Cancelada' | string;
 
 const EquipesGantt: React.FC = () => {
-  const [equipes, setEquipes] = useState<Equipe[]>([]);
-  const [alocacoes, setAlocacoes] = useState<Alocacao[]>([]);
-  const [obras, setObras] = useState<Obra[]>([]);
+  const [alocacoes, setAlocacoes] = useState<AlocacaoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const calendarRef = useRef<FullCalendar>(null);
 
-  // Carregar dados das equipes
-  const loadEquipes = async () => {
-    try {
-      console.log('🔍 Carregando equipes...');
-      const response = await axiosApiService.get<Equipe[]>(ENDPOINTS.OBRAS.EQUIPES);
-      
-      console.log('📊 Resposta da API - Equipes:', response);
-      
-      if (response.success && response.data && Array.isArray(response.data)) {
-        console.log('✅ Equipes carregadas:', response.data.length);
-        setEquipes(response.data);
-      } else {
-        console.warn('⚠️ Dados de equipes inválidos ou vazios:', response);
-        setEquipes([]);
-      }
-    } catch (error) {
-      console.error('❌ Erro ao carregar equipes:', error);
-      setError('Erro de conexão ao carregar equipes');
-      setEquipes([]);
-    }
-  };
+  // Filtros
+  const [filtroStatus, setFiltroStatus] = useState<'TODAS' | 'Planejada' | 'EmAndamento' | 'Concluida' | 'Cancelada'>('TODAS');
+  const now = new Date();
+  const [filtroMes, setFiltroMes] = useState<number>(now.getMonth() + 1); // 1-12
+  const [filtroAno, setFiltroAno] = useState<number>(now.getFullYear());
 
-  // Carregar dados das alocações
+  // Carregar todas as alocações (globais)
   const loadAlocacoes = async () => {
     try {
-      console.log('🔍 Carregando alocações...');
-      
-      // Obter mês e ano atual
-      const now = new Date();
-      const mes = now.getMonth() + 1; // getMonth() retorna 0-11, precisamos 1-12
-      const ano = now.getFullYear();
-      
-      console.log(`📅 Carregando alocações para mês ${mes} e ano ${ano}`);
-      
-      const response = await axiosApiService.get<Alocacao[]>(`${ENDPOINTS.OBRAS.ALOCACOES}/calendario?mes=${mes}&ano=${ano}`);
-      
-      console.log('📊 Resposta da API - Alocações:', response);
-      
-      if (response.success && response.data && Array.isArray(response.data)) {
-        console.log('✅ Alocações carregadas:', response.data.length);
+      const response = await alocacaoObraService.getAllAlocacoes();
+      if (response.success && Array.isArray(response.data)) {
         setAlocacoes(response.data);
       } else {
-        console.warn('⚠️ Dados de alocações inválidos ou vazios:', response);
         setAlocacoes([]);
       }
     } catch (error) {
@@ -113,107 +51,80 @@ const EquipesGantt: React.FC = () => {
     }
   };
 
-  // Carregar dados das obras (mock para demonstração)
-  const loadObras = async () => {
-    try {
-      // Mock de obras para demonstração
-      const mockObras: Obra[] = [
-        {
-          id: '1',
-          nome: 'Instalação Elétrica Residencial',
-          cliente: 'João Silva',
-          endereco: 'Rua das Flores, 123',
-          dataInicio: '2025-01-15',
-          dataFim: '2025-02-15',
-          status: 'em_andamento',
-          progresso: 65
-        },
-        {
-          id: '2',
-          nome: 'Reforma Hidráulica Comercial',
-          cliente: 'Maria Santos',
-          endereco: 'Av. Principal, 456',
-          dataInicio: '2025-01-20',
-          dataFim: '2025-03-20',
-          status: 'planejada',
-          progresso: 0
-        }
-      ];
-      
-      setObras(mockObras);
-    } catch (error) {
-      console.error('❌ Erro ao carregar obras:', error);
-      setObras([]);
-    }
-  };
-
   useEffect(() => {
-    const loadData = async () => {
+    const run = async () => {
       setLoading(true);
       setError(null);
-      
       try {
-        console.log('🚀 Iniciando carregamento de dados do Gantt...');
-        await Promise.all([loadEquipes(), loadAlocacoes(), loadObras()]);
-        console.log('✅ Dados do Gantt carregados com sucesso');
-      } catch (error) {
-        console.error('❌ Erro geral ao carregar dados:', error);
-        setError('Erro ao carregar dados do sistema');
+        await loadAlocacoes();
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
+    run();
   }, []);
 
-  // Preparar dados para o FullCalendar
-  const calendarResources = equipes.map(equipe => ({
-    id: equipe.id,
-    title: equipe.nome,
+  // Filtragem por status e período (mês/ano)
+  const alocacoesFiltradas = React.useMemo(() => {
+    const inicioMes = new Date(filtroAno, filtroMes - 1, 1, 0, 0, 0);
+    const fimMes = new Date(filtroAno, filtroMes, 0, 23, 59, 59);
+    return alocacoes.filter((a) => {
+      // Status
+      if (filtroStatus !== 'TODAS' && a.status !== filtroStatus) return false;
+      // Período (interseção)
+      const aInicio = new Date(a.dataInicio as any);
+      const aFim = new Date(a.dataFimPrevisto as any);
+      const intersects = aInicio <= fimMes && aFim >= inicioMes;
+      return intersects;
+    });
+  }, [alocacoes, filtroStatus, filtroMes, filtroAno]);
+
+  // Preparar resources como Equipes únicas das alocações filtradas
+  const calendarResources = Array.from(
+    new Map(
+      alocacoesFiltradas
+        .filter(a => a.equipe)
+        .map(a => [a.equipe!.id, {
+          id: a.equipe!.id,
+          title: a.equipe!.nome,
+          extendedProps: { tipo: a.equipe!.tipo }
+        }])
+    ).values()
+  );
+
+  const calendarEvents = alocacoesFiltradas.map(a => ({
+    id: a.id,
+    resourceId: a.equipe?.id || a.equipeId || '',
+    title: a.projeto?.titulo || a.projeto?.id || 'Projeto',
+    start: a.dataInicio as any,
+    end: a.dataFimPrevisto as any,
+    backgroundColor: getStatusColor(a.status as StatusLabel),
+    borderColor: getStatusColor(a.status as StatusLabel),
     extendedProps: {
-      tipo: equipe.tipo,
-      membros: equipe.membros,
-      especialidades: equipe.especialidades,
-      status: equipe.status
+      status: a.status as StatusLabel,
+      observacoes: a.observacoes,
+      equipe: a.equipe,
+      projeto: a.projeto
     }
   }));
 
-  const calendarEvents = alocacoes.map(alocacao => {
-    const obra = obras.find(o => o.id === alocacao.obraId);
-    return {
-      id: alocacao.id,
-      resourceId: alocacao.equipeId,
-      title: obra ? obra.nome : `Obra ${alocacao.obraId}`,
-      start: alocacao.dataInicio,
-      end: alocacao.dataFim,
-      backgroundColor: getStatusColor(alocacao.status),
-      borderColor: getStatusColor(alocacao.status),
-      extendedProps: {
-        status: alocacao.status,
-        progresso: alocacao.progresso,
-        observacoes: alocacao.observacoes,
-        obra: obra
-      }
-    };
-  });
-
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: StatusLabel) => {
     switch (status) {
-      case 'planejada': return '#3B82F6'; // blue
-      case 'em_andamento': return '#F59E0B'; // yellow
-      case 'concluida': return '#10B981'; // green
-      case 'cancelada': return '#EF4444'; // red
-      default: return '#6B7280'; // gray
+      case 'Planejada': return '#3B82F6';
+      case 'EmAndamento': return '#F59E0B';
+      case 'Concluida': return '#10B981';
+      case 'Cancelada': return '#EF4444';
+      default: return '#6B7280';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: StatusLabel) => {
     switch (status) {
-      case 'planejada': return 'Planejada';
-      case 'em_andamento': return 'Em Andamento';
-      case 'concluida': return 'Concluída';
-      case 'cancelada': return 'Cancelada';
+      case 'Planejada': return 'Planejada';
+      case 'EmAndamento': return 'Em Andamento';
+      case 'Concluida': return 'Concluída';
+      case 'Cancelada': return 'Cancelada';
       default: return 'Desconhecido';
     }
   };
@@ -299,8 +210,51 @@ const EquipesGantt: React.FC = () => {
           <p className="text-sm text-brand-gray-600">Visualização das alocações das equipes nas obras</p>
         </div>
         
+        {/* Filtros */}
+        <div className="px-4 pt-4">
+          <div className="flex flex-col md:flex-row gap-3 md:items-end">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Status</label>
+              <select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value as any)}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="TODAS">Todas</option>
+                <option value="Planejada">Planejada</option>
+                <option value="EmAndamento">Em Andamento</option>
+                <option value="Concluida">Concluída</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Mês</label>
+              <select
+                value={filtroMes}
+                onChange={(e) => setFiltroMes(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, idx) => (
+                  <option key={idx} value={idx+1}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Ano</label>
+              <input
+                type="number"
+                value={filtroAno}
+                onChange={(e) => setFiltroAno(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-lg w-28"
+                min={2000}
+                max={2100}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="p-4">
-          {equipes.length === 0 ? (
+          {calendarResources.length === 0 ? (
             <div className="text-center py-12">
               <CalendarIcon className="w-12 h-12 text-brand-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-brand-gray-900 mb-2">Nenhuma equipe cadastrada</h3>
@@ -318,6 +272,7 @@ const EquipesGantt: React.FC = () => {
                 ref={calendarRef}
                 plugins={[resourceTimelinePlugin, interactionPlugin]}
                 initialView="resourceTimelineMonth"
+                initialDate={new Date(filtroAno, filtroMes - 1, 1) as any}
                 headerToolbar={{
                   left: 'prev,next today',
                   center: 'title',
@@ -330,30 +285,22 @@ const EquipesGantt: React.FC = () => {
                 slotMinWidth="100"
                 height="100%"
                 eventContent={(eventInfo) => {
-                  const progresso = eventInfo.event.extendedProps.progresso || 0;
                   return (
                     <div className="flex items-center h-full">
                       <div className="flex-1 text-xs font-medium text-white truncate">
                         {eventInfo.event.title}
-                      </div>
-                      <div className="ml-1 text-xs text-white/80">
-                        {progresso}%
                       </div>
                     </div>
                   );
                 }}
                 eventClick={(info) => {
                   const event = info.event;
-                  const obra = event.extendedProps.obra;
-                  const status = event.extendedProps.status;
-                  const progresso = event.extendedProps.progresso || 0;
+                  const status = event.extendedProps.status as StatusLabel;
                   
                   alert(`
-                    Obra: ${event.title}
+                    Projeto: ${event.title}
                     Status: ${getStatusText(status)}
-                    Progresso: ${progresso}%
                     Período: ${event.start?.toLocaleDateString()} - ${event.end?.toLocaleDateString()}
-                    ${obra ? `Cliente: ${obra.cliente}` : ''}
                     ${event.extendedProps.observacoes ? `Observações: ${event.extendedProps.observacoes}` : ''}
                   `);
                 }}

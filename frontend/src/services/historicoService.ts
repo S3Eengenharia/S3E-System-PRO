@@ -1,4 +1,5 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 export interface HistoryLog {
   id: string;
@@ -43,15 +44,15 @@ export interface HistoryResponse {
 
 class HistoricoService {
   async listar(filters?: HistoryFilters) {
-    return apiService.get<HistoryResponse>('/api/historico', filters);
+    return axiosApiService.get<HistoryResponse>(ENDPOINTS.HISTORICO, filters);
   }
 
   async listarPorModulo(modulo: string, filters?: Omit<HistoryFilters, 'module'>) {
-    return apiService.get<HistoryResponse>(`/api/historico/${modulo}`, filters);
+    return axiosApiService.get<HistoryResponse>(`${ENDPOINTS.HISTORICO}/${modulo}`, filters);
   }
 
   async criar(data: CreateHistoryLogData) {
-    return apiService.post<HistoryLog>('/api/historico', data);
+    return axiosApiService.post<HistoryLog>(ENDPOINTS.HISTORICO, data);
   }
 }
 

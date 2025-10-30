@@ -175,10 +175,10 @@ Para agilizar o processo e garantir que você siga as melhores práticas da S3E 
 Sim! Todos os campos são editáveis para casos especiais.
 
 ### **E se um item estiver sem estoque?**
-Aparecerá "SEM ESTOQUE" em vermelho e o campo ficará desabilitado.
+Aparecerá "SEM ESTOQUE" em vermelho e .
 
 ### **Como sei se escolhi os componentes certos?**
-O sistema filtra automaticamente apenas os componentes compatíveis!
+O sistema filtra automaticamente apenas os componentes compatíveis la do estoque!
 
 ### **Posso editar um kit depois de criado?**
 Sim! Clique no menu (⋮) do kit e selecione "Editar".
