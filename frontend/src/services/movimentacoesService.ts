@@ -1,4 +1,5 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
+import { ENDPOINTS } from '../config/api';
 
 export interface Movimentacao {
   id: string;
@@ -42,23 +43,23 @@ export interface MovimentacaoFilters {
 
 class MovimentacoesService {
   async listar(filters?: MovimentacaoFilters) {
-    return apiService.get<Movimentacao[]>('/api/movimentacoes', filters);
+    return axiosApiService.get<Movimentacao[]>(ENDPOINTS.MOVIMENTACOES, filters);
   }
 
   async buscar(id: string) {
-    return apiService.get<Movimentacao>(`/api/movimentacoes/${id}`);
+    return axiosApiService.get<Movimentacao>(`${ENDPOINTS.MOVIMENTACOES}/${id}`);
   }
 
   async criar(data: CreateMovimentacaoData) {
-    return apiService.post<Movimentacao>('/api/movimentacoes', data);
+    return axiosApiService.post<Movimentacao>(ENDPOINTS.MOVIMENTACOES, data);
   }
 
   async atualizar(id: string, data: UpdateMovimentacaoData) {
-    return apiService.put<Movimentacao>(`/api/movimentacoes/${id}`, data);
+    return axiosApiService.put<Movimentacao>(`${ENDPOINTS.MOVIMENTACOES}/${id}`, data);
   }
 
   async deletar(id: string) {
-    return apiService.delete<{ message: string }>(`/api/movimentacoes/${id}`);
+    return axiosApiService.delete<{ message: string }>(`${ENDPOINTS.MOVIMENTACOES}/${id}`);
   }
 }
 

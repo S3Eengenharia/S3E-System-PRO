@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import equipesController from '../controllers/equipesController';
-import { authenticateToken } from '../middlewares/auth.js';
+import { authenticateToken, authorize } from '../middlewares/auth.js';
 
 const router = Router();
 
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);
+router.use(authorize('admin', 'operacional'));
 
 /**
  * @route GET /api/equipes

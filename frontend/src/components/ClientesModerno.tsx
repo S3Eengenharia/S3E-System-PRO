@@ -74,15 +74,22 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         try {
             setLoading(true);
             setError(null);
+            console.log('👥 Iniciando carregamento de clientes...');
+            
             const response = await clientesService.listar();
             
             if (response.success && response.data) {
                 setClientes(response.data);
+                console.log(`✅ ${response.data.length} clientes carregados com sucesso`);
             } else {
-                setError('Erro ao carregar clientes');
+                const errorMsg = response.error || 'Erro ao carregar clientes';
+                setError(errorMsg);
+                console.warn('⚠️ Erro ao carregar clientes:', errorMsg);
             }
         } catch (err) {
-            setError('Erro ao carregar clientes');
+            const errorMsg = 'Erro de conexão ao carregar clientes';
+            setError(errorMsg);
+            console.error('❌ Erro crítico:', err);
         } finally {
             setLoading(false);
         }
@@ -137,21 +144,30 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         e.preventDefault();
         
         try {
+            console.log('💾 Salvando cliente...', formState);
+            
+            let response;
             if (clienteToEdit) {
-                const response = await clientesService.atualizar(clienteToEdit.id, formState);
-                if (response.success) {
-                    await loadClientes();
-                    setIsModalOpen(false);
-                }
+                response = await clientesService.atualizar(clienteToEdit.id, formState);
             } else {
-                const response = await clientesService.criar(formState);
-                if (response.success) {
-                    await loadClientes();
-                    setIsModalOpen(false);
-                }
+                response = await clientesService.criar(formState);
+            }
+            
+            if (response.success) {
+                console.log('✅ Cliente salvo com sucesso');
+                await loadClientes();
+                setIsModalOpen(false);
+                
+                // Mostrar mensagem de sucesso
+                alert(response.message || `Cliente ${clienteToEdit ? 'atualizado' : 'criado'} com sucesso!`);
+            } else {
+                const errorMsg = response.error || 'Erro ao salvar cliente';
+                console.warn('⚠️ Erro ao salvar:', errorMsg);
+                alert(errorMsg);
             }
         } catch (err) {
-            alert('Erro ao salvar cliente');
+            console.error('❌ Erro crítico ao salvar:', err);
+            alert('Erro de conexão ao salvar cliente');
         }
     };
 
@@ -159,28 +175,45 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         if (!clienteToDelete) return;
         
         try {
+            console.log(`🗑️ Desativando cliente ${clienteToDelete.id}...`);
+            
             const response = await clientesService.desativar(clienteToDelete.id);
+            
             if (response.success) {
+                console.log('✅ Cliente desativado com sucesso');
                 await loadClientes();
                 setClienteToDelete(null);
+                alert(response.message || 'Cliente desativado com sucesso!');
             } else {
-                alert(response.message || 'Erro ao desativar cliente');
+                const errorMsg = response.error || 'Erro ao desativar cliente';
+                console.warn('⚠️ Erro ao desativar:', errorMsg);
+                alert(errorMsg);
             }
         } catch (err) {
-            alert('Erro ao desativar cliente');
+            console.error('❌ Erro crítico ao desativar:', err);
+            alert('Erro de conexão ao desativar cliente');
         }
     };
 
     const handleReativar = async (cliente: Cliente) => {
         if (window.confirm(`Deseja reativar o cliente "${cliente.nome}"?`)) {
             try {
+                console.log(`🔄 Reativando cliente ${cliente.id}...`);
+                
                 const response = await clientesService.reativar(cliente.id);
+                
                 if (response.success) {
+                    console.log('✅ Cliente reativado com sucesso');
                     await loadClientes();
-                    alert('✅ Cliente reativado com sucesso!');
+                    alert(response.message || 'Cliente reativado com sucesso!');
+                } else {
+                    const errorMsg = response.error || 'Erro ao reativar cliente';
+                    console.warn('⚠️ Erro ao reativar:', errorMsg);
+                    alert(errorMsg);
                 }
             } catch (err) {
-                alert('Erro ao reativar cliente');
+                console.error('❌ Erro crítico ao reativar:', err);
+                alert('Erro de conexão ao reativar cliente');
             }
         }
     };
@@ -209,14 +242,42 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                         <p className="text-sm sm:text-base text-gray-500 mt-1">Gerencie seus clientes e parceiros</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
-                >
-                    <PlusIcon className="w-5 h-5" />
-                    Novo Cliente
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={loadClientes}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold disabled:opacity-50"
+                        title="Recarregar dados"
+                    >
+                        <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {loading ? 'Carregando...' : 'Atualizar'}
+                    </button>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                    >
+                        <PlusIcon className="w-5 h-5" />
+                        Novo Cliente
+                    </button>
+                </div>
             </header>
+
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                        <p className="text-red-800 font-medium">⚠️ {error}</p>
+                        <button 
+                            onClick={loadClientes}
+                            className="text-red-700 hover:text-red-900 font-medium underline"
+                        >
+                            Tentar novamente
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Filtros */}
             <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 mb-6">
@@ -271,6 +332,12 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                             <span className="text-xs text-gray-600">Inativo: {clientes.filter(c => !c.ativo).length}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${error ? 'bg-red-500' : clientes.length > 0 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                            <span className="text-xs text-gray-600">
+                                {error ? 'API Error' : clientes.length > 0 ? 'API Online' : 'Carregando...'}
+                            </span>
                         </div>
                     </div>
                 </div>
