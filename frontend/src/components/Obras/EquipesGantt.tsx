@@ -34,6 +34,15 @@ const EquipesGantt: React.FC = () => {
   const now = new Date();
   const [filtroMes, setFiltroMes] = useState<number>(now.getMonth() + 1); // 1-12
   const [filtroAno, setFiltroAno] = useState<number>(now.getFullYear());
+  // Drafts
+  const [filtroStatusDraft, setFiltroStatusDraft] = useState<typeof filtroStatus>(filtroStatus);
+  const [filtroMesDraft, setFiltroMesDraft] = useState<number>(filtroMes);
+  const [filtroAnoDraft, setFiltroAnoDraft] = useState<number>(filtroAno);
+  const handleAplicarFiltros = () => {
+    setFiltroStatus(filtroStatusDraft);
+    setFiltroMes(filtroMesDraft);
+    setFiltroAno(filtroAnoDraft);
+  };
 
   // Carregar todas as alocações (globais)
   const loadAlocacoes = async () => {
@@ -216,8 +225,8 @@ const EquipesGantt: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Status</label>
               <select
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value as any)}
+                value={filtroStatusDraft}
+                onChange={(e) => setFiltroStatusDraft(e.target.value as any)}
                 className="px-3 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="TODAS">Todas</option>
@@ -230,8 +239,8 @@ const EquipesGantt: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Mês</label>
               <select
-                value={filtroMes}
-                onChange={(e) => setFiltroMes(Number(e.target.value))}
+                value={filtroMesDraft}
+                onChange={(e) => setFiltroMesDraft(Number(e.target.value))}
                 className="px-3 py-2 border border-gray-300 rounded-lg"
               >
                 {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, idx) => (
@@ -243,12 +252,20 @@ const EquipesGantt: React.FC = () => {
               <label className="block text-xs font-semibold text-gray-700 mb-1">Ano</label>
               <input
                 type="number"
-                value={filtroAno}
-                onChange={(e) => setFiltroAno(Number(e.target.value))}
+                value={filtroAnoDraft}
+                onChange={(e) => setFiltroAnoDraft(Number(e.target.value))}
                 className="px-3 py-2 border border-gray-300 rounded-lg w-28"
                 min={2000}
                 max={2100}
               />
+            </div>
+            <div className="md:ml-auto">
+              <button
+                onClick={handleAplicarFiltros}
+                className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue/90 font-semibold"
+              >
+                Aplicar Filtros
+              </button>
             </div>
           </div>
         </div>
