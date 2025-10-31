@@ -86,8 +86,9 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
     const [invoiceNumber, setInvoiceNumber] = useState('');
     const [status, setStatus] = useState<PurchaseStatus>(PurchaseStatus.Pendente);
-    const [purchaseItems, setPurchaseItems] = useState<PurchaseOrderItem[]>([]);
-    const [productToAdd, setProductToAdd] = useState<{id: string, quantity: string, cost: string}>({id: '', quantity: '1', cost: ''});
+    type ExtendedItem = PurchaseOrderItem & { ncm?: string; sku?: string };
+    const [purchaseItems, setPurchaseItems] = useState<ExtendedItem[]>([]);
+    const [productToAdd, setProductToAdd] = useState<{id: string, quantity: string, cost: string, ncm?: string, sku?: string}>({id: '', quantity: '1', cost: ''});
     
     // Novos campos do fornecedor
     const [supplierName, setSupplierName] = useState('');
@@ -109,30 +110,34 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [numParcelas, setNumParcelas] = useState<string>('1');
     const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<string>('');
 
+    // Campos fiscais/ERP adicionais
+    const [destinatarioCNPJ, setDestinatarioCNPJ] = useState<string>('');
+    const [statusImportacao, setStatusImportacao] = useState<'MANUAL' | 'XML'>('MANUAL');
+    const [valorIPI, setValorIPI] = useState<string>('0');
+    const [valorTotalProdutos, setValorTotalProdutos] = useState<string>('0');
+    const [valorTotalNota, setValorTotalNota] = useState<string>('0');
+    // Duplicatas/Parcelas
+    const [parcelas, setParcelas] = useState<Array<{ numero: string; dataVencimento: string; valor: number }>>([]);
+
+    const totalProdutosCalculado = useMemo(() => {
+        return purchaseItems.reduce((total, item) => total + item.totalCost, 0);
+    }, [purchaseItems]);
+
+    const valorTotalNotaCalculado = useMemo(() => {
+        const freteNum = parseFloat(frete || '0') || 0;
+        const outrasNum = parseFloat(outrasDespesas || '0') || 0;
+        const ipiNum = parseFloat(valorIPI || '0') || 0;
+        const totalProdutosNum = parseFloat(valorTotalProdutos || String(totalProdutosCalculado)) || 0;
+        return totalProdutosNum + ipiNum + freteNum + outrasNum;
+    }, [valorIPI, frete, outrasDespesas, valorTotalProdutos, totalProdutosCalculado]);
+
     // Carregar compras reais na montagem
     useEffect(() => {
         const load = async () => {
             setIsLoading(true);
             try {
                 const data = await comprasService.getCompras();
-                const mapped: PurchaseOrder[] = data.map((c: any) => ({
-                    id: c.id,
-                    supplierId: c.fornecedorId || c.fornecedor?.id || '',
-                    supplierName: c.fornecedorNome || c.fornecedor?.nome || c.supplierName || 'Fornecedor',
-                    orderDate: c.dataCompra || c.orderDate,
-                    invoiceNumber: c.numeroNF || c.invoiceNumber,
-                    status: (c.status as PurchaseStatus) || PurchaseStatus.Pendente,
-                    items: (c.items || c.itens || []).map((it: any) => ({
-                        productId: it.materialId || it.productId || it.id || '',
-                        productName: it.nomeProduto || it.productName || it.nome || 'Item',
-                        quantity: it.quantidade || it.quantity || 0,
-                        unitCost: it.valorUnit || it.precoUnitario || it.unitCost || 0,
-                        totalCost: (it.quantidade || it.quantity || 0) * (it.valorUnit || it.precoUnitario || it.unitCost || 0)
-                    })),
-                    totalAmount: c.valorTotal || c.totalAmount || 0,
-                    notes: c.observacoes || c.notes || ''
-                }));
-                setPurchaseOrders(mapped);
+                setPurchaseOrders(data);
             } catch (e) {
                 console.error('Erro ao carregar compras', e);
             } finally {
@@ -207,12 +212,14 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         const unitCost = parseFloat(productToAdd.cost);
         const totalCost = quantity * unitCost;
 
-        const newItem: PurchaseOrderItem = {
+        const newItem: ExtendedItem = {
             productId: product.id,
             productName: product.name,
             quantity,
             unitCost,
-            totalCost
+            totalCost,
+            ncm: productToAdd.ncm,
+            sku: productToAdd.sku
         };
 
         setPurchaseItems(prev => [...prev, newItem]);
@@ -224,10 +231,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     };
 
     const calculateTotal = () => {
-        const itensTotal = purchaseItems.reduce((total, item) => total + item.totalCost, 0);
-        const freteNum = parseFloat(frete || '0') || 0;
-        const outrasNum = parseFloat(outrasDespesas || '0') || 0;
-        return itensTotal + freteNum + outrasNum;
+        return valorTotalNotaCalculado;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -252,12 +256,20 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                 items: purchaseItems.map((it) => ({
                     nomeProduto: it.productName,
                     quantidade: it.quantity,
-                    valorUnit: it.unitCost
+                    valorUnit: it.unitCost,
+                    ncm: (it as any).ncm,
+                    sku: (it as any).sku
                 })),
                 observacoes: '',
                 condicoesPagamento: condicaoPagamento === 'PARCELADO' ? 'PARCELADO' : 'AVISTA',
                 parcelas: condicaoPagamento === 'PARCELADO' ? parseInt(numParcelas || '1') : 1,
-                dataPrimeiroVencimento: condicaoPagamento === 'PARCELADO' && dataPrimeiroVencimento ? dataPrimeiroVencimento : undefined
+                dataPrimeiroVencimento: condicaoPagamento === 'PARCELADO' && dataPrimeiroVencimento ? dataPrimeiroVencimento : undefined,
+                destinatarioCNPJ,
+                statusImportacao,
+                valorIPI: parseFloat(valorIPI || '0') || 0,
+                valorTotalProdutos: parseFloat(valorTotalProdutos || '0') || 0,
+                valorTotalNota: valorTotalNotaCalculado,
+                parcelas
             };
 
             // cria via service
@@ -265,24 +277,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
             // reload list
             const data = await comprasService.getCompras();
-            const mapped: PurchaseOrder[] = data.map((c: any) => ({
-                id: c.id,
-                supplierId: c.fornecedorId || c.fornecedor?.id || '',
-                supplierName: c.fornecedorNome || c.fornecedor?.nome || c.supplierName || 'Fornecedor',
-                orderDate: c.dataCompra || c.orderDate,
-                invoiceNumber: c.numeroNF || c.invoiceNumber,
-                status: (c.status as PurchaseStatus) || PurchaseStatus.Pendente,
-                items: (c.items || c.itens || []).map((it: any) => ({
-                    productId: it.materialId || it.productId || it.id || '',
-                    productName: it.nomeProduto || it.productName || it.nome || 'Item',
-                    quantity: it.quantidade || it.quantity || 0,
-                    unitCost: it.valorUnit || it.precoUnitario || it.unitCost || 0,
-                    totalCost: (it.quantidade || it.quantity || 0) * (it.valorUnit || it.precoUnitario || it.unitCost || 0)
-                })),
-                totalAmount: c.valorTotal || c.totalAmount || 0,
-                notes: c.observacoes || c.notes || ''
-            }));
-            setPurchaseOrders(mapped);
+            setPurchaseOrders(data);
 
             alert('✅ Compra registrada com sucesso!');
             handleCloseModal();
@@ -312,6 +307,75 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             const xmlContent = await readFileAsText(selectedXMLFile);
             const parsedData = parseNFeXML(xmlContent);
             setParsedXMLData(parsedData);
+        } catch (error) {
+            setXmlError('Erro ao processar arquivo XML: ' + (error as Error).message);
+        } finally {
+            setIsProcessingXML(false);
+        }
+    };
+
+    // Novo: upload e preenchimento automático a partir do XML
+    const handleXMLUpload = async (file: File | null | undefined) => {
+        if (!file) {
+            setXmlError('Nenhum arquivo selecionado.');
+            return;
+        }
+        setIsProcessingXML(true);
+        setXmlError(null);
+        try {
+            const xmlContent = await readFileAsText(file);
+            // Faz parsing no backend para garantir compatibilidade de estruturas
+            const resp = await comprasService.parseXML(xmlContent);
+            const data = (resp as any) || {};
+
+            // Preencher formulário com dados do backend
+            setSupplierName(data.fornecedor?.nome || '');
+            setSupplierCNPJ(data.fornecedor?.cnpj || '');
+            setSupplierAddress(data.fornecedor?.endereco || '');
+            setInvoiceNumber(data.numeroNF || '');
+            setPurchaseDate(data.dataEmissao ? String(data.dataEmissao).slice(0, 10) : new Date().toISOString().split('T')[0]);
+            setPurchaseItems(
+                (data.items || []).map((it: any) => ({
+                    productId: it.materialId || '',
+                    productName: it.nomeProduto || '',
+                    quantity: it.quantidade || 0,
+                    unitCost: it.valorUnit || 0,
+                    totalCost: (it.quantidade || 0) * (it.valorUnit || 0),
+                    ncm: it.ncm || '',
+                    sku: it.sku || ''
+                }))
+            );
+
+            // Custos e Totais
+            setFrete(String(data.valorFrete ?? '0'));
+            setOutrasDespesas(String(data.outrasDespesas ?? '0'));
+            setValorIPI(String(data.valorIPI ?? '0'));
+            setValorTotalProdutos(String(data.valorTotalProdutos ?? '0'));
+            setValorTotalNota(String(data.valorTotalNota ?? '0'));
+
+            // Destinatário
+            setDestinatarioCNPJ(data.destinatarioCNPJ || '');
+            setStatusImportacao('XML');
+
+            // Duplicatas / Parcelas
+            if (Array.isArray(data.parcelas)) {
+                setParcelas(
+                    data.parcelas.map((d: any, idx: number) => ({
+                        numero: d.numero || d.nDup || String(idx + 1).padStart(3, '0'),
+                        dataVencimento: (d.dataVencimento || d.dVenc || '').slice(0, 10),
+                        valor: parseFloat(String(d.valor || d.vDup || 0))
+                    }))
+                );
+            }
+
+            // Mantém à vista por padrão (NF-e não traz parcelamento padrão)
+            setCondicaoPagamento('AVISTA');
+            setNumParcelas('1');
+            setDataPrimeiroVencimento('');
+
+            // Abrir modal de compra preenchido
+            setIsXMLModalOpen(false);
+            setIsModalOpen(true);
         } catch (error) {
             setXmlError('Erro ao processar arquivo XML: ' + (error as Error).message);
         } finally {
@@ -608,7 +672,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                             {/* Informações da Compra */}
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações da Compra</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Número da NF *
@@ -651,7 +715,66 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                             <option value={PurchaseStatus.Cancelado}>Cancelado</option>
                                         </select>
                                     </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">CNPJ Destinatário</label>
+                                        <input
+                                            type="text"
+                                            value={destinatarioCNPJ}
+                                            onChange={(e) => setDestinatarioCNPJ(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                            placeholder="00.000.000/0000-00"
+                                        />
+                                    </div>
                                 </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Status de Importação</label>
+                                        <select
+                                            value={statusImportacao}
+                                            onChange={(e) => setStatusImportacao(e.target.value as any)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        >
+                                            <option value="MANUAL">Manual</option>
+                                            <option value="XML">XML</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Valor IPI</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={valorIPI}
+                                            onChange={(e) => setValorIPI(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Total Produtos</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={valorTotalProdutos}
+                                            onChange={(e) => setValorTotalProdutos(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Total da Nota</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={valorTotalNota}
+                                            onChange={(e) => setValorTotalNota(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                </div>
+                                
                             </div>
 
                             {/* Itens da Compra */}
@@ -661,7 +784,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                 {/* Adicionar Produto */}
                                 <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl mb-4">
                                     <h4 className="font-medium text-gray-800 mb-3">Adicionar Item</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                                         <div>
                                             <input
                                                 type="text"
@@ -688,6 +811,24 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                                 placeholder="Valor unitário"
                                                 min="0"
                                                 step="0.01"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="text"
+                                                value={productToAdd.ncm || ''}
+                                                onChange={(e) => setProductToAdd({...productToAdd, ncm: e.target.value})}
+                                                placeholder="NCM"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="text"
+                                                value={productToAdd.sku || ''}
+                                                onChange={(e) => setProductToAdd({...productToAdd, sku: e.target.value})}
+                                                placeholder="SKU (opcional)"
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
                                             />
                                         </div>
@@ -723,18 +864,22 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                                             {item.quantity} × R$ {item.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </p>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3">
                                                         <p className="font-bold text-orange-700">
                                                             R$ {item.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveProduct(index)}
-                                                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
                                                     </div>
+                                                <div className="mt-2 text-xs text-gray-500">
+                                                    {item.ncm && <span className="mr-3">NCM: {item.ncm}</span>}
+                                                    {item.sku && <span>SKU: {item.sku}</span>}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveProduct(index)}
+                                                    className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
                                                 </div>
                                             </div>
                                         ))}
@@ -754,7 +899,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                             {/* Custos e Pagamento */}
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Custos e Pagamento</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Valor do Frete</label>
                                         <input
@@ -777,6 +922,29 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                             onChange={(e) => setOutrasDespesas(e.target.value)}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
                                             placeholder="0,00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Valor IPI</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={valorIPI}
+                                            onChange={(e) => setValorIPI(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Total Produtos</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={valorTotalProdutos || String(totalProdutosCalculado)}
+                                            onChange={(e) => setValorTotalProdutos(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
                                         />
                                     </div>
                                     <div>
@@ -817,6 +985,82 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Parcialmento (Duplicatas) */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Faturas / Parcelas (Duplicatas)</h3>
+                                <div className="space-y-3">
+                                    {parcelas.length === 0 && (
+                                        <p className="text-sm text-gray-500">Nenhuma parcela adicionada.</p>
+                                    )}
+                                    {parcelas.map((p, i) => (
+                                        <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 border border-gray-200 p-3 rounded-xl">
+                                            <input
+                                                type="text"
+                                                value={p.numero}
+                                                onChange={(e) => setParcelas(prev => prev.map((px, idx) => idx === i ? { ...px, numero: e.target.value } : px))}
+                                                className="px-3 py-2 border border-gray-300 rounded-lg"
+                                                placeholder="Número"
+                                            />
+                                            <input
+                                                type="date"
+                                                value={p.dataVencimento}
+                                                onChange={(e) => setParcelas(prev => prev.map((px, idx) => idx === i ? { ...px, dataVencimento: e.target.value } : px))}
+                                                className="px-3 py-2 border border-gray-300 rounded-lg"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={p.valor}
+                                                onChange={(e) => setParcelas(prev => prev.map((px, idx) => idx === i ? { ...px, valor: parseFloat(e.target.value || '0') } : px))}
+                                                className="px-3 py-2 border border-gray-300 rounded-lg"
+                                                placeholder="Valor"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setParcelas(prev => prev.filter((_, idx) => idx !== i))}
+                                                className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold"
+                                            >
+                                                Remover
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setParcelas(prev => [...prev, { numero: String(prev.length + 1).padStart(3, '0'), dataVencimento: '', valor: 0 }])}
+                                        className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-semibold"
+                                    >
+                                        Adicionar Parcela
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Resumo de Totais */}
+                            <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-200 p-4 rounded-xl">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                    <div className="text-sm text-gray-700">
+                                        <div className="font-semibold">Produtos</div>
+                                        <div>R$ {(valorTotalProdutos ? parseFloat(valorTotalProdutos) : totalProdutosCalculado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    </div>
+                                    <div className="text-sm text-gray-700">
+                                        <div className="font-semibold">IPI</div>
+                                        <div>R$ {parseFloat(valorIPI || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    </div>
+                                    <div className="text-sm text-gray-700">
+                                        <div className="font-semibold">Frete</div>
+                                        <div>R$ {parseFloat(frete || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    </div>
+                                    <div className="text-sm text-gray-700">
+                                        <div className="font-semibold">Outras Despesas</div>
+                                        <div>R$ {parseFloat(outrasDespesas || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-lg font-semibold text-gray-800">TOTAL GERAL DA NOTA</div>
+                                        <div className="text-2xl font-bold text-orange-700">R$ {valorTotalNotaCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
@@ -861,7 +1105,14 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                 <input
                                     type="file"
                                     accept=".xml"
-                                    onChange={handleXMLFileChange}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            setSelectedXMLFile(file);
+                                            // opcional: processar imediatamente
+                                            // handleXMLUpload(file);
+                                        }
+                                    }}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
@@ -895,20 +1146,12 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={processXMLImport}
+                                    onClick={() => selectedXMLFile && handleXMLUpload(selectedXMLFile)}
                                     disabled={!selectedXMLFile || isProcessingXML}
                                     className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {isProcessingXML ? 'Processando...' : 'Processar XML'}
+                                    {isProcessingXML ? 'Processando...' : 'Processar e Preencher'}
                                 </button>
-                                {parsedXMLData && (
-                                    <button
-                                        onClick={confirmXMLImport}
-                                        className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
-                                    >
-                                        Confirmar Importação
-                                    </button>
-                                )}
                             </div>
                         </div>
                     </div>
