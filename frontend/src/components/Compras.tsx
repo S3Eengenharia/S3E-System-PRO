@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type PurchaseOrder, type Supplier, PurchaseStatus, type PurchaseOrderItem, type Product, CatalogItemType } from '../types';
 import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
+import { comprasService } from '../services/comprasService';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -68,6 +69,7 @@ interface ComprasProps {
 
 const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
     const [filter, setFilter] = useState<PurchaseStatus | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
@@ -100,38 +102,48 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [isProcessingXML, setIsProcessingXML] = useState(false);
     const [xmlError, setXmlError] = useState<string | null>(null);
 
-    // Mock data para demonstração
-    const mockPurchases: PurchaseOrder[] = [
-        {
-            id: '1',
-            supplierId: 'sup1',
-            supplierName: 'Elétrica Central LTDA',
-            orderDate: '2024-01-15',
-            invoiceNumber: 'NF-001234',
-            status: PurchaseStatus.Recebido,
-            items: [
-                { productId: 'p1', productName: 'Cabo Flexível 2,5mm', quantity: 100, unitCost: 2.50, totalCost: 250 }
-            ],
-            totalAmount: 250,
-            notes: 'Entrega realizada conforme prazo'
-        },
-        {
-            id: '2',
-            supplierId: 'sup2',
-            supplierName: 'Materiais Elétricos São João',
-            orderDate: '2024-01-20',
-            invoiceNumber: 'NF-005678',
-            status: PurchaseStatus.Pendente,
-            items: [
-                { productId: 'p2', productName: 'Disjuntor 32A', quantity: 20, unitCost: 45.00, totalCost: 900 }
-            ],
-            totalAmount: 900,
-            notes: 'Aguardando confirmação de entrega'
-        }
-    ];
+    // Campos de custos e pagamento
+    const [frete, setFrete] = useState<string>('0');
+    const [outrasDespesas, setOutrasDespesas] = useState<string>('0');
+    const [condicaoPagamento, setCondicaoPagamento] = useState<'AVISTA' | 'PARCELADO'>('AVISTA');
+    const [numParcelas, setNumParcelas] = useState<string>('1');
+    const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<string>('');
+
+    // Carregar compras reais na montagem
+    useEffect(() => {
+        const load = async () => {
+            setIsLoading(true);
+            try {
+                const data = await comprasService.getCompras();
+                const mapped: PurchaseOrder[] = data.map((c: any) => ({
+                    id: c.id,
+                    supplierId: c.fornecedorId || c.fornecedor?.id || '',
+                    supplierName: c.fornecedorNome || c.fornecedor?.nome || c.supplierName || 'Fornecedor',
+                    orderDate: c.dataCompra || c.orderDate,
+                    invoiceNumber: c.numeroNF || c.invoiceNumber,
+                    status: (c.status as PurchaseStatus) || PurchaseStatus.Pendente,
+                    items: (c.items || c.itens || []).map((it: any) => ({
+                        productId: it.materialId || it.productId || it.id || '',
+                        productName: it.nomeProduto || it.productName || it.nome || 'Item',
+                        quantity: it.quantidade || it.quantity || 0,
+                        unitCost: it.valorUnit || it.precoUnitario || it.unitCost || 0,
+                        totalCost: (it.quantidade || it.quantity || 0) * (it.valorUnit || it.precoUnitario || it.unitCost || 0)
+                    })),
+                    totalAmount: c.valorTotal || c.totalAmount || 0,
+                    notes: c.observacoes || c.notes || ''
+                }));
+                setPurchaseOrders(mapped);
+            } catch (e) {
+                console.error('Erro ao carregar compras', e);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        load();
+    }, []);
 
     const filteredPurchases = useMemo(() => {
-        let filtered = mockPurchases;
+        let filtered = purchaseOrders;
         
         if (filter !== 'Todos') {
             filtered = filtered.filter(purchase => purchase.status === filter);
@@ -145,7 +157,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         }
         
         return filtered;
-    }, [filter, searchTerm]);
+    }, [filter, searchTerm, purchaseOrders]);
 
     // Handlers
     const handleOpenModal = (purchase: PurchaseOrder | null = null) => {
@@ -212,7 +224,10 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     };
 
     const calculateTotal = () => {
-        return purchaseItems.reduce((total, item) => total + item.totalCost, 0);
+        const itensTotal = purchaseItems.reduce((total, item) => total + item.totalCost, 0);
+        const freteNum = parseFloat(frete || '0') || 0;
+        const outrasNum = parseFloat(outrasDespesas || '0') || 0;
+        return itensTotal + freteNum + outrasNum;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -224,9 +239,51 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         }
 
         try {
-            // Simulação de API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
+            const payload: any = {
+                fornecedorNome: supplierName,
+                fornecedorCNPJ: supplierCNPJ,
+                fornecedorTel: supplierPhone,
+                numeroNF: invoiceNumber,
+                dataEmissaoNF: purchaseDate,
+                dataCompra: purchaseDate,
+                status: status,
+                valorFrete: parseFloat(frete || '0') || 0,
+                outrasDespesas: parseFloat(outrasDespesas || '0') || 0,
+                items: purchaseItems.map((it) => ({
+                    nomeProduto: it.productName,
+                    quantidade: it.quantity,
+                    valorUnit: it.unitCost
+                })),
+                observacoes: '',
+                condicoesPagamento: condicaoPagamento === 'PARCELADO' ? 'PARCELADO' : 'AVISTA',
+                parcelas: condicaoPagamento === 'PARCELADO' ? parseInt(numParcelas || '1') : 1,
+                dataPrimeiroVencimento: condicaoPagamento === 'PARCELADO' && dataPrimeiroVencimento ? dataPrimeiroVencimento : undefined
+            };
+
+            // cria via service
+            await comprasService.createCompra(payload);
+
+            // reload list
+            const data = await comprasService.getCompras();
+            const mapped: PurchaseOrder[] = data.map((c: any) => ({
+                id: c.id,
+                supplierId: c.fornecedorId || c.fornecedor?.id || '',
+                supplierName: c.fornecedorNome || c.fornecedor?.nome || c.supplierName || 'Fornecedor',
+                orderDate: c.dataCompra || c.orderDate,
+                invoiceNumber: c.numeroNF || c.invoiceNumber,
+                status: (c.status as PurchaseStatus) || PurchaseStatus.Pendente,
+                items: (c.items || c.itens || []).map((it: any) => ({
+                    productId: it.materialId || it.productId || it.id || '',
+                    productName: it.nomeProduto || it.productName || it.nome || 'Item',
+                    quantity: it.quantidade || it.quantity || 0,
+                    unitCost: it.valorUnit || it.precoUnitario || it.unitCost || 0,
+                    totalCost: (it.quantidade || it.quantity || 0) * (it.valorUnit || it.precoUnitario || it.unitCost || 0)
+                })),
+                totalAmount: c.valorTotal || c.totalAmount || 0,
+                notes: c.observacoes || c.notes || ''
+            }));
+            setPurchaseOrders(mapped);
+
             alert('✅ Compra registrada com sucesso!');
             handleCloseModal();
         } catch (error) {
@@ -341,20 +398,20 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
                 <div className="mt-4 flex items-center justify-between">
                     <p className="text-sm text-gray-600">
-                        Exibindo <span className="font-bold text-gray-900">{filteredPurchases.length}</span> de <span className="font-bold text-gray-900">{mockPurchases.length}</span> compras
+                        Exibindo <span className="font-bold text-gray-900">{filteredPurchases.length}</span> de <span className="font-bold text-gray-900">{purchaseOrders.length}</span> compras
                     </p>
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">Pendente: {mockPurchases.filter(p => p.status === PurchaseStatus.Pendente).length}</span>
+                            <span className="text-xs text-gray-600">Pendente: {purchaseOrders.filter(p => p.status === PurchaseStatus.Pendente).length}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">Recebido: {mockPurchases.filter(p => p.status === PurchaseStatus.Recebido).length}</span>
+                            <span className="text-xs text-gray-600">Recebido: {purchaseOrders.filter(p => p.status === PurchaseStatus.Recebido).length}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">Cancelado: {mockPurchases.filter(p => p.status === PurchaseStatus.Cancelado).length}</span>
+                            <span className="text-xs text-gray-600">Cancelado: {purchaseOrders.filter(p => p.status === PurchaseStatus.Cancelado).length}</span>
                         </div>
                     </div>
                 </div>
@@ -689,6 +746,74 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                                     R$ {calculateTotal().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Custos e Pagamento */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Custos e Pagamento</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Valor do Frete</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={frete}
+                                            onChange={(e) => setFrete(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Outras Despesas/Descontos</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={outrasDespesas}
+                                            onChange={(e) => setOutrasDespesas(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Condição de Pagamento</label>
+                                        <select
+                                            value={condicaoPagamento}
+                                            onChange={(e) => setCondicaoPagamento(e.target.value as any)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        >
+                                            <option value="AVISTA">À vista</option>
+                                            <option value="PARCELADO">Parcelado</option>
+                                        </select>
+                                    </div>
+                                    {condicaoPagamento === 'PARCELADO' && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Número de Parcelas</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value={numParcelas}
+                                                onChange={(e) => setNumParcelas(e.target.value)}
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                {condicaoPagamento === 'PARCELADO' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Data do 1º Vencimento</label>
+                                            <input
+                                                type="date"
+                                                value={dataPrimeiroVencimento}
+                                                onChange={(e) => setDataPrimeiroVencimento(e.target.value)}
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                            />
                                         </div>
                                     </div>
                                 )}
