@@ -1,4 +1,5 @@
 import { apiService } from './api';
+import { type PurchaseOrder } from '../types';
 
 export interface ItemCompra {
   id: string;
@@ -44,6 +45,28 @@ export interface ParsedXMLData {
 
 class ComprasService {
   /**
+   * Converte o DTO do backend em um PurchaseOrder usado na UI
+   */
+  mapCompraToPurchaseOrder(compraDTO: any): PurchaseOrder {
+    return {
+      id: compraDTO.id,
+      supplierId: compraDTO.fornecedorId || compraDTO.fornecedor?.id || '',
+      supplierName: compraDTO.fornecedorNome || compraDTO.fornecedor?.nome || compraDTO.supplierName || 'Fornecedor',
+      orderDate: compraDTO.dataCompra || compraDTO.orderDate,
+      invoiceNumber: compraDTO.numeroNF || compraDTO.invoiceNumber,
+      status: (compraDTO.status as any) || 'Pendente',
+      items: (compraDTO.items || compraDTO.itens || []).map((it: any) => ({
+        productId: it.materialId || it.productId || it.id || '',
+        productName: it.nomeProduto || it.productName || it.nome || 'Item',
+        quantity: it.quantidade || it.quantity || 0,
+        unitCost: it.valorUnit || it.precoUnitario || it.unitCost || 0,
+        totalCost: (it.quantidade || it.quantity || 0) * (it.valorUnit || it.precoUnitario || it.unitCost || 0)
+      })),
+      totalAmount: compraDTO.valorTotal || compraDTO.totalAmount || 0,
+      notes: compraDTO.observacoes || compraDTO.notes || ''
+    } as PurchaseOrder;
+  }
+  /**
    * Listar todas as compras
    */
   async getCompras(params?: {
@@ -52,24 +75,24 @@ class ComprasService {
     dataInicio?: string;
     dataFim?: string;
   }) {
-    return apiService.get<Compra[]>('/api/compras', params);
+    const resp = await apiService.get<any>('/api/compras', params);
+    // Desenvelopa: alguns endpoints retornam { success, data } ou apenas []
+    const raw = Array.isArray(resp)
+      ? resp
+      : Array.isArray((resp as any).data)
+      ? (resp as any).data
+      : Array.isArray((resp as any)?.data?.data)
+      ? (resp as any).data.data
+      : [];
+    return (raw as any[]).map((c) => this.mapCompraToPurchaseOrder(c));
   }
 
   /**
    * Criar nova compra
    */
-  async createCompra(data: {
-    fornecedorId: string;
-    dataEntregaPrevista?: string;
-    notaFiscal?: string;
-    observacoes?: string;
-    itens: Array<{
-      materialId: string;
-      quantidade: number;
-      precoUnitario: number;
-    }>;
-  }) {
-    return apiService.post<Compra>('/api/compras', data);
+  async createCompra(data: any) {
+    const resp = await apiService.post<any>('/api/compras', data);
+    return (resp as any)?.data ?? resp;
   }
 
   /**
@@ -83,27 +106,11 @@ class ComprasService {
   }
 
   /**
-   * Fazer parse de XML de nota fiscal
+   * Fazer parse de XML de nota fiscal no backend
+   * Envia o conteúdo XML como JSON { xml: string }
    */
-  async parseXML(file: File) {
-    const formData = new FormData();
-    formData.append('xml', file);
-
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${apiService['baseURL']}/api/compras/parse-xml`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Erro ao fazer parse do XML');
-    }
-
-    return await response.json();
+  async parseXML(xmlText: string) {
+    return apiService.post<any>('/api/compras/parse-xml', { xml: xmlText });
   }
 }
 
