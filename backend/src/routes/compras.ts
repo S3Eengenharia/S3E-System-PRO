@@ -8,7 +8,7 @@ router.use(authenticate);
 
 router.get('/', getCompras);
 router.post('/', createCompra);
-router.patch('/:id/status', updateCompraStatus);
+router.put('/:id/status', updateCompraStatus);
 router.post('/parse-xml', parseXML);
 
 export default router;
