@@ -117,6 +117,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [valorTotalProdutos, setValorTotalProdutos] = useState<string>('0');
     const [valorTotalNota, setValorTotalNota] = useState<string>('0');
     // Duplicatas/Parcelas
+    const [duplicatas, setDuplicatas] = useState<Array<{numero: string, dataVencimento: string, valor: number}>>([]);
     const [parcelas, setParcelas] = useState<Array<{ numero: string; dataVencimento: string; valor: number }>>([]);
 
     const totalProdutosCalculado = useMemo(() => {
@@ -157,7 +158,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         if (searchTerm) {
             filtered = filtered.filter(purchase =>
                 purchase.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                purchase.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
+                (purchase.invoiceNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase())
             );
         }
         
@@ -168,9 +169,9 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const handleOpenModal = (purchase: PurchaseOrder | null = null) => {
         if (purchase) {
             setPurchaseToEdit(purchase);
-            setSelectedSupplierId(purchase.supplierId);
+            setSelectedSupplierId(purchase.supplierId || '');
             setPurchaseDate(purchase.orderDate);
-            setInvoiceNumber(purchase.invoiceNumber);
+            setInvoiceNumber(purchase.invoiceNumber || '');
             setStatus(purchase.status);
             setPurchaseItems(purchase.items);
             setSupplierName(purchase.supplierName);
@@ -269,7 +270,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                 valorIPI: parseFloat(valorIPI || '0') || 0,
                 valorTotalProdutos: parseFloat(valorTotalProdutos || '0') || 0,
                 valorTotalNota: valorTotalNotaCalculado,
-                parcelas
+                duplicatas
             };
 
             // cria via service
@@ -305,8 +306,9 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
         try {
             const xmlContent = await readFileAsText(selectedXMLFile);
-            const parsedData = parseNFeXML(xmlContent);
-            setParsedXMLData(parsedData);
+            // Backend processa o XML agora
+            // const parsedData = parseNFeXML(xmlContent);
+            // setParsedXMLData(parsedData);
         } catch (error) {
             setXmlError('Erro ao processar arquivo XML: ' + (error as Error).message);
         } finally {
@@ -1173,44 +1175,66 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                         </div>
 
                         <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Fornecedor</h3>
-                                    <p className="text-gray-900 font-medium">{purchaseToView.supplierName}</p>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Status</h3>
-                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getStatusClass(purchaseToView.status)}`}>
-                                        {purchaseToView.status === PurchaseStatus.Pendente && '⏳ '}
-                                        {purchaseToView.status === PurchaseStatus.Recebido && '✅ '}
-                                        {purchaseToView.status === PurchaseStatus.Cancelado && '❌ '}
-                                        {purchaseToView.status}
-                                    </span>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Nota Fiscal</h3>
-                                    <p className="text-gray-900 font-medium">{purchaseToView.invoiceNumber}</p>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Data da Compra</h3>
-                                    <p className="text-gray-900 font-medium">{new Date(purchaseToView.orderDate).toLocaleDateString('pt-BR')}</p>
+                            {/* Informações Básicas */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">📋</span>
+                                    Informações Básicas
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Fornecedor</h4>
+                                        <p className="text-gray-900 font-medium">{purchaseToView.supplierName}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Status</h4>
+                                        <span className={`inline-block px-3 py-1.5 text-xs font-bold rounded-lg ${getStatusClass(purchaseToView.status)}`}>
+                                            {purchaseToView.status === PurchaseStatus.Pendente && '⏳ '}
+                                            {purchaseToView.status === PurchaseStatus.Recebido && '✅ '}
+                                            {purchaseToView.status === PurchaseStatus.Cancelado && '❌ '}
+                                            {purchaseToView.status}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Nota Fiscal</h4>
+                                        <p className="text-gray-900 font-medium">{purchaseToView.invoiceNumber}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Data da Compra</h4>
+                                        <p className="text-gray-900 font-medium">{new Date(purchaseToView.orderDate).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    {(purchaseToView as any).destinatarioCNPJ && (
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                            <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">CNPJ Destinatário</h4>
+                                            <p className="text-gray-900 font-medium">{(purchaseToView as any).destinatarioCNPJ}</p>
+                                        </div>
+                                    )}
+                                    {(purchaseToView as any).statusImportacao && (
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                            <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Tipo de Importação</h4>
+                                            <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-lg ${
+                                                (purchaseToView as any).statusImportacao === 'XML' 
+                                                    ? 'bg-green-100 text-green-700' 
+                                                    : 'bg-gray-200 text-gray-700'
+                                            }`}>
+                                                {(purchaseToView as any).statusImportacao === 'XML' ? '📄 XML' : '✏️ Manual'}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl">
-                                <h3 className="font-semibold text-gray-800 mb-2">Total da Compra</h3>
-                                <p className="text-3xl font-bold text-orange-700">
-                                    R$ {purchaseToView.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </p>
-                            </div>
-
+                            {/* Itens da Compra */}
                             {purchaseToView.items && purchaseToView.items.length > 0 && (
                                 <div>
-                                    <h3 className="font-semibold text-gray-800 mb-4">Itens da Compra</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">📦</span>
+                                        Itens da Compra ({purchaseToView.items.length})
+                                    </h3>
                                     <div className="space-y-3">
                                         {purchaseToView.items.map((item, index) => (
-                                            <div key={index} className="bg-gray-50 border border-gray-200 p-4 rounded-xl">
-                                                <div className="flex justify-between items-start">
+                                            <div key={index} className="bg-white border border-gray-200 p-4 rounded-xl hover:shadow-md transition-shadow">
+                                                <div className="flex justify-between items-start mb-2">
                                                     <div className="flex-1">
                                                         <p className="font-semibold text-gray-900">{item.productName}</p>
                                                         <p className="text-sm text-gray-600 mt-1">
@@ -1223,16 +1247,164 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                                         </p>
                                                     </div>
                                                 </div>
+                                                {((item as any).ncm || (item as any).sku) && (
+                                                    <div className="flex gap-4 text-xs text-gray-500 pt-2 border-t border-gray-100">
+                                                        {(item as any).ncm && (
+                                                            <span className="bg-gray-100 px-2 py-1 rounded">
+                                                                NCM: {(item as any).ncm}
+                                                            </span>
+                                                        )}
+                                                        {(item as any).sku && (
+                                                            <span className="bg-gray-100 px-2 py-1 rounded">
+                                                                SKU: {(item as any).sku}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
+                            {/* Detalhes Fiscais e Totais */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <span className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-600">💰</span>
+                                    Detalhes Fiscais e Totais
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {(purchaseToView as any).valorTotalProdutos !== undefined && (
+                                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                            <h4 className="text-xs font-semibold text-blue-700 uppercase mb-1">Total Produtos</h4>
+                                            <p className="text-xl font-bold text-blue-900">
+                                                R$ {parseFloat((purchaseToView as any).valorTotalProdutos || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {(purchaseToView as any).frete !== undefined && parseFloat((purchaseToView as any).frete || '0') > 0 && (
+                                        <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl">
+                                            <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Frete</h4>
+                                            <p className="text-xl font-bold text-purple-900">
+                                                R$ {parseFloat((purchaseToView as any).frete || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {(purchaseToView as any).valorIPI !== undefined && parseFloat((purchaseToView as any).valorIPI || '0') > 0 && (
+                                        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl">
+                                            <h4 className="text-xs font-semibold text-indigo-700 uppercase mb-1">Valor IPI</h4>
+                                            <p className="text-xl font-bold text-indigo-900">
+                                                R$ {parseFloat((purchaseToView as any).valorIPI || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {(purchaseToView as any).outrasDespesas !== undefined && parseFloat((purchaseToView as any).outrasDespesas || '0') > 0 && (
+                                        <div className="bg-gray-100 border border-gray-300 p-4 rounded-xl">
+                                            <h4 className="text-xs font-semibold text-gray-700 uppercase mb-1">Outras Despesas</h4>
+                                            <p className="text-xl font-bold text-gray-900">
+                                                R$ {parseFloat((purchaseToView as any).outrasDespesas || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Total Geral */}
+                                <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300 p-6 rounded-xl mt-4">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-orange-700 uppercase mb-1">Total Geral da Nota</h4>
+                                            <p className="text-xs text-gray-600">
+                                                {(purchaseToView as any).valorTotalNota !== undefined 
+                                                    ? 'Valor total da NF-e' 
+                                                    : 'Valor total da compra'}
+                                            </p>
+                                        </div>
+                                        <p className="text-4xl font-bold text-orange-700">
+                                            R$ {(
+                                                (purchaseToView as any).valorTotalNota !== undefined 
+                                                    ? parseFloat((purchaseToView as any).valorTotalNota || '0') 
+                                                    : purchaseToView.totalAmount
+                                            ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Condições de Pagamento */}
+                            {((purchaseToView as any).condicoesPagamento || (purchaseToView as any).duplicatas?.length > 0) && (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600">💳</span>
+                                        Condições de Pagamento
+                                    </h3>
+                                    <div className="bg-white border border-gray-200 rounded-xl p-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                            {(purchaseToView as any).condicoesPagamento && (
+                                                <div className="bg-gray-50 p-3 rounded-lg">
+                                                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Condição</h4>
+                                                    <p className="text-sm font-medium text-gray-900">
+                                                        {(purchaseToView as any).condicoesPagamento === 'AVISTA' ? '💵 À Vista' : '📅 Parcelado'}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {(purchaseToView as any).parcelas && (
+                                                <div className="bg-gray-50 p-3 rounded-lg">
+                                                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Parcelas</h4>
+                                                    <p className="text-sm font-medium text-gray-900">
+                                                        {(purchaseToView as any).parcelas}x
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {(purchaseToView as any).dataPrimeiroVencimento && (
+                                                <div className="bg-gray-50 p-3 rounded-lg">
+                                                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Primeiro Vencimento</h4>
+                                                    <p className="text-sm font-medium text-gray-900">
+                                                        {new Date((purchaseToView as any).dataPrimeiroVencimento).toLocaleDateString('pt-BR')}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Duplicatas */}
+                                        {(purchaseToView as any).duplicatas && (purchaseToView as any).duplicatas.length > 0 && (
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-gray-700 mb-3">Duplicatas/Parcelas</h4>
+                                                <div className="space-y-2">
+                                                    {(purchaseToView as any).duplicatas.map((dup: any, idx: number) => (
+                                                        <div key={idx} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center">
+                                                                    {idx + 1}
+                                                                </span>
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500">Duplicata {dup.numero || (idx + 1).toString().padStart(3, '0')}</p>
+                                                                    <p className="text-sm font-medium text-gray-900">
+                                                                        Vencimento: {new Date(dup.dataVencimento).toLocaleDateString('pt-BR')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-lg font-bold text-green-700">
+                                                                R$ {parseFloat(dup.valor || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Observações */}
                             {purchaseToView.notes && (
-                                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Observações</h3>
-                                    <p className="text-gray-700">{purchaseToView.notes}</p>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">📝</span>
+                                        Observações
+                                    </h3>
+                                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                        <p className="text-gray-700">{purchaseToView.notes}</p>
+                                    </div>
                                 </div>
                             )}
                         </div>
