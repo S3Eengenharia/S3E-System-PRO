@@ -58,6 +58,9 @@ interface VendaForm {
     parcelas: number;
     valorEntrada: number;
     observacoes?: string;
+    dataPrimeiraParcela: string;
+    observacoesComerciais?: string;
+    condicoesEspeciaisPagamento?: string;
 }
 
 type TabType = 'nova' | 'lista' | 'dashboard';
@@ -72,7 +75,10 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
         formaPagamento: 'À vista',
         parcelas: 1,
         valorEntrada: 0,
-        observacoes: ''
+        observacoes: '',
+        dataPrimeiraParcela: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        observacoesComerciais: '',
+        condicoesEspeciaisPagamento: ''
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,6 +156,21 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
         return orcamentosAprovados.find(orc => orc.id === vendaForm.orcamentoId) || null;
     }, [vendaForm.orcamentoId, orcamentosAprovados]);
 
+    // Cálculos financeiros automáticos
+    const calculosFinanceiros = useMemo(() => {
+        const valorTotal = orcamentoSelecionado?.precoVenda || 0;
+        const valorEntrada = vendaForm.valorEntrada || 0;
+        const valorFinanciado = Math.max(0, valorTotal - valorEntrada);
+        const numeroParcelas = vendaForm.parcelas || 1;
+        const valorParcela = numeroParcelas > 0 ? valorFinanciado / numeroParcelas : 0;
+
+        return {
+            valorTotal,
+            valorFinanciado,
+            valorParcela
+        };
+    }, [orcamentoSelecionado, vendaForm.valorEntrada, vendaForm.parcelas]);
+
     // Estatísticas calculadas
     const estatisticasVendas = useMemo(() => {
         if (dashboardData) {
@@ -199,8 +220,12 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 clienteId: orcamentoSelecionado.clienteId,
                 formaPagamento: vendaForm.formaPagamento,
                 numeroParcelas: vendaForm.parcelas,
-                dataVencimentoPrimeiraParcela: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 dias
-                observacoes: vendaForm.observacoes
+                valorEntrada: vendaForm.valorEntrada,
+                valorFinanciado: calculosFinanceiros.valorFinanciado,
+                dataVencimentoPrimeiraParcela: vendaForm.dataPrimeiraParcela,
+                observacoes: vendaForm.observacoes,
+                observacoesComerciais: vendaForm.observacoesComerciais,
+                condicoesEspeciaisPagamento: vendaForm.condicoesEspeciaisPagamento
             };
 
             console.log('📤 Enviando dados da venda:', vendaData);
@@ -219,7 +244,10 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                     formaPagamento: 'À vista',
                     parcelas: 1,
                     valorEntrada: 0,
-                    observacoes: ''
+                    observacoes: '',
+                    dataPrimeiraParcela: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    observacoesComerciais: '',
+                    condicoesEspeciaisPagamento: ''
                 });
                 
                 // Recarregar dados
@@ -360,122 +388,383 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     );
 
     const renderNovaVenda = () => (
-        <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft">
-            <div className="mb-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Registrar Nova Venda</h3>
-                <p className="text-gray-600">Selecione um orçamento aprovado para converter em venda</p>
+        <div className="bg-white border-2 border-gray-200 rounded-2xl shadow-soft max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
+                <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center shadow-medium ring-2 ring-green-100">
+                        <CurrencyDollarIcon className="w-7 h-7 text-white" />
+                    </div>
+                    <div className="flex-1">
+                        <h2 className="text-2xl font-bold text-gray-900">Nova Venda / Projeto</h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Converta um orçamento aprovado em venda e defina as condições financeiras
+                        </p>
+                    </div>
+                </div>
             </div>
 
-            <form onSubmit={handleSubmitVenda} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Orçamento Aprovado *
-                        </label>
-                        <select
-                            value={vendaForm.orcamentoId}
-                            onChange={(e) => setVendaForm({...vendaForm, orcamentoId: e.target.value})}
-                            required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        >
-                            <option value="">Selecione um orçamento aprovado</option>
-                            {orcamentosAprovados.map(orc => (
-                                <option key={orc.id} value={orc.id}>
-                                    {orc.titulo} - {orc.cliente?.nome} - R$ {orc.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </option>
-                            ))}
-                        </select>
-                        {orcamentosAprovados.length === 0 && (
-                            <p className="text-sm text-orange-600 mt-2">
-                                ⚠️ Nenhum orçamento aprovado encontrado. Aprove um orçamento primeiro.
-                            </p>
+            <form onSubmit={handleSubmitVenda} className="p-6 space-y-6">
+                {/* SEÇÃO 1: Seleção de Orçamento */}
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">📋</span>
+                        Seleção do Orçamento/Projeto
+                    </h3>
+                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                        {!vendaForm.orcamentoId && (
+                            <div className="mb-4 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 flex items-start gap-3">
+                                <span className="text-2xl">ℹ️</span>
+                                <div>
+                                    <p className="text-sm font-semibold text-blue-900 mb-1">
+                                        Selecione um Orçamento para Começar
+                                    </p>
+                                    <p className="text-xs text-blue-700">
+                                        Após selecionar um orçamento aprovado, as demais seções do formulário (Informações do Projeto, Condições Financeiras, Documentos e Observações) serão exibidas automaticamente.
+                                    </p>
+                                </div>
+                            </div>
                         )}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Forma de Pagamento *
-                        </label>
-                        <select
-                            value={vendaForm.formaPagamento}
-                            onChange={(e) => setVendaForm({...vendaForm, formaPagamento: e.target.value})}
-                            required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        >
-                            {formasPagamento.map(forma => (
-                                <option key={forma} value={forma}>{forma}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {vendaForm.formaPagamento.includes('x') && (
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                Número de Parcelas
-                            </label>
-                            <input
-                                type="number"
-                                value={vendaForm.parcelas}
-                                onChange={(e) => setVendaForm({...vendaForm, parcelas: Number(e.target.value)})}
-                                min="1"
-                                max="24"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                            />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Orçamento Aprovado *
+                                </label>
+                                <select
+                                    value={vendaForm.orcamentoId}
+                                    onChange={(e) => setVendaForm({...vendaForm, orcamentoId: e.target.value})}
+                                    required
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                >
+                                    <option value="">Selecione um orçamento aprovado para converter em venda</option>
+                                    {orcamentosAprovados.map(orc => (
+                                        <option key={orc.id} value={orc.id}>
+                                            {orc.titulo} - {orc.cliente?.nome} - R$ {orc.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </option>
+                                    ))}
+                                </select>
+                                {orcamentosAprovados.length === 0 && (
+                                    <div className="mt-3 bg-orange-50 border-2 border-orange-300 rounded-xl p-4 flex items-start gap-3">
+                                        <span className="text-2xl">⚠️</span>
+                                        <div>
+                                            <p className="text-sm font-semibold text-orange-900 mb-1">
+                                                Nenhum Orçamento Aprovado Disponível
+                                            </p>
+                                            <p className="text-xs text-orange-700">
+                                                Para criar uma venda, você precisa primeiro aprovar um orçamento na página de <strong>Orçamentos</strong>. Vá até lá, selecione um orçamento em status "Pendente" e aprove-o para que ele apareça aqui.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Valor de Entrada (R$)
-                        </label>
-                        <input
-                            type="number"
-                            value={vendaForm.valorEntrada}
-                            onChange={(e) => setVendaForm({...vendaForm, valorEntrada: Number(e.target.value)})}
-                            min="0"
-                            step="0.01"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                            placeholder="0,00"
-                        />
                     </div>
                 </div>
 
+                {/* SEÇÃO 2: Informações do Projeto (Read-Only) */}
                 {orcamentoSelecionado && (
-                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                        <h4 className="font-semibold text-green-900 mb-2">Resumo do Orçamento Selecionado</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            <div>
-                                <span className="text-green-700 font-medium">Cliente:</span>
-                                <p className="text-green-900">{orcamentoSelecionado.cliente?.nome}</p>
-                            </div>
-                            <div>
-                                <span className="text-green-700 font-medium">Valor Total:</span>
-                                <p className="text-green-900 font-bold">
-                                    R$ {orcamentoSelecionado.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-green-700 font-medium">Itens:</span>
-                                <p className="text-green-900">{orcamentoSelecionado.items?.length || 0} item(s)</p>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">🏢</span>
+                            Informações do Projeto (Herdadas)
+                        </h3>
+                        <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-white bg-opacity-70 p-4 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Cliente</h4>
+                                    <p className="text-gray-900 font-medium">{orcamentoSelecionado.cliente?.nome || 'N/A'}</p>
+                                    <p className="text-xs text-gray-600 mt-1">{orcamentoSelecionado.cliente?.email || ''}</p>
+                                </div>
+                                <div className="bg-white bg-opacity-70 p-4 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Projeto</h4>
+                                    <p className="text-gray-900 font-medium">{orcamentoSelecionado.titulo || 'Projeto'}</p>
+                                    <p className="text-xs text-gray-600 mt-1">Nº Orçamento: {orcamentoSelecionado.numeroOrcamento || orcamentoSelecionado.id?.slice(0, 8)}</p>
+                                </div>
+                                <div className="bg-white bg-opacity-70 p-4 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Status</h4>
+                                    <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-lg">
+                                        ✅ Aprovado
+                                    </span>
+                                </div>
+                                <div className="bg-white bg-opacity-70 p-4 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Endereço da Obra</h4>
+                                    <p className="text-sm text-gray-900">{orcamentoSelecionado.enderecoObra || orcamentoSelecionado.cliente?.endereco || 'Não especificado'}</p>
+                                </div>
+                                <div className="bg-white bg-opacity-70 p-4 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Tipo de Projeto</h4>
+                                    <p className="text-sm text-gray-900">{orcamentoSelecionado.tipoInstalacao || 'Instalação Elétrica'}</p>
+                                </div>
+                                <div className="bg-white bg-opacity-70 p-4 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Itens/Serviços</h4>
+                                    <p className="text-sm text-gray-900 font-medium">{orcamentoSelecionado.items?.length || 0} item(s)</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Observações
-                    </label>
-                    <textarea
-                        value={vendaForm.observacoes}
-                        onChange={(e) => setVendaForm({...vendaForm, observacoes: e.target.value})}
-                        rows={3}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        placeholder="Informações adicionais sobre a venda..."
-                    />
-                </div>
+                {/* SEÇÃO 3: Condições Financeiras (Inputs Ativos) */}
+                {orcamentoSelecionado && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600">💰</span>
+                            Condições Financeiras
+                        </h3>
+                        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-6">
+                            {/* Valor Total (Read-Only) */}
+                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 p-6 rounded-xl">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-green-700 uppercase mb-1">Valor Total do Projeto</h4>
+                                        <p className="text-xs text-gray-600">Valor herdado do orçamento aprovado</p>
+                                    </div>
+                                    <p className="text-4xl font-bold text-green-700">
+                                        R$ {calculosFinanceiros.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                            </div>
 
-                <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                            {/* Lista de Itens/Serviços (Read-Only) */}
+                            {orcamentoSelecionado?.items && orcamentoSelecionado.items.length > 0 && (
+                                <div>
+                                    <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <span className="text-green-600">📦</span>
+                                        Itens/Serviços do Orçamento ({orcamentoSelecionado.items.length})
+                                    </h4>
+                                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                                        {/* Header da Tabela */}
+                                        <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-6 py-3 grid grid-cols-12 gap-4 text-xs font-semibold text-gray-700 uppercase">
+                                            <div className="col-span-5">Item/Serviço</div>
+                                            <div className="col-span-2 text-center">Quantidade</div>
+                                            <div className="col-span-2 text-right">Valor Unit.</div>
+                                            <div className="col-span-3 text-right">Subtotal</div>
+                                        </div>
+                                        
+                                        {/* Linhas de Itens */}
+                                        <div className="divide-y divide-gray-200">
+                                            {orcamentoSelecionado.items.map((item: any, index: number) => (
+                                                <div key={index} className="px-6 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50 transition-colors">
+                                                    <div className="col-span-5">
+                                                        <p className="font-semibold text-gray-900">{item.nome || item.descricao || item.material?.nome || 'Item'}</p>
+                                                        {item.descricao && item.nome && (
+                                                            <p className="text-xs text-gray-500 mt-1">{item.descricao}</p>
+                                                        )}
+                                                        {item.sku && (
+                                                            <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                                                                SKU: {item.sku}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-2 text-center">
+                                                        <span className="text-gray-900 font-medium">
+                                                            {item.quantidade || item.quantity || 0}
+                                                        </span>
+                                                        {item.unidadeMedida && (
+                                                            <span className="text-xs text-gray-500 ml-1">
+                                                                {item.unidadeMedida}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-2 text-right text-gray-900">
+                                                        R$ {(item.valorUnitario || item.precoUnitario || item.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </div>
+                                                    <div className="col-span-3 text-right">
+                                                        <span className="font-bold text-green-700 text-lg">
+                                                            R$ {((item.quantidade || item.quantity || 0) * (item.valorUnitario || item.precoUnitario || item.preco || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Footer com Total */}
+                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-t-2 border-green-300 px-6 py-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-semibold text-gray-700">TOTAL DOS ITENS:</span>
+                                                <span className="text-2xl font-bold text-green-700">
+                                                    R$ {calculosFinanceiros.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Inputs de Pagamento */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Forma de Pagamento *
+                                    </label>
+                                    <select
+                                        value={vendaForm.formaPagamento}
+                                        onChange={(e) => setVendaForm({...vendaForm, formaPagamento: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    >
+                                        {formasPagamento.map(forma => (
+                                            <option key={forma} value={forma}>{forma}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Número de Parcelas *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={vendaForm.parcelas}
+                                        onChange={(e) => setVendaForm({...vendaForm, parcelas: Number(e.target.value)})}
+                                        min="1"
+                                        max="36"
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Valor de Entrada (R$)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={vendaForm.valorEntrada}
+                                        onChange={(e) => setVendaForm({...vendaForm, valorEntrada: Number(e.target.value)})}
+                                        min="0"
+                                        max={calculosFinanceiros.valorTotal}
+                                        step="0.01"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        placeholder="0,00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Data da Primeira Parcela *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={vendaForm.dataPrimeiraParcela}
+                                        onChange={(e) => setVendaForm({...vendaForm, dataPrimeiraParcela: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Cálculos Automáticos */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                    <h4 className="text-xs font-semibold text-blue-700 uppercase mb-1">Valor Financiado</h4>
+                                    <p className="text-2xl font-bold text-blue-900">
+                                        R$ {calculosFinanceiros.valorFinanciado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        Total - Entrada = Valor a parcelar
+                                    </p>
+                                </div>
+
+                                <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Valor da Parcela</h4>
+                                    <p className="text-2xl font-bold text-purple-900">
+                                        R$ {calculosFinanceiros.valorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        {vendaForm.parcelas}x de R$ {calculosFinanceiros.valorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SEÇÃO 4: Documentos Vinculados */}
+                {orcamentoSelecionado && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-600">📄</span>
+                            Documentos do Projeto
+                        </h3>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                                    <DocumentTextIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm font-medium text-gray-700">Projeto Elétrico</p>
+                                    <p className="text-xs text-gray-500 mt-1">Disponível no orçamento</p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                                    <DocumentTextIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm font-medium text-gray-700">ART/RRT</p>
+                                    <p className="text-xs text-gray-500 mt-1">A ser gerado</p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                                    <DocumentTextIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm font-medium text-gray-700">Laudos</p>
+                                    <p className="text-xs text-gray-500 mt-1">A ser anexado</p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                                    <DocumentTextIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm font-medium text-gray-700">Contrato</p>
+                                    <p className="text-xs text-gray-500 mt-1">A ser gerado</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SEÇÃO 5: Observações e Controles */}
+                {orcamentoSelecionado && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">📝</span>
+                            Observações e Controles
+                        </h3>
+                        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Observações Comerciais
+                            </label>
+                            <textarea
+                                value={vendaForm.observacoesComerciais}
+                                onChange={(e) => setVendaForm({...vendaForm, observacoesComerciais: e.target.value})}
+                                rows={3}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                placeholder="Informações adicionais sobre a negociação, descontos aplicados, etc..."
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Condições Especiais de Pagamento
+                            </label>
+                            <textarea
+                                value={vendaForm.condicoesEspeciaisPagamento}
+                                onChange={(e) => setVendaForm({...vendaForm, condicoesEspeciaisPagamento: e.target.value})}
+                                rows={2}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                placeholder="Ex: Pagamento mediante conclusão de etapas, bonificações, etc..."
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Observações Gerais
+                            </label>
+                            <textarea
+                                value={vendaForm.observacoes}
+                                onChange={(e) => setVendaForm({...vendaForm, observacoes: e.target.value})}
+                                rows={2}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                placeholder="Outras informações relevantes sobre a venda..."
+                            />
+                        </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Botões de Ação */}
+                <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200">
                     <button
                         type="button"
                         onClick={() => setActiveTab('dashboard')}
@@ -486,9 +775,22 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                     <button
                         type="submit"
                         disabled={isSubmitting || !orcamentoSelecionado}
-                        className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                        {isSubmitting ? 'Processando...' : 'Registrar Venda'}
+                        {isSubmitting ? (
+                            <>
+                                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processando...
+                            </>
+                        ) : (
+                            <>
+                                <CreditCardIcon className="w-5 h-5" />
+                                Registrar Venda e Criar Projeto
+                            </>
+                        )}
                     </button>
                 </div>
             </form>

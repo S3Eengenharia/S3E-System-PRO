@@ -212,6 +212,55 @@ class FinanceiroService {
       return { success: false, error: 'Erro de conexão com o backend' };
     }
   }
+
+  /**
+   * Dar baixa em conta a receber
+   */
+  async darBaixaRecebimento(contaId: string, data: {
+    dataPagamento: string;
+    valorRecebido: number;
+    observacoes?: string;
+  }): Promise<{ success: boolean; data?: ContaReceber; error?: string }> {
+    try {
+      console.log(`💳 Dando baixa em conta a receber ${contaId}...`, data);
+      
+      const response = await axiosApiService.put<ContaReceber>(`/api/vendas/contas/${contaId}/pagar`, data);
+      
+      if (response.success && response.data) {
+        console.log('✅ Baixa registrada com sucesso:', response.data);
+        return { success: true, data: response.data };
+      } else {
+        console.warn('⚠️ Erro ao dar baixa:', response);
+        return { success: false, error: response.error || 'Erro ao dar baixa' };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao dar baixa em conta a receber:', error);
+      return { success: false, error: 'Erro de conexão com o backend' };
+    }
+  }
+
+  /**
+   * Buscar dados para gráficos do dashboard
+   */
+  async getDadosGraficos(): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      console.log('📈 Carregando dados de gráficos...');
+      
+      // Tentar endpoint dedicado de gráficos, se não existir, usar dados mensais
+      const response = await axiosApiService.get<any>(ENDPOINTS.RELATORIOS.FINANCEIRO);
+      
+      if (response.success && response.data) {
+        console.log('✅ Dados de gráficos carregados:', response.data);
+        return { success: true, data: response.data };
+      } else {
+        console.warn('⚠️ Erro ao carregar gráficos:', response);
+        return { success: false, error: response.error || 'Erro ao carregar gráficos' };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar gráficos:', error);
+      return { success: false, error: 'Erro de conexão com o backend' };
+    }
+  }
 }
 
 export const financeiroService = new FinanceiroService();
