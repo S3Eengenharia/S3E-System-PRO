@@ -529,7 +529,9 @@ export interface PurchaseOrderItem {
     productName: string;
     quantity: number;
     unitCost: number;
+    totalCost: number;
     ncm?: string;
+    sku?: string;
 }
 
 export enum PurchaseStatus {
@@ -543,20 +545,42 @@ export interface Installment {
     value: number;
 }
 
+export interface Duplicata {
+    numero: string;
+    dataVencimento: string;
+    valor: number;
+}
+
 export interface PurchaseOrder {
     id: string;
-    supplier: {
+    supplierId?: string;
+    supplierName: string;
+    supplier?: {
         id: string;
         name: string;
     };
-    date: string;
+    orderDate: string;
+    date?: string;
     items: PurchaseOrderItem[];
-    totalValue: number;
+    totalAmount: number;
+    totalValue?: number;
     status: PurchaseStatus;
     invoiceNumber?: string;
     paymentMethod?: string;
     installments?: Installment[];
     paymentTerms?: string;
+    notes?: string;
+    frete?: number;
+    outrasDespesas?: number;
+    condicoesPagamento?: string;
+    parcelas?: number;
+    dataPrimeiroVencimento?: string;
+    destinatarioCNPJ?: string;
+    statusImportacao?: string;
+    valorIPI?: number;
+    valorTotalProdutos?: number;
+    valorTotalNota?: number;
+    duplicatas?: Duplicata[];
     fullVendorDetails?: {
         name: string;
         cnpj: string;
