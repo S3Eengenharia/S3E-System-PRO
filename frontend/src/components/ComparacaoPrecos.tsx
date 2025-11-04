@@ -3,6 +3,7 @@ import { PriceComparisonItem, PriceComparisonStatus, PriceComparisonImport } fro
 import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { axiosApiService } from '../services/axiosApi';
+import { comparacaoPrecosService, type ProcessedCSVResult, type ProcessedItem } from '../services/comparacaoPrecosService';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -64,51 +65,6 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
     const [error, setError] = useState<string | null>(null);
     const { token } = useContext(AuthContext)!;
 
-    // Mock data para demonstração
-    const mockImports: PriceComparisonImport[] = [
-        {
-            id: 'IMP-001',
-            fileName: 'orcamento_fornecedor_a.csv',
-            uploadDate: '2024-01-15T10:30:00Z',
-            supplierName: 'Elétrica Central LTDA',
-            itemsCount: 25,
-            totalValue: 15750.50,
-            status: 'completed',
-            items: [
-                {
-                    id: '1',
-                    materialCode: 'CAB-2.5',
-                    materialName: 'Cabo Flexível 2,5mm',
-                    unit: 'm',
-                    quantity: 100,
-                    currentPrice: 2.50,
-                    newPrice: 2.30,
-                    difference: -8.0,
-                    differenceValue: -20.00,
-                    status: PriceComparisonStatus.Lower,
-                    supplierName: 'Elétrica Central LTDA',
-                    lastPurchaseDate: '2024-01-01',
-                    stockQuantity: 150
-                },
-                {
-                    id: '2',
-                    materialCode: 'DISJ-32A',
-                    materialName: 'Disjuntor Bipolar 32A',
-                    unit: 'un',
-                    quantity: 20,
-                    currentPrice: 45.00,
-                    newPrice: 48.00,
-                    difference: 6.7,
-                    differenceValue: 60.00,
-                    status: PriceComparisonStatus.Higher,
-                    supplierName: 'Elétrica Central LTDA',
-                    lastPurchaseDate: '2024-01-01',
-                    stockQuantity: 5
-                }
-            ]
-        }
-    ];
-
     // Função para processar CSV
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -130,37 +86,65 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
         setError(null);
 
         try {
-            // Simulação de processamento
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            const response = await comparacaoPrecosService.uploadCSV(selectedFile, supplierName);
             
-            const newImport: PriceComparisonImport = {
-                id: `IMP-${Date.now()}`,
-                fileName: selectedFile.name,
-                uploadDate: new Date().toISOString(),
-                supplierName: supplierName,
-                itemsCount: 15,
-                totalValue: 8500.00,
-                status: 'completed',
-                items: []
-            };
+            if (response.success && response.data) {
+                const data = response.data;
+                
+                // Converter ProcessedItem[] para PriceComparisonItem[]
+                const items: PriceComparisonItem[] = data.items.map((item: ProcessedItem, index: number) => ({
+                    id: `${index + 1}`,
+                    materialCode: item.codigo,
+                    materialName: item.nome,
+                    unit: item.unidade,
+                    quantity: item.quantidade,
+                    currentPrice: item.preco_atual || 0,
+                    newPrice: item.preco_unitario,
+                    difference: item.diferenca_percentual || 0,
+                    differenceValue: item.preco_atual 
+                        ? (item.preco_unitario - item.preco_atual) * item.quantidade 
+                        : 0,
+                    status: item.status as PriceComparisonStatus,
+                    supplierName: supplierName,
+                    lastPurchaseDate: '',
+                    stockQuantity: 0
+                }));
+                
+                const totalValue = items.reduce((sum, item) => sum + (item.newPrice * item.quantity), 0);
+                
+                const newImport: PriceComparisonImport = {
+                    id: `IMP-${Date.now()}`,
+                    fileName: selectedFile.name,
+                    uploadDate: new Date().toISOString(),
+                    supplierName: supplierName,
+                    itemsCount: items.length,
+                    totalValue: totalValue,
+                    status: 'completed',
+                    items: items
+                };
 
-            setImports([newImport, ...imports]);
-            setSelectedImport(newImport);
-            setIsUploadModalOpen(false);
-            setSupplierName('');
-            setSelectedFile(null);
+                setImports([newImport, ...imports]);
+                setSelectedImport(newImport);
+                setIsUploadModalOpen(false);
+                setSupplierName('');
+                setSelectedFile(null);
 
-            alert('✅ CSV processado com sucesso!');
+                alert('✅ CSV processado com sucesso!');
+            } else {
+                setError(response.error || 'Erro ao processar CSV');
+                alert(`❌ ${response.error || 'Erro ao processar CSV'}`);
+            }
         } catch (error) {
             console.error('Erro ao processar CSV:', error);
             setError('Erro ao processar arquivo CSV');
+            alert('❌ Erro ao processar arquivo CSV. Verifique o console para mais detalhes.');
         } finally {
             setIsProcessing(false);
         }
     };
 
     const filteredImports = useMemo(() => {
-        let filtered = [...mockImports, ...imports];
+        let filtered = [...imports];
         
         if (searchTerm) {
             filtered = filtered.filter(imp =>
@@ -214,6 +198,44 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                 return 'Sem Histórico';
             default:
                 return 'Desconhecido';
+        }
+    };
+
+    const handleAtualizarPrecos = async () => {
+        if (!selectedImport || !selectedImport.items) return;
+        
+        if (!window.confirm('Deseja atualizar os preços dos materiais com base nesta comparação? Apenas itens com preços menores serão atualizados.')) {
+            return;
+        }
+
+        try {
+            setIsProcessing(true);
+            
+            // Converter items para ProcessedItem[]
+            const processedItems: ProcessedItem[] = selectedImport.items.map(item => ({
+                codigo: item.materialCode,
+                nome: item.materialName,
+                unidade: item.unit,
+                quantidade: item.quantity,
+                preco_unitario: item.newPrice,
+                preco_atual: item.currentPrice,
+                diferenca_percentual: item.difference,
+                status: item.status as 'Lower' | 'Higher' | 'Equal' | 'NoHistory'
+            }));
+            
+            const response = await comparacaoPrecosService.atualizarPrecos(processedItems);
+            
+            if (response.success) {
+                alert(`✅ Preços atualizados com sucesso! ${response.data?.updated || 0} itens foram atualizados.`);
+                setSelectedImport(null);
+            } else {
+                alert(`❌ ${response.error || 'Erro ao atualizar preços'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar preços:', error);
+            alert('❌ Erro ao atualizar preços. Verifique o console para mais detalhes.');
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -578,6 +600,25 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                             ) : (
                                 <div className="text-center py-8">
                                     <p className="text-gray-500">Nenhum item para exibir</p>
+                                </div>
+                            )}
+                            
+                            {/* Botão Atualizar Preços */}
+                            {selectedImport.items && selectedImport.items.length > 0 && (
+                                <div className="mt-6 flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                    <button
+                                        onClick={() => setSelectedImport(null)}
+                                        className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                    >
+                                        Fechar
+                                    </button>
+                                    <button
+                                        onClick={handleAtualizarPrecos}
+                                        disabled={isProcessing}
+                                        className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isProcessing ? 'Processando...' : '💰 Atualizar Preços Menores'}
+                                    </button>
                                 </div>
                             )}
                         </div>

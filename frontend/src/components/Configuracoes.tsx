@@ -1,0 +1,1068 @@
+import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { configuracoesService, type ConfiguracaoSistema, type Usuario } from '../services/configuracoesService';
+import { ThemeContext } from '../contexts/ThemeContext';
+
+// ==================== ICONS ====================
+const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+);
+
+const PaintBrushIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+    </svg>
+);
+
+const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+    </svg>
+);
+
+const BuildingOfficeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+    </svg>
+);
+
+const MagnifyingGlassIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+    </svg>
+);
+
+const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+);
+
+const PhotoIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+    </svg>
+);
+
+const SunIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+    </svg>
+);
+
+const MoonIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+    </svg>
+);
+
+const ComputerDesktopIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+    </svg>
+);
+
+const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+);
+
+const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+);
+
+interface ConfiguracoesProps {
+    toggleSidebar: () => void;
+}
+
+type TabType = 'aparencia' | 'usuarios' | 'empresa' | 'fiscal';
+
+const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
+    const themeContext = useContext(ThemeContext);
+    const [abaAtiva, setAbaAtiva] = useState<TabType>('aparencia');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    
+    // Estados de Configuração
+    const [config, setConfig] = useState<ConfiguracaoSistema | null>(null);
+    const [formConfig, setFormConfig] = useState({
+        temaPreferido: 'light' as 'light' | 'dark' | 'system',
+        logoUrl: '',
+        nomeEmpresa: 'S3E Engenharia',
+        emailContato: '',
+        telefoneContato: ''
+    });
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = useState<string>('');
+    
+    // Estados de Configuração Fiscal
+    const [certificadoPFX, setCertificadoPFX] = useState<string>('');
+    const [certificadoPFXFile, setCertificadoPFXFile] = useState<File | null>(null);
+    const [senhaCertificado, setSenhaCertificado] = useState('');
+    const [ambienteFiscal, setAmbienteFiscal] = useState<'1' | '2'>('2'); // 1=Produção, 2=Homologação
+
+    // Estados de Usuários
+    const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+    const [searchUsuarios, setSearchUsuarios] = useState('');
+    const [roleFilter, setRoleFilter] = useState<string>('Todos');
+    const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+    
+    // Estados do Modal de Criar Usuário
+    const [isModalUsuarioOpen, setIsModalUsuarioOpen] = useState(false);
+    const [novoUsuario, setNovoUsuario] = useState({
+        email: '',
+        password: '',
+        name: '',
+        role: 'user'
+    });
+    const [creatingUser, setCreatingUser] = useState(false);
+
+    useEffect(() => {
+        loadConfiguracoes();
+        if (abaAtiva === 'usuarios') {
+            loadUsuarios();
+        }
+    }, [abaAtiva]);
+
+    const loadConfiguracoes = async () => {
+        try {
+            setLoading(true);
+            const response = await configuracoesService.getConfiguracoes();
+            
+            if (response.success && response.data) {
+                setConfig(response.data);
+                setFormConfig({
+                    temaPreferido: response.data.temaPreferido as 'light' | 'dark' | 'system',
+                    logoUrl: response.data.logoUrl || '',
+                    nomeEmpresa: response.data.nomeEmpresa,
+                    emailContato: response.data.emailContato || '',
+                    telefoneContato: response.data.telefoneContato || ''
+                });
+                // Aplicar tema salvo
+                if (themeContext) {
+                    themeContext.setTheme(response.data.temaPreferido as any);
+                }
+                // Setar preview da logo
+                setLogoPreview(response.data.logoUrl || '');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar configurações:', error);
+            alert('❌ Erro ao carregar configurações');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadUsuarios = async () => {
+        try {
+            setLoadingUsuarios(true);
+            const response = await configuracoesService.listarUsuarios();
+            
+            console.log('📥 Resposta de listarUsuarios:', response);
+            
+            if (response.success && response.data) {
+                // Garantir que sempre seja um array
+                const usuariosArray = Array.isArray(response.data) ? response.data : [];
+                console.log('👥 Usuários carregados:', usuariosArray);
+                setUsuarios(usuariosArray);
+            } else {
+                console.warn('⚠️ Resposta sem dados, inicializando array vazio');
+                setUsuarios([]);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar usuários:', error);
+            setUsuarios([]); // Garantir array vazio em caso de erro
+            alert('❌ Erro ao carregar usuários');
+        } finally {
+            setLoadingUsuarios(false);
+        }
+    };
+
+    const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setLogoFile(file);
+            // Criar preview
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setLogoPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleSalvarConfiguracoes = async () => {
+        try {
+            setSaving(true);
+            
+            // Se houver um novo arquivo de logo, fazer upload primeiro
+            if (logoFile) {
+                const uploadResponse = await configuracoesService.uploadLogo(logoFile);
+                if (uploadResponse.success && uploadResponse.data) {
+                    // Atualizar formConfig com a nova URL
+                    formConfig.logoUrl = uploadResponse.data.logoUrl;
+                }
+            }
+            
+            const response = await configuracoesService.salvarConfiguracoes(formConfig);
+            
+            if (response.success) {
+                // Aplicar tema imediatamente
+                if (themeContext) {
+                    themeContext.setTheme(formConfig.temaPreferido);
+                }
+                alert('✅ Configurações salvas com sucesso!');
+                setLogoFile(null); // Limpar arquivo após salvar
+                await loadConfiguracoes();
+            } else {
+                alert(`❌ ${response.error || 'Erro ao salvar configurações'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao salvar configurações:', error);
+            alert('❌ Erro ao salvar configurações');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAtualizarRole = async (userId: string, newRole: string) => {
+        try {
+            const response = await configuracoesService.atualizarUsuarioRole(userId, newRole);
+            
+            if (response.success) {
+                alert('✅ Permissão atualizada com sucesso!');
+                await loadUsuarios();
+            } else {
+                alert(`❌ ${response.error || 'Erro ao atualizar permissão'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar role:', error);
+            alert('❌ Erro ao atualizar permissão');
+        }
+    };
+
+    const handleToggleStatus = async (userId: string, currentStatus: boolean) => {
+        try {
+            const newStatus = !currentStatus;
+            const response = await configuracoesService.toggleUsuarioStatus(userId, newStatus);
+            
+            if (response.success) {
+                alert(`✅ Usuário ${newStatus ? 'ativado' : 'desativado'} com sucesso!`);
+                await loadUsuarios();
+            } else {
+                alert(`❌ ${response.error || 'Erro ao alterar status'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao alterar status:', error);
+            alert('❌ Erro ao alterar status do usuário');
+        }
+    };
+
+    const handleOpenModalUsuario = () => {
+        setNovoUsuario({
+            email: '',
+            password: '',
+            name: '',
+            role: 'user'
+        });
+        setIsModalUsuarioOpen(true);
+    };
+
+    const handleCloseModalUsuario = () => {
+        setIsModalUsuarioOpen(false);
+        setNovoUsuario({
+            email: '',
+            password: '',
+            name: '',
+            role: 'user'
+        });
+    };
+
+    const handleCriarUsuario = async () => {
+        try {
+            // Validações
+            if (!novoUsuario.email || !novoUsuario.password || !novoUsuario.name || !novoUsuario.role) {
+                alert('❌ Todos os campos são obrigatórios');
+                return;
+            }
+
+            if (novoUsuario.password.length < 6) {
+                alert('❌ A senha deve ter pelo menos 6 caracteres');
+                return;
+            }
+
+            setCreatingUser(true);
+            const response = await configuracoesService.criarUsuario(novoUsuario);
+
+            if (response.success) {
+                alert('✅ Usuário criado com sucesso!');
+                handleCloseModalUsuario();
+                await loadUsuarios();
+            } else {
+                alert(`❌ ${response.error || 'Erro ao criar usuário'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao criar usuário:', error);
+            alert('❌ Erro ao criar usuário');
+        } finally {
+            setCreatingUser(false);
+        }
+    };
+
+    const usuariosFiltrados = useMemo(() => {
+        return usuarios.filter(u => {
+            const matchesSearch = !searchUsuarios || 
+                u.name.toLowerCase().includes(searchUsuarios.toLowerCase()) ||
+                u.email.toLowerCase().includes(searchUsuarios.toLowerCase());
+            
+            const matchesRole = roleFilter === 'Todos' || u.role === roleFilter;
+            
+            return matchesSearch && matchesRole;
+        });
+    }, [usuarios, searchUsuarios, roleFilter]);
+
+    const getRoleBadgeClass = (role: string) => {
+        switch (role) {
+            case 'admin': return 'bg-purple-100 text-purple-800 ring-1 ring-purple-200';
+            case 'gerente': return 'bg-blue-100 text-blue-800 ring-1 ring-blue-200';
+            case 'orcamentista': return 'bg-green-100 text-green-800 ring-1 ring-green-200';
+            case 'compras': return 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200';
+            case 'engenheiro': return 'bg-cyan-100 text-cyan-800 ring-1 ring-cyan-200';
+            case 'eletricista': return 'bg-orange-100 text-orange-800 ring-1 ring-orange-200';
+            default: return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+        }
+    };
+
+    const getRoleLabel = (role: string) => {
+        const labels: Record<string, string> = {
+            'admin': 'Administrador',
+            'gerente': 'Gerente',
+            'orcamentista': 'Orçamentista',
+            'compras': 'Compras',
+            'engenheiro': 'Engenheiro Elétrico',
+            'eletricista': 'Eletricista',
+            'user': 'Usuário'
+        };
+        return labels[role] || role;
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando configurações...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen p-4 sm:p-8 bg-gray-50 dark:bg-dark-bg">
+            {/* Header */}
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 dark:text-dark-text-secondary rounded-xl hover:bg-white dark:hover:bg-dark-card hover:shadow-md transition-all">
+                        <Bars3Icon className="w-6 h-6" />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 dark:text-dark-text tracking-tight">Configurações</h1>
+                        <p className="text-sm sm:text-base text-gray-500 dark:text-dark-text-secondary mt-1">Personalize o sistema e gerencie usuários</p>
+                    </div>
+                </div>
+            </header>
+
+            {/* Navegação por Tabs */}
+            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-md border border-gray-200 dark:border-dark-border mb-6">
+                <div className="flex border-b border-gray-200 dark:border-dark-border">
+                    <button
+                        onClick={() => setAbaAtiva('aparencia')}
+                        className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all ${
+                            abaAtiva === 'aparencia'
+                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:text-gray-900 dark:hover:text-dark-text hover:bg-gray-50 dark:hover:bg-dark-bg'
+                        }`}
+                    >
+                        <PaintBrushIcon className="w-5 h-5" />
+                        Aparência e Tema
+                    </button>
+                    <button
+                        onClick={() => setAbaAtiva('usuarios')}
+                        className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all ${
+                            abaAtiva === 'usuarios'
+                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:text-gray-900 dark:hover:text-dark-text hover:bg-gray-50 dark:hover:bg-dark-bg'
+                        }`}
+                    >
+                        <UsersIcon className="w-5 h-5" />
+                        Gerenciamento de Usuários
+                    </button>
+                    <button
+                        onClick={() => setAbaAtiva('empresa')}
+                        className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all ${
+                            abaAtiva === 'empresa'
+                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:text-gray-900 dark:hover:text-dark-text hover:bg-gray-50 dark:hover:bg-dark-bg'
+                        }`}
+                    >
+                        <BuildingOfficeIcon className="w-5 h-5" />
+                        Informações da Empresa
+                    </button>
+                    <button
+                        onClick={() => setAbaAtiva('fiscal')}
+                        className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all ${
+                            abaAtiva === 'fiscal'
+                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:text-gray-900 dark:hover:text-dark-text hover:bg-gray-50 dark:hover:bg-dark-bg'
+                        }`}
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Config. Fiscal NF-e
+                    </button>
+                </div>
+
+                {/* Conteúdo das Abas */}
+                <div className="p-8">
+                    {/* ABA 1: APARÊNCIA E TEMA */}
+                    {abaAtiva === 'aparencia' && (
+                        <div className="space-y-8 animate-fade-in">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">Personalização Visual</h2>
+                                <p className="text-gray-600 dark:text-dark-text-secondary">Escolha o tema e personalize a aparência do sistema</p>
+                            </div>
+
+                            {/* Seleção de Tema */}
+                            <div className="bg-gray-50 dark:bg-dark-bg p-6 rounded-xl border border-gray-200 dark:border-dark-border">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-4">
+                                    Tema do Sistema
+                                </label>
+                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-6">
+                                    Escolha entre tema claro, escuro ou automático (segue preferência do sistema)
+                                </p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* Light Theme */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormConfig({...formConfig, temaPreferido: 'light'})}
+                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
+                                            formConfig.temaPreferido === 'light'
+                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
+                                        }`}
+                                    >
+                                        {formConfig.temaPreferido === 'light' && (
+                                            <div className="absolute top-2 right-2">
+                                                <CheckIcon className="w-5 h-5 text-indigo-600" />
+                                            </div>
+                                        )}
+                                        <div className="w-16 h-16 mb-3 bg-white rounded-full flex items-center justify-center shadow-md">
+                                            <SunIcon className="w-8 h-8 text-yellow-500" />
+                                        </div>
+                                        <span className="font-bold text-gray-900 dark:text-dark-text">Claro</span>
+                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Tema padrão</span>
+                                    </button>
+
+                                    {/* Dark Theme */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormConfig({...formConfig, temaPreferido: 'dark'})}
+                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
+                                            formConfig.temaPreferido === 'dark'
+                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
+                                        }`}
+                                    >
+                                        {formConfig.temaPreferido === 'dark' && (
+                                            <div className="absolute top-2 right-2">
+                                                <CheckIcon className="w-5 h-5 text-indigo-600" />
+                                            </div>
+                                        )}
+                                        <div className="w-16 h-16 mb-3 bg-slate-900 rounded-full flex items-center justify-center shadow-md">
+                                            <MoonIcon className="w-8 h-8 text-indigo-300" />
+                                        </div>
+                                        <span className="font-bold text-gray-900 dark:text-dark-text">Escuro</span>
+                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Fundo #0F172A</span>
+                                    </button>
+
+                                    {/* System Theme */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormConfig({...formConfig, temaPreferido: 'system'})}
+                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
+                                            formConfig.temaPreferido === 'system'
+                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
+                                        }`}
+                                    >
+                                        {formConfig.temaPreferido === 'system' && (
+                                            <div className="absolute top-2 right-2">
+                                                <CheckIcon className="w-5 h-5 text-indigo-600" />
+                                            </div>
+                                        )}
+                                        <div className="w-16 h-16 mb-3 bg-gradient-to-br from-white to-slate-900 rounded-full flex items-center justify-center shadow-md">
+                                            <ComputerDesktopIcon className="w-8 h-8 text-gray-700" />
+                                        </div>
+                                        <span className="font-bold text-gray-900 dark:text-dark-text">Automático</span>
+                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Segue o sistema</span>
+                                    </button>
+                                </div>
+
+                                {/* Informação sobre o tema atual */}
+                                {themeContext && (
+                                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <p className="text-sm text-blue-800">
+                                            <strong>Tema atual:</strong> {formConfig.temaPreferido === 'light' ? 'Claro' : formConfig.temaPreferido === 'dark' ? 'Escuro' : 'Automático'} 
+                                            {formConfig.temaPreferido === 'system' && ` (aplicando: ${themeContext.effectiveTheme === 'dark' ? 'Escuro' : 'Claro'})`}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Logo da Empresa */}
+                            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                                <label className="block text-sm font-bold text-gray-700 mb-3">
+                                    Logo/Perfil da Empresa
+                                </label>
+                                <div className="flex items-start gap-6">
+                                    {/* Preview da Logo */}
+                                    <div className="flex-shrink-0">
+                                        {logoPreview ? (
+                                            <img 
+                                                src={logoPreview} 
+                                                alt="Logo Preview" 
+                                                className="w-32 h-32 rounded-xl object-cover border-4 border-white shadow-lg"
+                                            />
+                                        ) : (
+                                            <div className="w-32 h-32 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center border-4 border-white shadow-lg">
+                                                <PhotoIcon className="w-12 h-12 text-indigo-400" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Input de Arquivo */}
+                                    <div className="flex-1">
+                                        <div className="relative">
+                                            <input
+                                                type="file"
+                                                id="logo-upload"
+                                                accept="image/jpeg,image/png,image/svg+xml,image/webp"
+                                                onChange={handleLogoChange}
+                                                className="hidden"
+                                            />
+                                            <label
+                                                htmlFor="logo-upload"
+                                                className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-indigo-500 cursor-pointer transition-colors bg-white"
+                                            >
+                                                <div className="text-center">
+                                                    <PhotoIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                                    <p className="text-sm font-medium text-gray-700">
+                                                        {logoFile ? logoFile.name : 'Clique para selecionar uma imagem'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        PNG, JPG, SVG, WEBP (máx. 5MB)
+                                                    </p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        {logoFile && (
+                                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                                <p className="text-sm text-green-800">
+                                                    ✅ Arquivo selecionado: <strong>{logoFile.name}</strong> ({(logoFile.size / 1024).toFixed(2)} KB)
+                                                </p>
+                                            </div>
+                                        )}
+                                        <p className="text-xs text-blue-600 mt-2">
+                                            💡 <strong>Dica:</strong> O arquivo será enviado ao salvar as configurações
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Botão de Salvar */}
+                            <div className="flex justify-end pt-6 border-t border-gray-200">
+                                <button
+                                    onClick={handleSalvarConfiguracoes}
+                                    disabled={saving}
+                                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Salvando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckIcon className="w-5 h-5 inline mr-2" />
+                                            Salvar Configurações
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ABA 2: GERENCIAMENTO DE USUÁRIOS */}
+                    {abaAtiva === 'usuarios' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Gerenciamento de Usuários</h2>
+                                    <p className="text-gray-600">Gerencie permissões e acessos dos usuários do sistema</p>
+                                </div>
+                                <button
+                                    onClick={handleOpenModalUsuario}
+                                    className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold flex items-center gap-2"
+                                >
+                                    <PlusIcon className="w-5 h-5" />
+                                    Criar Novo Usuário
+                                </button>
+                            </div>
+
+                            {/* Filtros */}
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <div className="flex-1 relative">
+                                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por nome ou email..."
+                                        value={searchUsuarios}
+                                        onChange={(e) => setSearchUsuarios(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <select
+                                    value={roleFilter}
+                                    onChange={(e) => setRoleFilter(e.target.value)}
+                                    className="px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                >
+                                    <option value="Todos">Todas as Funções</option>
+                                    <option value="admin">Administrador</option>
+                                    <option value="gerente">Gerente</option>
+                                    <option value="engenheiro">Engenheiro Elétrico</option>
+                                    <option value="orcamentista">Orçamentista</option>
+                                    <option value="compras">Compras</option>
+                                    <option value="eletricista">Eletricista</option>
+                                    <option value="user">Usuário</option>
+                                </select>
+                            </div>
+
+                            {/* Tabela de Usuários */}
+                            {loadingUsuarios ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                                    <p className="text-gray-600">Carregando usuários...</p>
+                                </div>
+                            ) : usuariosFiltrados.length === 0 ? (
+                                <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-16 text-center">
+                                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <UsersIcon className="w-10 h-10 text-gray-400" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum usuário encontrado</h3>
+                                    <p className="text-gray-500">
+                                        {searchUsuarios || roleFilter !== 'Todos'
+                                            ? 'Tente ajustar os filtros de busca'
+                                            : 'Nenhum usuário cadastrado no sistema'}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Usuário</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Email</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Função</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                {usuariosFiltrados.map((usuario) => (
+                                                    <tr key={usuario.id} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="font-semibold text-gray-900">{usuario.name}</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="text-sm text-gray-600">{usuario.email}</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                            <select
+                                                                value={usuario.role}
+                                                                onChange={(e) => handleAtualizarRole(usuario.id, e.target.value)}
+                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getRoleBadgeClass(usuario.role)} border-0 cursor-pointer`}
+                                                            >
+                                                                <option value="admin">Administrador</option>
+                                                                <option value="gerente">Gerente</option>
+                                                                <option value="engenheiro">Engenheiro Elétrico</option>
+                                                                <option value="orcamentista">Orçamentista</option>
+                                                                <option value="compras">Compras</option>
+                                                                <option value="eletricista">Eletricista</option>
+                                                                <option value="user">Usuário</option>
+                                                            </select>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                            <button
+                                                                onClick={() => handleToggleStatus(usuario.id, usuario.active)}
+                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                                                                    usuario.active
+                                                                        ? 'bg-green-100 text-green-800 ring-1 ring-green-200 hover:bg-green-200'
+                                                                        : 'bg-red-100 text-red-800 ring-1 ring-red-200 hover:bg-red-200'
+                                                                }`}
+                                                            >
+                                                                {usuario.active ? '✅ Ativo' : '❌ Inativo'}
+                                                            </button>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                            <div className="text-xs text-gray-500">
+                                                                {new Date(usuario.updatedAt).toLocaleDateString('pt-BR')}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    {/* Contador */}
+                                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                                        <p className="text-sm text-gray-600">
+                                            Exibindo <span className="font-bold text-gray-900">{usuariosFiltrados.length}</span> de <span className="font-bold text-gray-900">{usuarios.length}</span> usuários
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ABA 3: CONFIGURAÇÃO FISCAL NF-E */}
+                    {abaAtiva === 'fiscal' && (
+                        <div className="space-y-8 animate-fade-in">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">Configuração Fiscal para NF-e</h2>
+                                <p className="text-gray-600 dark:text-dark-text-secondary">Configure certificado digital e ambiente de emissão</p>
+                            </div>
+
+                            {/* Ambiente Fiscal */}
+                            <div className="bg-gray-50 dark:bg-dark-bg p-6 rounded-xl border border-gray-200 dark:border-dark-border">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-4">
+                                    Ambiente de Emissão
+                                </label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAmbienteFiscal('2')}
+                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
+                                            ambienteFiscal === '2'
+                                                ? 'border-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 ring-2 ring-yellow-200 dark:ring-yellow-800'
+                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
+                                        }`}
+                                    >
+                                        {ambienteFiscal === '2' && (
+                                            <div className="absolute top-2 right-2">
+                                                <CheckIcon className="w-5 h-5 text-yellow-600" />
+                                            </div>
+                                        )}
+                                        <div className="w-16 h-16 mb-3 bg-yellow-100 dark:bg-yellow-900/40 rounded-full flex items-center justify-center shadow-md">
+                                            <svg className="w-8 h-8 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                            </svg>
+                                        </div>
+                                        <span className="font-bold text-gray-900 dark:text-dark-text">Homologação</span>
+                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Ambiente de testes</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setAmbienteFiscal('1')}
+                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
+                                            ambienteFiscal === '1'
+                                                ? 'border-green-600 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-200 dark:ring-green-800'
+                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
+                                        }`}
+                                    >
+                                        {ambienteFiscal === '1' && (
+                                            <div className="absolute top-2 right-2">
+                                                <CheckIcon className="w-5 h-5 text-green-600" />
+                                            </div>
+                                        )}
+                                        <div className="w-16 h-16 mb-3 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center shadow-md">
+                                            <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <span className="font-bold text-gray-900 dark:text-dark-text">Produção</span>
+                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Ambiente oficial</span>
+                                    </button>
+                                </div>
+                                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                    <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                                        <strong>⚠️ Atenção:</strong> Use "Homologação" para testes. Apenas mude para "Produção" quando estiver pronto para emitir NF-es oficiais.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Certificado Digital PFX */}
+                            <div className="bg-gray-50 dark:bg-dark-bg p-6 rounded-xl border border-gray-200 dark:border-dark-border">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-3">
+                                    Certificado Digital A1 (.pfx ou .p12)
+                                </label>
+                                <div className="space-y-4">
+                                    {/* Upload de Certificado */}
+                                    <div>
+                                        <input
+                                            type="file"
+                                            id="pfx-upload"
+                                            accept=".pfx,.p12"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    setCertificadoPFXFile(file);
+                                                }
+                                            }}
+                                            className="hidden"
+                                        />
+                                        <label
+                                            htmlFor="pfx-upload"
+                                            className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 dark:border-dark-border rounded-xl hover:border-indigo-500 cursor-pointer transition-colors bg-white dark:bg-dark-card"
+                                        >
+                                            <div className="text-center">
+                                                <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <p className="text-sm font-medium text-gray-700 dark:text-dark-text">
+                                                    {certificadoPFXFile ? certificadoPFXFile.name : 'Clique para selecionar certificado PFX'}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+                                                    Formato: .pfx ou .p12 (máx. 5MB)
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* Senha do Certificado */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                            Senha do Certificado
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={senhaCertificado}
+                                            onChange={(e) => setSenhaCertificado(e.target.value)}
+                                            placeholder="Digite a senha do certificado"
+                                            className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                        />
+                                    </div>
+
+                                    {/* Informação de Segurança */}
+                                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                        <h4 className="font-bold text-blue-800 dark:text-blue-400 mb-2 text-sm">🔒 Segurança do Certificado</h4>
+                                        <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                                            <li>• O certificado será armazenado de forma segura no servidor</li>
+                                            <li>• A senha será criptografada antes do armazenamento</li>
+                                            <li>• Apenas administradores podem gerenciar certificados</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Botão de Salvar */}
+                            <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-dark-border">
+                                <button
+                                    onClick={handleSalvarConfiguracoes}
+                                    disabled={saving}
+                                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold disabled:opacity-50"
+                                >
+                                    {saving ? 'Salvando...' : 'Salvar Configurações Fiscais'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ABA 4: INFORMAÇÕES DA EMPRESA */}
+                    {abaAtiva === 'empresa' && (
+                        <div className="space-y-8 animate-fade-in">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 mb-2">Informações da Empresa</h2>
+                                <p className="text-gray-600">Dados básicos de contato e identificação</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Nome da Empresa *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formConfig.nomeEmpresa}
+                                        onChange={(e) => setFormConfig({...formConfig, nomeEmpresa: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="S3E Engenharia"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Email de Contato
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={formConfig.emailContato}
+                                        onChange={(e) => setFormConfig({...formConfig, emailContato: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="contato@s3e.com.br"
+                                    />
+                                </div>
+
+                                <div className="lg:col-span-2">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Telefone de Contato
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={formConfig.telefoneContato}
+                                        onChange={(e) => setFormConfig({...formConfig, telefoneContato: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="(11) 98765-4321"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Botão de Salvar */}
+                            <div className="flex justify-end pt-6 border-t border-gray-200">
+                                <button
+                                    onClick={handleSalvarConfiguracoes}
+                                    disabled={saving}
+                                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold disabled:opacity-50"
+                                >
+                                    {saving ? 'Salvando...' : 'Salvar Informações'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* MODAL DE CRIAR USUÁRIO */}
+            {isModalUsuarioOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-scale-in">
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                            <h3 className="text-2xl font-bold text-gray-900">Criar Novo Usuário</h3>
+                            <button
+                                onClick={handleCloseModalUsuario}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <XMarkIcon className="w-6 h-6 text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-4">
+                            {/* Nome */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nome Completo *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={novoUsuario.name}
+                                    onChange={(e) => setNovoUsuario({...novoUsuario, name: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="João da Silva"
+                                />
+                            </div>
+
+                            {/* Email */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Email *
+                                </label>
+                                <input
+                                    type="email"
+                                    value={novoUsuario.email}
+                                    onChange={(e) => setNovoUsuario({...novoUsuario, email: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="joao@s3e.com"
+                                />
+                            </div>
+
+                            {/* Senha */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Senha *
+                                </label>
+                                <input
+                                    type="password"
+                                    value={novoUsuario.password}
+                                    onChange={(e) => setNovoUsuario({...novoUsuario, password: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="••••••••"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Mínimo de 6 caracteres</p>
+                            </div>
+
+                            {/* Role */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Função/Nível de Acesso *
+                                </label>
+                                <select
+                                    value={novoUsuario.role}
+                                    onChange={(e) => setNovoUsuario({...novoUsuario, role: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                >
+                                    <option value="user">Usuário</option>
+                                    <option value="eletricista">Eletricista</option>
+                                    <option value="compras">Compras</option>
+                                    <option value="orcamentista">Orçamentista</option>
+                                    <option value="engenheiro">Engenheiro Elétrico</option>
+                                    <option value="gerente">Gerente</option>
+                                    <option value="admin">Administrador</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex gap-3 p-6 border-t border-gray-200">
+                            <button
+                                onClick={handleCloseModalUsuario}
+                                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleCriarUsuario}
+                                disabled={creatingUser}
+                                className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {creatingUser ? (
+                                    <>
+                                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Criando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckIcon className="w-5 h-5 inline mr-2" />
+                                        Criar Usuário
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default Configuracoes;
+

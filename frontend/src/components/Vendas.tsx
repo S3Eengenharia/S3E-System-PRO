@@ -44,7 +44,7 @@ const DocumentTextIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 const CreditCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25a3 3 0 106 0m-6 0a3 3 0 016 0m6 0a3 3 0 106 0m-6 0a3 3 0 016 0m6 0a3 3 0 106 0m-6 0a3 3 0 016 0m-6-3a3 3 0 106 0m-6 0a3 3 0 616 0" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h16.5M6 18h12" />
     </svg>
 );
 

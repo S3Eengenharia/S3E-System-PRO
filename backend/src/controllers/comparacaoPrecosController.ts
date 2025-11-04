@@ -10,7 +10,7 @@ const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
       cb(null, true);
     } else {
@@ -23,20 +23,28 @@ export class ComparacaoPrecosController {
   /**
    * Upload e processamento de arquivo CSV
    */
-  async uploadCSV(req: Request, res: Response) {
+  async uploadCSV(req: Request, res: Response): Promise<void> {
     try {
+      console.log('📥 Upload CSV - Body:', req.body);
+      console.log('📥 Upload CSV - File:', req.file ? { name: req.file.originalname, size: req.file.size } : 'Nenhum arquivo');
+
       if (!req.file) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Nenhum arquivo CSV foi enviado'
         });
+        return;
       }
+
+      const fornecedor = req.body.fornecedor || req.body.supplierName || 'Fornecedor não informado';
+      console.log('🏢 Fornecedor:', fornecedor);
 
       // Converter buffer para string
       const csvContent = req.file.buffer.toString('utf-8');
+      console.log('📄 Primeiras 200 caracteres do CSV:', csvContent.substring(0, 200));
       
       // Processar CSV
-      const result = await comparacaoPrecosService.processarCSV(csvContent);
+      const result = await comparacaoPrecosService.processarCSV(csvContent, fornecedor);
 
       res.json({
         success: true,
@@ -45,7 +53,7 @@ export class ComparacaoPrecosController {
       });
 
     } catch (error) {
-      console.error('Erro no upload CSV:', error);
+      console.error('❌ Erro no upload CSV:', error);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Erro interno do servidor'
@@ -56,15 +64,16 @@ export class ComparacaoPrecosController {
   /**
    * Buscar histórico de preços de um material
    */
-  async buscarHistoricoPrecos(req: Request, res: Response) {
+  async buscarHistoricoPrecos(req: Request, res: Response): Promise<void> {
     try {
       const { codigo } = req.params;
 
       if (!codigo) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Código do material é obrigatório'
         });
+        return;
       }
 
       const historico = await comparacaoPrecosService.buscarHistoricoPrecos(codigo);
@@ -87,15 +96,16 @@ export class ComparacaoPrecosController {
   /**
    * Atualizar preços baseado na comparação
    */
-  async atualizarPrecos(req: Request, res: Response) {
+  async atualizarPrecos(req: Request, res: Response): Promise<void> {
     try {
       const { items } = req.body;
 
       if (!items || !Array.isArray(items)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Lista de itens é obrigatória'
         });
+        return;
       }
 
       const result = await comparacaoPrecosService.atualizarPrecos(items);
@@ -125,13 +135,14 @@ export class ComparacaoPrecosController {
   /**
    * Validar estrutura do CSV antes do processamento
    */
-  async validarCSV(req: Request, res: Response) {
+  async validarCSV(req: Request, res: Response): Promise<void> {
     try {
       if (!req.file) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Nenhum arquivo CSV foi enviado'
         });
+        return;
       }
 
       const csvContent = req.file.buffer.toString('utf-8');
@@ -144,18 +155,20 @@ export class ComparacaoPrecosController {
       });
 
       if (!records.length) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'CSV vazio ou sem dados válidos'
         });
+        return;
       }
 
       const requiredColumns = ['codigo', 'nome', 'unidade', 'quantidade', 'preco_unitario'];
-      const csvColumns = Object.keys(records[0]);
+      const firstRecord = records[0] as Record<string, unknown>;
+      const csvColumns = Object.keys(firstRecord);
       const missingColumns = requiredColumns.filter(col => !csvColumns.includes(col));
 
       if (missingColumns.length > 0) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: `Colunas obrigatórias não encontradas: ${missingColumns.join(', ')}`,
           data: {
@@ -164,6 +177,7 @@ export class ComparacaoPrecosController {
             missing: missingColumns
           }
         });
+        return;
       }
 
       res.json({

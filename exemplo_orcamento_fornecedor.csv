@@ -2,11 +2,10 @@ codigo,nome,unidade,quantidade,preco_unitario
 MAT-001,Cabo 2.5mmÂ² - Rolo 100m,Rolo,5,295.00
 MAT-002,Disjuntor 20A Bipolar,Unidade,10,42.50
 MAT-003,Tomada 2P+T 10A,Unidade,20,12.50
-MAT-004,Eletroduto 3/4" - 3m,Barra,30,18.90
-MAT-005,Quadro DistribuiÃ§Ã£o 12 Disjuntores,Unidade,2,380.00
+"MAT-004,Eletroduto 3/4"" - 3m,Barra,30,18.90"
+MAT-005,Quadro Distribuição 12 Disjuntores,Unidade,2,380.00
 MAT-006,Interruptor Simples 10A,Unidade,15,8.75
 MAT-007,Caixa de Luz 4x2,Unidade,25,3.50
 MAT-008,Fita Isolante 19mm x 20m,Unidade,10,6.90
-MAT-009,AbraÃ§adeira PlÃ¡stica 200mm,Pacote,5,15.80
+MAT-009,Abraçadeira Plastica 200mm,Pacote,5,15.80
 MAT-010,Disjuntor 32A Bipolar,Unidade,8,55.00
-

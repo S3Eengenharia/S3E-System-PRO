@@ -47,3 +47,4 @@ coverage/
 
 # Optional eslint cache
 .eslintcache
+/generated/prisma

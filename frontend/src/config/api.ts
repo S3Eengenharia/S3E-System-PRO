@@ -48,7 +48,5 @@ export const ENDPOINTS = {
     FINANCEIRO: '/api/relatorios/financeiro',
     FINANCEIRO_RESUMO: '/api/relatorios/financeiro/resumo',
   },
-  COMPARACAO_PRECOS: {
-    UPLOAD_CSV: '/api/comparacao-precos/upload-csv',
-  },
+  COMPARACAO_PRECOS: '/api/comparacao-precos',
 };

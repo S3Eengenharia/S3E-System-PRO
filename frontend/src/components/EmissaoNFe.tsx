@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { empresaFiscalService, type EmpresaFiscal } from '../services/empresaFiscalService';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -35,8 +36,10 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     const [serie, setSerie] = useState('1');
     
     // Estados para Configuração de Empresas
-    const [empresas, setEmpresas] = useState<any[]>([]);
+    const [empresas, setEmpresas] = useState<EmpresaFiscal[]>([]);
+    const [loadingEmpresas, setLoadingEmpresas] = useState(false);
     const [isModalEmpresaOpen, setIsModalEmpresaOpen] = useState(false);
+    const [editandoEmpresaId, setEditandoEmpresaId] = useState<string | null>(null);
     const [empresaForm, setEmpresaForm] = useState({
         cnpj: '',
         inscricaoEstadual: '',
@@ -55,6 +58,29 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     });
     const [certificadoFile, setCertificadoFile] = useState<File | null>(null);
     const [certificadoSenha, setCertificadoSenha] = useState('');
+    const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
+
+    // Carregar empresas ao montar componente
+    useEffect(() => {
+        if (activeSection === 'configurar') {
+            loadEmpresas();
+        }
+    }, [activeSection]);
+
+    const loadEmpresas = async () => {
+        try {
+            setLoadingEmpresas(true);
+            const response = await empresaFiscalService.listar();
+            if (response.success && response.data) {
+                setEmpresas(response.data);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar empresas:', error);
+            alert('❌ Erro ao carregar empresas fiscais');
+        } finally {
+            setLoadingEmpresas(false);
+        }
+    };
     
     // Mock de projetos aprovados
     const projetosAprovados = [
@@ -87,24 +113,99 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
 
     const handleCloseModalEmpresa = () => {
         setIsModalEmpresaOpen(false);
+        setEditandoEmpresaId(null);
+        setCertificadoFile(null);
+        setCertificadoSenha('');
     };
 
-    const handleSalvarEmpresa = () => {
-        // TODO: Conectar com API
-        const novaEmpresa = {
-            id: Date.now().toString(),
-            ...empresaForm,
-            certificadoValidade: certificadoFile ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR') : null
-        };
-        
-        setEmpresas([...empresas, novaEmpresa]);
-        handleCloseModalEmpresa();
-        alert('Empresa cadastrada com sucesso!');
+    const handleEditarEmpresa = (empresa: EmpresaFiscal) => {
+        setEmpresaForm({
+            cnpj: empresa.cnpj,
+            inscricaoEstadual: empresa.inscricaoEstadual,
+            razaoSocial: empresa.razaoSocial,
+            nomeFantasia: empresa.nomeFantasia || '',
+            endereco: empresa.endereco,
+            numero: empresa.numero,
+            complemento: empresa.complemento || '',
+            bairro: empresa.bairro,
+            cidade: empresa.cidade,
+            estado: empresa.estado,
+            cep: empresa.cep,
+            telefone: empresa.telefone || '',
+            email: empresa.email || '',
+            regimeTributario: empresa.regimeTributario
+        });
+        setEditandoEmpresaId(empresa.id);
+        setCertificadoFile(null);
+        setCertificadoSenha('');
+        setIsModalEmpresaOpen(true);
     };
 
-    const handleDeleteEmpresa = (id: string) => {
+    const handleSalvarEmpresa = async () => {
+        try {
+            // Validações
+            if (!empresaForm.cnpj || !empresaForm.razaoSocial || !empresaForm.inscricaoEstadual) {
+                alert('❌ Preencha todos os campos obrigatórios');
+                return;
+            }
+
+            setSalvandoEmpresa(true);
+
+            // Converter certificado para Base64 se fornecido
+            let certificadoBase64 = undefined;
+            if (certificadoFile && certificadoSenha) {
+                certificadoBase64 = await empresaFiscalService.converterCertificadoParaBase64(certificadoFile);
+            }
+
+            const dataToSave = {
+                ...empresaForm,
+                certificadoBase64,
+                certificadoSenha: certificadoSenha || undefined
+            };
+
+            if (editandoEmpresaId) {
+                // Atualizar empresa existente
+                const response = await empresaFiscalService.atualizar(editandoEmpresaId, dataToSave);
+                if (response.success) {
+                    alert('✅ Empresa atualizada com sucesso!');
+                    await loadEmpresas();
+                    handleCloseModalEmpresa();
+                } else {
+                    alert(`❌ ${response.error || 'Erro ao atualizar empresa'}`);
+                }
+            } else {
+                // Criar nova empresa
+                const response = await empresaFiscalService.criar(dataToSave);
+                if (response.success) {
+                    alert('✅ Empresa configurada com sucesso!');
+                    await loadEmpresas();
+                    handleCloseModalEmpresa();
+                } else {
+                    alert(`❌ ${response.error || 'Erro ao criar empresa'}`);
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao salvar empresa:', error);
+            alert('❌ Erro ao salvar empresa fiscal');
+        } finally {
+            setSalvandoEmpresa(false);
+        }
+    };
+
+    const handleDeleteEmpresa = async (id: string) => {
         if (confirm('Deseja realmente excluir esta configuração fiscal?')) {
-            setEmpresas(empresas.filter(e => e.id !== id));
+            try {
+                const response = await empresaFiscalService.deletar(id);
+                if (response.success) {
+                    alert('✅ Empresa excluída com sucesso!');
+                    await loadEmpresas();
+                } else {
+                    alert(`❌ ${response.error || 'Erro ao excluir empresa'}`);
+                }
+            } catch (error) {
+                console.error('Erro ao excluir empresa:', error);
+                alert('❌ Erro ao excluir empresa fiscal');
+            }
         }
     };
 
@@ -377,7 +478,12 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                     </div>
 
                     {/* Lista de Empresas Configuradas */}
-                    {empresas.length === 0 ? (
+                    {loadingEmpresas ? (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                            <p className="text-gray-600">Carregando empresas cadastradas...</p>
+                        </div>
+                    ) : empresas.length === 0 ? (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                             <svg className="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -440,14 +546,23 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                             </p>
                                         </div>
 
-                                        {/* Botão Deletar */}
-                                        <div className="pt-4 border-t border-gray-200 flex justify-end">
+                                        {/* Botões de Ação */}
+                                        <div className="pt-4 border-t border-gray-200 flex justify-between">
+                                            <button
+                                                onClick={() => handleEditarEmpresa(empresa)}
+                                                className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                                Editar
+                                            </button>
                                             <button
                                                 onClick={() => handleDeleteEmpresa(empresa.id)}
                                                 className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
                                             >
                                                 <TrashIcon className="w-4 h-4" />
-                                                Excluir Configuração
+                                                Excluir
                                             </button>
                                         </div>
                                     </div>
@@ -469,7 +584,9 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                             </svg>
                                         </div>
                                         <div>
-                                            <h2 className="text-2xl font-bold text-white">Configuração Fiscal</h2>
+                                            <h2 className="text-2xl font-bold text-white">
+                                                {editandoEmpresaId ? 'Editar' : 'Nova'} Configuração Fiscal
+                                            </h2>
                                             <p className="text-sm text-white/80">Dados da empresa para emissão de NF-e</p>
                                         </div>
                                     </div>
@@ -498,9 +615,13 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                                     value={empresaForm.cnpj}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, cnpj: e.target.value})}
                                                     placeholder="00.000.000/0000-00"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                     required
+                                                    disabled={!!editandoEmpresaId}
                                                 />
+                                                {editandoEmpresaId && (
+                                                    <p className="text-xs text-gray-500 mt-1">⚠️ CNPJ não pode ser alterado</p>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Inscrição Estadual *</label>
@@ -730,9 +851,17 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                     </button>
                                     <button
                                         onClick={handleSalvarEmpresa}
-                                        className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+                                        disabled={salvandoEmpresa}
+                                        className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Salvar Configuração
+                                        {salvandoEmpresa ? (
+                                            <>
+                                                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Salvando...
+                                            </>
+                                        ) : (
+                                            editandoEmpresaId ? 'Atualizar Configuração' : 'Salvar Configuração'
+                                        )}
                                     </button>
                                 </div>
                             </div>

@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { CatalogItem, CatalogItemType, Product, Kit, KitProduct, Service, KitService, ServiceType, KitConfiguration, MaterialItem } from '../types';
 import { axiosApiService } from '../services/axiosApi';
-import { servicosService, type Servico } from '../services/servicosService';
 import { ENDPOINTS } from '../config/api';
+import CriacaoQuadroModular from './CriacaoQuadroModular';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -71,6 +71,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToEdit, setItemToEdit] = useState<CatalogItem | null>(null);
     const [itemToDelete, setItemToDelete] = useState<CatalogItem | null>(null);
+    const [showQuadroModal, setShowQuadroModal] = useState(false);
 
     const loadCatalogItems = async () => {
         try {
@@ -79,9 +80,6 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             
             // Carregar materiais
             const materiaisResponse = await axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS);
-            
-            // Carregar serviços
-            const servicosResponse = await servicosService.listar();
             
             const catalogItems: CatalogItem[] = [];
             
@@ -100,25 +98,6 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                         isActive: material.ativo !== false,
                         createdAt: material.createdAt || new Date().toISOString(),
                         updatedAt: material.updatedAt || new Date().toISOString()
-                    });
-                });
-            }
-            
-            // Converter serviços em itens do catálogo
-            if (servicosResponse.success && servicosResponse.data) {
-                const servicos = Array.isArray(servicosResponse.data) ? servicosResponse.data : [];
-                servicos.forEach((servico: Servico) => {
-                    catalogItems.push({
-                        id: servico.id,
-                        name: servico.nome,
-                        description: servico.descricao || '',
-                        type: CatalogItemType.Servico,
-                        price: servico.preco,
-                        category: servico.tipo || 'Serviço',
-                        imageUrl: undefined,
-                        isActive: servico.ativo !== false,
-                        createdAt: servico.createdAt || new Date().toISOString(),
-                        updatedAt: servico.updatedAt || new Date().toISOString()
                     });
                 });
             }
@@ -284,13 +263,22 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                         <p className="text-sm sm:text-base text-gray-500 mt-1">Gerencie produtos, kits e serviços</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
-                >
-                    <PlusIcon className="w-5 h-5" />
-                    Novo Item
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => setShowQuadroModal(true)}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
+                    >
+                        <Squares2x2Icon className="w-5 h-5" />
+                        Criar Quadro Elétrico
+                    </button>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
+                    >
+                        <PlusIcon className="w-5 h-5" />
+                        Novo Item
+                    </button>
+                </div>
             </header>
 
             {/* Error Message */}
@@ -645,6 +633,16 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                     </div>
                 </div>
             )}
+            
+            {/* Modal de Criação de Quadro Elétrico */}
+            <CriacaoQuadroModular
+                isOpen={showQuadroModal}
+                onClose={() => setShowQuadroModal(false)}
+                onSave={() => {
+                    setShowQuadroModal(false);
+                    loadCatalogItems();
+                }}
+            />
         </div>
     );
 };

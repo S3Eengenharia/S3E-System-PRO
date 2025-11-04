@@ -32,6 +32,9 @@ import historicoRoutes from './routes/historico.js';
 import nfeRoutes from './routes/nfe.js';
 import empresasRoutes from './routes/empresas.js';
 import dashboardRoutes from './routes/dashboard.js';
+import quadrosRoutes from './routes/quadros.routes.js';
+import configuracaoRoutes from './routes/configuracao.routes.js';
+import obraRoutes from './routes/obra.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,8 +46,40 @@ app.use(cors({
   credentials: true
 }));
 app.use(morgan('dev'));
-app.use(express.json({ limit: '50mb' })); // Aumentado para suportar XMLs grandes
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Servir arquivos estáticos (uploads)
+app.use('/uploads', express.static('uploads'));
+
+// EXCEÇÃO: Não aplicar body parsers em rotas com upload de arquivos (multer)
+// Lista de rotas que usam multipart/form-data
+const uploadRoutes = [
+  '/api/comparacao-precos/upload-csv',
+  '/api/comparacao-precos/validate-csv',
+  '/api/configuracoes/upload-logo'
+];
+
+// Body parsers COM EXCEÇÃO para rotas de upload
+app.use((req, res, next) => {
+  // Debug: ver qual é o path/url da requisição
+  if (req.url.includes('comparacao-precos') || req.url.includes('upload')) {
+    console.log(`🔍 DEBUG Upload - URL: ${req.url}, Path: ${req.path}, Method: ${req.method}`);
+  }
+  
+  // Se a rota está na lista de upload, pula os body parsers
+  // Usar req.url em vez de req.path pois req.path pode não incluir o prefixo completo
+  const isUploadRoute = uploadRoutes.some(route => req.url.includes(route.split('/api')[1]));
+  
+  if (isUploadRoute) {
+    console.log(`⚠️  PULANDO body parsers para rota de upload: ${req.url}`);
+    return next();
+  }
+  
+  // Aplica body parsers normalmente
+  express.json({ limit: '50mb' })(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
+  });
+});
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -79,7 +114,10 @@ app.get('/api', (_req, res) => {
       historico: '/api/historico',
       nfe: '/api/nfe',
       empresas: '/api/empresas',
-      dashboard: '/api/dashboard'
+      dashboard: '/api/dashboard',
+      quadros: '/api/quadros',
+      configuracoes: '/api/configuracoes',
+      obras: '/api/obras'
     }
   });
 });
@@ -109,6 +147,9 @@ app.use('/api/historico', historicoRoutes);
 app.use('/api/nfe', nfeRoutes);
 app.use('/api/empresas', empresasRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/quadros', quadrosRoutes);
+app.use('/api/configuracoes', configuracaoRoutes);
+app.use('/api/obras', obraRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

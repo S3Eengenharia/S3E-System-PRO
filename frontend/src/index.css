@@ -167,46 +167,27 @@ button:active {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* Dark Theme Styles */
-body.dark {
-    background: linear-gradient(to bottom right, #0a1a2f, #000000);
-    min-height: 100vh;
-  }
-  
-  body.dark .bg-brand-gray-50 {
-    background: transparent;
-  }
-  
-  body.dark .bg-white {
-    background-color: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(10px);
-  }
-  
-  body.dark .text-brand-gray-800,
-  body.dark .text-brand-gray-700,
-  body.dark .text-brand-gray-600 {
-    color: #e2e8f0;
-  }
-  
-  body.dark .text-brand-gray-500,
-  body.dark .text-brand-gray-400 {
-    color: #94a3b8;
-  }
-  
-  body.dark .border-brand-gray-200,
-  body.dark .border-brand-gray-300 {
-    border-color: rgba(51, 65, 85, 0.5);
-  }
-  
-  body.dark input,
-  body.dark textarea,
-  body.dark select {
-    background-color: rgba(30, 41, 59, 0.5);
-    color: #e2e8f0;
-    border-color: rgba(71, 85, 105, 0.5);
-  }
-  
-  body.dark input::placeholder,
-  body.dark textarea::placeholder {
-    color: #64748b;
-  }
+/* ========== DARK THEME STYLES ========== */
+/* Aplica quando a classe 'dark' está no <html> (via Tailwind) */
+.dark body {
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
+  min-height: 100vh;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+/* Scrollbar no dark mode */
+.dark *::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%);
+  border-color: #1e293b;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+}
