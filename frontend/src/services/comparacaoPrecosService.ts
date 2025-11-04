@@ -1,99 +1,46 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
-export interface ComparacaoPreco {
+export interface ProcessedItem {
   codigo: string;
-  descricao: string;
+  nome: string;
   unidade: string;
-  precoAtual: number;
-  precoFornecedor: number;
-  diferenca: number;
-  percentual: number;
-  fornecedor: string;
+  quantidade: number;
+  preco_unitario: number;
+  preco_atual?: number;
+  diferenca_percentual?: number;
+  status: 'Lower' | 'Higher' | 'Equal' | 'NoHistory';
 }
 
-export interface HistoricoPreco {
-  data: string;
-  preco: number;
+export interface ProcessedCSVResult {
   fornecedor: string;
-}
-
-export interface ResultadoValidacao {
-  valido: boolean;
-  erros: string[];
-  avisos: string[];
-  preview: ComparacaoPreco[];
+  items: ProcessedItem[];
+  resumo: {
+    total_itens: number;
+    menores: number;
+    maiores: number;
+    iguais: number;
+    sem_historico: number;
+  };
 }
 
 class ComparacaoPrecosService {
-  /**
-   * Upload e processamento de arquivo CSV para comparação de preços
-   */
-  async uploadCSV(file: File) {
+  async uploadCSV(file: File, supplierName: string) {
     const formData = new FormData();
-    formData.append('file', file);
-
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${apiService['baseURL']}/api/comparacao-precos/upload-csv`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
+    formData.append('csvFile', file);
+    formData.append('fornecedor', supplierName);
+    
+    return axiosApiService.post<ProcessedCSVResult>('/api/comparacao-precos/upload-csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Erro ao fazer upload do arquivo');
-    }
-
-    return await response.json();
   }
 
-  /**
-   * Validar estrutura do arquivo CSV
-   */
-  async validarCSV(file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${apiService['baseURL']}/api/comparacao-precos/validate-csv`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Erro ao validar arquivo');
-    }
-
-    return await response.json();
+  async buscarHistorico(codigoMaterial: string) {
+    return axiosApiService.get(`/api/comparacao-precos/historico/${codigoMaterial}`);
   }
 
-  /**
-   * Buscar histórico de preços de um material
-   */
-  async buscarHistoricoPrecos(codigo: string) {
-    return apiService.get<HistoricoPreco[]>(`/api/comparacao-precos/historico/${codigo}`);
-  }
-
-  /**
-   * Atualizar preços no banco baseado na comparação
-   */
-  async atualizarPrecos(atualizacoes: Array<{
-    codigo: string;
-    novoPreco: number;
-    fornecedor: string;
-  }>) {
-    return apiService.post<{
-      atualizados: number;
-      erros: string[];
-    }>('/api/comparacao-precos/atualizar-precos', { atualizacoes });
+  async atualizarPrecos(items: ProcessedItem[]) {
+    return axiosApiService.post('/api/comparacao-precos/atualizar-precos', { items });
   }
 }
 
 export const comparacaoPrecosService = new ComparacaoPrecosService();
-

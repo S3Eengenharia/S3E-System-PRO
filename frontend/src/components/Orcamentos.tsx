@@ -3,6 +3,7 @@ import { orcamentosService, type Orcamento as ApiOrcamento, type CreateOrcamento
 import { clientesService, type Cliente } from '../services/clientesService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
+import EditorDescricaoAvancada from './EditorDescricaoAvancada';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -70,16 +71,25 @@ interface Material {
 
 interface OrcamentoItem {
     id?: string;
-    tipo: 'MATERIAL' | 'KIT' | 'SERVICO';
+    tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA';
     materialId?: string;
     kitId?: string;
     servicoNome?: string;
+    descricao?: string;
     nome: string;
     unidadeMedida: string;
     quantidade: number;
     custoUnit: number;
     precoUnit: number;
     subtotal: number;
+}
+
+interface Foto {
+    id?: string;
+    url: string;
+    legenda: string;
+    ordem: number;
+    preview?: string;
 }
 
 interface Orcamento {
@@ -112,26 +122,38 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const [materiais, setMateriais] = useState<Material[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
+
     const [statusFilter, setStatusFilter] = useState<string>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
-    
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [orcamentoToEdit, setOrcamentoToEdit] = useState<Orcamento | null>(null);
     const [orcamentoToView, setOrcamentoToView] = useState<Orcamento | null>(null);
-    
+
     // Form state
     const [formState, setFormState] = useState({
         clienteId: '',
         titulo: '',
         descricao: '',
+        descricaoProjeto: '',
         validade: '',
         bdi: 20,
-        observacoes: ''
+        observacoes: '',
+        // Novos campos
+        empresaCNPJ: '',
+        enderecoObra: '',
+        responsavelObra: '',
+        previsaoInicio: '',
+        previsaoTermino: '',
+        descontoValor: 0,
+        impostoPercentual: 0,
+        condicaoPagamento: 'À Vista'
     });
 
     const [items, setItems] = useState<OrcamentoItem[]>([]);
+    const [fotos, setFotos] = useState<Foto[]>([]);
     const [showItemModal, setShowItemModal] = useState(false);
+    const [showEditorAvancado, setShowEditorAvancado] = useState(false);
     const [itemSearchTerm, setItemSearchTerm] = useState('');
 
     // Carregar dados iniciais usando os serviços adequados
@@ -139,9 +161,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         try {
             setLoading(true);
             setError(null);
-            
+
             console.log('🔍 Carregando dados de orçamentos via serviços...');
-            
+
             const [orcamentosRes, clientesRes, materiaisRes] = await Promise.all([
                 orcamentosService.listar(),
                 clientesService.listar(),
@@ -200,7 +222,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     // Filtrar materiais para seleção
     const filteredMaterials = useMemo(() => {
         if (!Array.isArray(materiais)) return [];
-        
+
         return materiais
             .filter(material => material.ativo && material.estoque > 0)
             .filter(material =>
@@ -212,7 +234,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     // Filtrar orçamentos
     const filteredOrcamentos = useMemo(() => {
         if (!Array.isArray(orcamentos)) return [];
-        
+
         return orcamentos
             .filter(orc => statusFilter === 'Todos' || orc.status === statusFilter)
             .filter(orc =>
@@ -221,9 +243,21 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             );
     }, [orcamentos, statusFilter, searchTerm]);
 
-    // Calcular total do orçamento
+    // Calcular totais do orçamento (NOVA LÓGICA)
+    const calculosOrcamento = useMemo(() => {
+        const subtotalItens = items.reduce((sum, item) => sum + item.subtotal, 0);
+        const valorComDesconto = subtotalItens - formState.descontoValor;
+        const valorTotalFinal = valorComDesconto * (1 + formState.impostoPercentual / 100);
+
+        return {
+            subtotalItens,
+            valorComDesconto,
+            valorTotalFinal
+        };
+    }, [items, formState.descontoValor, formState.impostoPercentual]);
+
     const calculateTotal = () => {
-        return items.reduce((total, item) => total + item.subtotal, 0);
+        return calculosOrcamento.valorTotalFinal;
     };
 
     // Abrir modal
@@ -234,22 +268,43 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 clienteId: orcamento.clienteId,
                 titulo: orcamento.titulo,
                 descricao: orcamento.descricao || '',
+                descricaoProjeto: (orcamento as any).descricaoProjeto || '',
                 validade: orcamento.validade.split('T')[0],
                 bdi: orcamento.bdi,
-                observacoes: orcamento.observacoes || ''
+                observacoes: orcamento.observacoes || '',
+                // Novos campos
+                empresaCNPJ: (orcamento as any).empresaCNPJ || '',
+                enderecoObra: (orcamento as any).enderecoObra || '',
+                responsavelObra: (orcamento as any).responsavelObra || '',
+                previsaoInicio: (orcamento as any).previsaoInicio ? new Date((orcamento as any).previsaoInicio).toISOString().split('T')[0] : '',
+                previsaoTermino: (orcamento as any).previsaoTermino ? new Date((orcamento as any).previsaoTermino).toISOString().split('T')[0] : '',
+                descontoValor: (orcamento as any).descontoValor || 0,
+                impostoPercentual: (orcamento as any).impostoPercentual || 0,
+                condicaoPagamento: (orcamento as any).condicaoPagamento || 'À Vista'
             });
             setItems(orcamento.items);
+            setFotos((orcamento as any).fotos || []);
         } else {
             setOrcamentoToEdit(null);
             setFormState({
                 clienteId: '',
                 titulo: '',
                 descricao: '',
+                descricaoProjeto: '',
                 validade: '',
                 bdi: 20,
-                observacoes: ''
+                observacoes: '',
+                empresaCNPJ: '',
+                enderecoObra: '',
+                responsavelObra: '',
+                previsaoInicio: '',
+                previsaoTermino: '',
+                descontoValor: 0,
+                impostoPercentual: 0,
+                condicaoPagamento: 'À Vista'
             });
             setItems([]);
+            setFotos([]);
         }
         setIsModalOpen(true);
     };
@@ -258,16 +313,27 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setShowItemModal(false);
+        setShowEditorAvancado(false);
         setOrcamentoToEdit(null);
         setFormState({
             clienteId: '',
             titulo: '',
             descricao: '',
+            descricaoProjeto: '',
             validade: '',
             bdi: 20,
-            observacoes: ''
+            observacoes: '',
+            empresaCNPJ: '',
+            enderecoObra: '',
+            responsavelObra: '',
+            previsaoInicio: '',
+            previsaoTermino: '',
+            descontoValor: 0,
+            impostoPercentual: 0,
+            condicaoPagamento: 'À Vista'
         });
         setItems([]);
+        setFotos([]);
     };
 
     // Adicionar item ao orçamento
@@ -312,7 +378,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     // Atualizar BDI e recalcular preços
     const handleBdiChange = (newBdi: number) => {
         setFormState(prev => ({ ...prev, bdi: newBdi }));
-        
+
         setItems(prev => prev.map(item => {
             const precoUnit = item.custoUnit * (1 + newBdi / 100);
             return {
@@ -336,21 +402,33 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         try {
             console.log('💾 Salvando orçamento...', formState);
 
-            const orcamentoData: CreateOrcamentoData = {
+            const orcamentoData: any = {
                 clienteId: formState.clienteId,
                 titulo: formState.titulo,
                 descricao: formState.descricao,
+                descricaoProjeto: formState.descricaoProjeto,
                 validade: formState.validade,
                 bdi: formState.bdi,
                 observacoes: formState.observacoes,
+                // Novos campos
+                empresaCNPJ: formState.empresaCNPJ,
+                enderecoObra: formState.enderecoObra,
+                responsavelObra: formState.responsavelObra,
+                previsaoInicio: formState.previsaoInicio || null,
+                previsaoTermino: formState.previsaoTermino || null,
+                descontoValor: formState.descontoValor,
+                impostoPercentual: formState.impostoPercentual,
+                condicaoPagamento: formState.condicaoPagamento,
                 items: items.map(item => ({
                     tipo: item.tipo,
                     materialId: item.materialId,
                     kitId: item.kitId,
+                    servicoNome: item.servicoNome,
+                    descricao: item.descricao || item.nome,
                     quantidade: item.quantidade,
+                    custoUnit: item.custoUnit,
                     precoUnitario: item.precoUnit,
-                    subtotal: item.subtotal,
-                    descricao: item.nome
+                    subtotal: item.subtotal
                 }))
             };
 
@@ -369,7 +447,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 console.log('✅ Orçamento salvo com sucesso');
                 handleCloseModal();
                 await loadData();
-                
+
                 // Mostrar mensagem de sucesso
                 alert(`Orçamento ${orcamentoToEdit ? 'atualizado' : 'criado'} com sucesso!`);
             } else {
@@ -388,9 +466,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const handleChangeStatus = async (orcamentoId: string, novoStatus: 'Rascunho' | 'Enviado' | 'Aprovado' | 'Rejeitado') => {
         try {
             console.log(`🔄 Alterando status do orçamento ${orcamentoId} para ${novoStatus}...`);
-            
+
             const response = await orcamentosService.atualizarStatus(orcamentoId, novoStatus);
-            
+
             if (response.success) {
                 console.log('✅ Status alterado com sucesso');
                 await loadData();
@@ -410,9 +488,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const handleDownloadPDF = async (orcamentoId: string, nomeCliente: string) => {
         try {
             console.log(`📄 Gerando PDF do orçamento ${orcamentoId}...`);
-            
+
             const result = await orcamentosService.baixarPDF(orcamentoId, nomeCliente);
-            
+
             if (result.success) {
                 console.log('✅ PDF baixado com sucesso');
             } else {
@@ -487,7 +565,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 animate-fade-in">
                     <div className="flex items-center justify-between">
                         <p className="text-red-800 font-medium">⚠️ {error}</p>
-                        <button 
+                        <button
                             onClick={loadData}
                             className="text-red-700 hover:text-red-900 font-medium underline"
                         >
@@ -679,202 +757,423 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                            {/* Informações Básicas */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Cliente *
-                                    </label>
-                                    <select
-                                        value={formState.clienteId}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, clienteId: e.target.value }))}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                    >
-                                        <option value="">Selecione um cliente</option>
-                                        {Array.isArray(clientes) && clientes.length > 0 ? (
-                                            clientes.map(cliente => (
-                                                <option key={cliente.id} value={cliente.id}>
-                                                    {cliente.nome} - {cliente.cpfCnpj}
-                                                </option>
-                                            ))
-                                        ) : (
-                                            <option value="" disabled>Nenhum cliente disponível</option>
-                                        )}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Título *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formState.titulo}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, titulo: e.target.value }))}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                        placeholder="Ex: Orçamento para instalação elétrica"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Validade *
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={formState.validade}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, validade: e.target.value }))}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        BDI (%) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={formState.bdi}
-                                        onChange={(e) => handleBdiChange(Number(e.target.value))}
-                                        min="0"
-                                        max="100"
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                        placeholder="20"
-                                    />
-                                </div>
-                            </div>
-
+                            {/* SEÇÃO 1: Informações Básicas */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Descrição
-                                </label>
-                                <textarea
-                                    value={formState.descricao}
-                                    onChange={(e) => setFormState(prev => ({ ...prev, descricao: e.target.value }))}
-                                    rows={3}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                    placeholder="Descreva o projeto ou serviço..."
-                                />
-                            </div>
-
-                            {/* Itens do Orçamento */}
-                            <div>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-semibold text-gray-800">Itens do Orçamento</h3>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowItemModal(true)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
-                                    >
-                                        <PlusIcon className="w-4 h-4" />
-                                        Adicionar Item
-                                    </button>
-                                </div>
-
-                                {items.length === 0 ? (
-                                    <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <span className="text-2xl">📦</span>
-                                        </div>
-                                        <p className="text-gray-500 font-medium">Nenhum item adicionado</p>
-                                        <p className="text-gray-400 text-sm mt-1">Clique em "Adicionar Item" para começar</p>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <span className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">📋</span>
+                                    Informações Básicas
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            CNPJ da Empresa Executora
+                                        </label>
+                                        <select
+                                            value={formState.empresaCNPJ}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, empresaCNPJ: e.target.value }))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                        >
+                                            <option value="">Selecione o CNPJ</option>
+                                            <option value="00.000.000/0001-00">S3E Engenharia - 00.000.000/0001-00</option>
+                                            <option value="00.000.000/0002-00">S3E Filial - 00.000.000/0002-00</option>
+                                        </select>
                                     </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {items.map((item, index) => (
-                                            <div key={index} className="bg-gray-50 border border-gray-200 p-4 rounded-xl">
-                                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900">{item.nome}</p>
-                                                        <p className="text-sm text-gray-600">{item.unidadeMedida}</p>
-                                                    </div>
-                                                    
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
-                                                        <input
-                                                            type="number"
-                                                            value={item.quantidade}
-                                                            onChange={(e) => handleUpdateItemQuantity(index, Number(e.target.value))}
-                                                            min="1"
-                                                            step="0.01"
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-                                                        />
-                                                    </div>
-                                                    
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">Valor Unit.</label>
-                                                        <p className="text-sm font-semibold text-gray-900">
-                                                            R$ {item.precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                        </p>
-                                                    </div>
-                                                    
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">Subtotal</label>
-                                                        <p className="text-sm font-bold text-purple-700">
-                                                            R$ {item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                        </p>
-                                                    </div>
-                                                    
-                                                    <div className="flex justify-end">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveItem(index)}
-                                                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Cliente *
+                                        </label>
+                                        <select
+                                            value={formState.clienteId}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, clienteId: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                        >
+                                            <option value="">Selecione um cliente</option>
+                                            {Array.isArray(clientes) && clientes.length > 0 ? (
+                                                clientes.map(cliente => (
+                                                    <option key={cliente.id} value={cliente.id}>
+                                                        {cliente.nome} - {cliente.cpfCnpj}
+                                                    </option>
+                                                ))
+                                            ) : (
+                                                <option value="" disabled>Nenhum cliente disponível</option>
+                                            )}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Título do Projeto *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formState.titulo}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, titulo: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="Ex: Instalação Elétrica - Edifício Comercial"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Validade do Orçamento *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={formState.validade}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, validade: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Endereço da Obra *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formState.enderecoObra}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, enderecoObra: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="Rua, Número, Bairro, Cidade - UF, CEP"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Responsável no Local
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formState.responsavelObra}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, responsavelObra: e.target.value }))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="Nome do responsável técnico"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            BDI - Margem (%) *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formState.bdi}
+                                            onChange={(e) => handleBdiChange(Number(e.target.value))}
+                                            min="0"
+                                            max="100"
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="20"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Descrição Resumida
+                                        </label>
+                                        <textarea
+                                            value={formState.descricao}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, descricao: e.target.value }))}
+                                            rows={2}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="Resumo breve do projeto..."
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* SEÇÃO 2: Prazos e Cronograma */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">📅</span>
+                                        Prazos e Cronograma
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Previsão de Início
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={formState.previsaoInicio}
+                                                onChange={(e) => setFormState(prev => ({ ...prev, previsaoInicio: e.target.value }))}
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Previsão de Término
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={formState.previsaoTermino}
+                                                onChange={(e) => setFormState(prev => ({ ...prev, previsaoTermino: e.target.value }))}
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SEÇÃO 3: Itens do Orçamento */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold text-gray-800">Itens do Orçamento</h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowItemModal(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
+                                        >
+                                            <PlusIcon className="w-4 h-4" />
+                                            Adicionar Item
+                                        </button>
+                                    </div>
+
+                                    {items.length === 0 ? (
+                                        <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">📦</span>
+                                            </div>
+                                            <p className="text-gray-500 font-medium">Nenhum item adicionado</p>
+                                            <p className="text-gray-400 text-sm mt-1">Clique em "Adicionar Item" para começar</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {items.map((item, index) => (
+                                                <div key={index} className="bg-gray-50 border border-gray-200 p-4 rounded-xl">
+                                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
+                                                        <div>
+                                                            <p className="font-semibold text-gray-900">{item.nome}</p>
+                                                            <p className="text-sm text-gray-600">{item.unidadeMedida}</p>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
+                                                            <input
+                                                                type="number"
+                                                                value={item.quantidade}
+                                                                onChange={(e) => handleUpdateItemQuantity(index, Number(e.target.value))}
+                                                                min="1"
+                                                                step="0.01"
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Valor Unit.</label>
+                                                            <p className="text-sm font-semibold text-gray-900">
+                                                                R$ {item.precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Subtotal</label>
+                                                            <p className="text-sm font-bold text-purple-700">
+                                                                R$ {item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="flex justify-end">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveItem(index)}
+                                                                className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                        
-                                        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 p-4 rounded-xl">
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* SEÇÃO 4: Cálculo Financeiro */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600">💰</span>
+                                        Cálculo Financeiro
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {/* Subtotal */}
+                                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-lg font-semibold text-gray-800">Total Geral:</span>
-                                                <span className="text-2xl font-bold text-purple-700">
-                                                    R$ {calculateTotal().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                <span className="text-sm font-semibold text-blue-700">Subtotal (com BDI {formState.bdi}%)</span>
+                                                <span className="text-xl font-bold text-blue-900">
+                                                    R$ {calculosOrcamento.subtotalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Desconto e Impostos */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                    Desconto (R$)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={formState.descontoValor}
+                                                    onChange={(e) => setFormState(prev => ({ ...prev, descontoValor: parseFloat(e.target.value) || 0 }))}
+                                                    min="0"
+                                                    step="0.01"
+                                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                                    placeholder="0,00"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                    Impostos (%)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={formState.impostoPercentual}
+                                                    onChange={(e) => setFormState(prev => ({ ...prev, impostoPercentual: parseFloat(e.target.value) || 0 }))}
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.01"
+                                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                                    placeholder="0"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                    Condição de Pagamento
+                                                </label>
+                                                <select
+                                                    value={formState.condicaoPagamento}
+                                                    onChange={(e) => setFormState(prev => ({ ...prev, condicaoPagamento: e.target.value }))}
+                                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                                >
+                                                    <option value="À Vista">À Vista</option>
+                                                    <option value="30 dias">30 dias</option>
+                                                    <option value="30/60 dias">30/60 dias</option>
+                                                    <option value="30/60/90 dias">30/60/90 dias</option>
+                                                    <option value="Personalizado">Personalizado</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Valor com Desconto */}
+                                        {formState.descontoValor > 0 && (
+                                            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm font-semibold text-orange-700">Valor com Desconto</span>
+                                                    <span className="text-xl font-bold text-orange-900">
+                                                        R$ {calculosOrcamento.valorComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* TOTAL FINAL */}
+                                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300 p-6 rounded-xl">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <span className="text-lg font-semibold text-purple-700 uppercase">Valor Total Final</span>
+                                                    <p className="text-xs text-gray-600 mt-1">
+                                                        Subtotal - Desconto + Impostos
+                                                    </p>
+                                                </div>
+                                                <span className="text-4xl font-bold text-purple-700">
+                                                    R$ {calculosOrcamento.valorTotalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
-                                )}
-                            </div>
+                                </div>
 
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Observações
-                                </label>
-                                <textarea
-                                    value={formState.observacoes}
-                                    onChange={(e) => setFormState(prev => ({ ...prev, observacoes: e.target.value }))}
-                                    rows={3}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                    placeholder="Informações adicionais sobre o orçamento..."
-                                />
-                            </div>
+                                {/* SEÇÃO 5: Descrição Técnica e Fotos */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-600">📝</span>
+                                        Descrição Técnica e Documentação
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowEditorAvancado(true)}
+                                            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-medium font-semibold flex items-center justify-center gap-3"
+                                        >
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                            📝 ABRIR EDITOR AVANÇADO DE DESCRIÇÃO E FOTOS
+                                        </button>
 
-                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={handleCloseModal}
-                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
-                                >
-                                    {orcamentoToEdit ? 'Atualizar' : 'Criar'} Orçamento
-                                </button>
+                                        {formState.descricaoProjeto && (
+                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                                <p className="text-sm text-green-800 font-medium">
+                                                    ✅ Descrição técnica adicionada ({formState.descricaoProjeto.length} caracteres)
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {fotos.length > 0 && (
+                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                                <p className="text-sm text-blue-800 font-medium">
+                                                    📷 {fotos.length} foto(s) anexada(s) ao projeto
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Observações Gerais
+                                    </label>
+                                    <textarea
+                                        value={formState.observacoes}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, observacoes: e.target.value }))}
+                                        rows={2}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                        placeholder="Informações adicionais sobre o orçamento..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={handleCloseModal}
+                                        className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
+                                    >
+                                        {orcamentoToEdit ? 'Atualizar' : 'Criar'} Orçamento
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* EDITOR AVANÇADO (Tela Cheia) */}
+            {showEditorAvancado && (
+                <EditorDescricaoAvancada
+                    orcamentoTitulo={formState.titulo || 'Novo Orçamento'}
+                    orcamentoCliente={clientes.find(c => c.id === formState.clienteId)?.nome || 'Cliente'}
+                    descricaoInicial={formState.descricaoProjeto}
+                    fotosIniciais={fotos}
+                    onSalvar={(desc, fts) => {
+                        setFormState(prev => ({ ...prev, descricaoProjeto: desc }));
+                        setFotos(fts);
+                        setShowEditorAvancado(false);
+                    }}
+                    onVoltar={() => setShowEditorAvancado(false)}
+                />
             )}
 
             {/* MODAL DE SELEÇÃO DE ITENS */}
@@ -883,8 +1182,8 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     <div className="bg-white rounded-2xl shadow-strong w-full max-w-4xl max-h-[80vh] overflow-hidden">
                         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900">Selecionar Material</h3>
-                                <p className="text-sm text-gray-600 mt-1">Escolha um material para adicionar ao orçamento</p>
+                                <h3 className="text-xl font-bold text-gray-900">Adicionar Item ao Orçamento</h3>
+                                <p className="text-sm text-gray-600 mt-1">Escolha o tipo e selecione o item</p>
                             </div>
                             <button onClick={() => setShowItemModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
                                 <XMarkIcon className="w-6 h-6" />
@@ -892,6 +1191,28 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         </div>
 
                         <div className="p-6">
+                            {/* Seletor de Tipo de Item */}
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-gray-700 mb-3">Tipo de Item</label>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                    <button type="button" className="px-4 py-3 bg-blue-100 border-2 border-blue-300 text-blue-800 rounded-xl font-semibold hover:bg-blue-200 transition-all">
+                                        📦 Material
+                                    </button>
+                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                        🎁 Kit
+                                    </button>
+                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                        🔧 Serviço
+                                    </button>
+                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                        ⚡ Quadro Pronto
+                                    </button>
+                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                        💵 Custo Extra
+                                    </button>
+                                </div>
+                            </div>
+
                             <div className="mb-4">
                                 <div className="relative">
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -917,8 +1238,8 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {filteredMaterials.map((material) => (
-                                            <div 
-                                                key={material.id} 
+                                            <div
+                                                key={material.id}
                                                 className="bg-gray-50 border-2 border-gray-200 p-4 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer group"
                                                 onClick={() => handleAddItem(material)}
                                             >

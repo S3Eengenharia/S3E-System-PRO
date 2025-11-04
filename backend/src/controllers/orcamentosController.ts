@@ -79,10 +79,20 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
       clienteId,
       titulo,
       descricao,
+      descricaoProjeto,
       validade,
       bdi,
       items,
-      observacoes
+      observacoes,
+      // Novos campos
+      empresaCNPJ,
+      enderecoObra,
+      responsavelObra,
+      previsaoInicio,
+      previsaoTermino,
+      descontoValor,
+      impostoPercentual,
+      condicaoPagamento
     } = req.body;
 
     // Calcular custo total e preço de venda
@@ -111,7 +121,7 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
       }
 
       const subtotal = custoUnit * item.quantidade;
-      const precoUnit = custoUnit * (1 + bdi / 100);
+      const precoUnit = custoUnit * (1 + (bdi || 0) / 100);
       
       custoTotal += subtotal;
 
@@ -120,6 +130,7 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
         materialId: item.materialId,
         kitId: item.kitId,
         servicoNome: item.servicoNome,
+        descricao: item.descricao,
         quantidade: item.quantidade,
         custoUnit,
         precoUnit,
@@ -127,18 +138,36 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
       });
     }
 
-    const precoVenda = custoTotal * (1 + bdi / 100);
+    // NOVA LÓGICA DE CÁLCULO:
+    // 1. Subtotal com BDI aplicado aos itens
+    const subtotalComBDI = itemsData.reduce((sum, item) => sum + item.subtotal, 0);
+    
+    // 2. Aplicar desconto
+    const valorComDesconto = subtotalComBDI - (descontoValor || 0);
+    
+    // 3. Aplicar impostos
+    const precoVenda = valorComDesconto * (1 + (impostoPercentual || 0) / 100);
 
     const orcamento = await prisma.orcamento.create({
       data: {
         clienteId,
         titulo,
         descricao,
+        descricaoProjeto,
         validade: new Date(validade),
-        bdi,
+        bdi: bdi || 0,
         custoTotal,
         precoVenda,
         observacoes,
+        // Novos campos
+        empresaCNPJ,
+        enderecoObra,
+        responsavelObra,
+        previsaoInicio: previsaoInicio ? new Date(previsaoInicio) : null,
+        previsaoTermino: previsaoTermino ? new Date(previsaoTermino) : null,
+        descontoValor: descontoValor || 0,
+        impostoPercentual: impostoPercentual || 0,
+        condicaoPagamento,
         items: {
           create: itemsData
         }
@@ -150,7 +179,8 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
             material: true,
             kit: true
           }
-        }
+        },
+        fotos: true
       }
     });
 

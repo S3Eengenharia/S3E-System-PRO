@@ -23,7 +23,7 @@ export class DashboardController {
         prisma.fornecedor.count({ where: { ativo: true } }),
         
         // Projetos ativos
-        prisma.projeto.count({ where: { status: 'EmAndamento' } }),
+        prisma.projeto.count({ where: { status: 'EXECUCAO' } }),
         
         // Orçamentos pendentes
         prisma.orcamento.count({ where: { status: { in: ['Rascunho', 'Enviado'] } } }),
@@ -230,7 +230,7 @@ export class DashboardController {
         // Projetos atrasados (data previsão passou)
         prisma.projeto.findMany({
           where: {
-            status: 'EmAndamento',
+            status: 'EXECUCAO', // Corrigido: usar valor do enum ProjetoStatus
             dataPrevisao: { lt: hoje }
           },
           select: {

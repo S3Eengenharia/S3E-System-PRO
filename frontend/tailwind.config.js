@@ -32,6 +32,12 @@ export default {
             '800': '#1F2937',
             '900': '#11182C',
           },
+          // Dark Theme Colors
+          'dark-bg': '#0F172A', // Slate 950 - Fundo principal dark
+          'dark-card': '#1E293B', // Slate 800 - Cards e containers
+          'dark-border': '#334155', // Slate 700 - Bordas
+          'dark-text': '#F8FAFC', // Slate 50 - Texto principal
+          'dark-text-secondary': '#CBD5E1', // Slate 300 - Texto secundário
         },
         keyframes: {
           fadeIn: {

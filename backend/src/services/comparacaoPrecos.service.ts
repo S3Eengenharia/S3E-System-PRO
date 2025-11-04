@@ -32,19 +32,40 @@ export interface ProcessedCSVResult {
 
 export class ComparacaoPrecosService {
   /**
+   * Detecta o delimitador do CSV (vírgula ou ponto e vírgula)
+   */
+  private detectarDelimitador(csvContent: string): ',' | ';' {
+    const primeiraLinha = csvContent.split('\n')[0];
+    const virgulas = (primeiraLinha.match(/,/g) || []).length;
+    const pontoVirgulas = (primeiraLinha.match(/;/g) || []).length;
+    
+    console.log(`📊 Delimitadores encontrados - Vírgulas: ${virgulas}, Ponto e vírgulas: ${pontoVirgulas}`);
+    
+    return pontoVirgulas > virgulas ? ';' : ',';
+  }
+
+  /**
    * Processa um arquivo CSV de orçamento de fornecedor
    */
-  async processarCSV(csvContent: string): Promise<ProcessedCSVResult> {
+  async processarCSV(csvContent: string, fornecedor: string = 'Não informado'): Promise<ProcessedCSVResult> {
     try {
+      console.log('🔍 Iniciando processamento do CSV...');
+      
+      // Detectar o delimitador automaticamente
+      const delimiter = this.detectarDelimitador(csvContent);
+      console.log(`✅ Delimitador detectado: "${delimiter}"`);
+      
       // Parse do CSV
       const records = parse(csvContent, {
         columns: true,
         skip_empty_lines: true,
         trim: true,
+        delimiter: delimiter,
         cast: (value, context) => {
           // Converter colunas numéricas
           if (context.column === 'quantidade' || context.column === 'preco_unitario') {
-            const numValue = parseFloat(value.replace(',', '.'));
+            // Tratar tanto vírgula quanto ponto como separador decimal
+            const numValue = parseFloat(value.toString().replace(',', '.'));
             return isNaN(numValue) ? 0 : numValue;
           }
           return value;
@@ -56,13 +77,26 @@ export class ComparacaoPrecosService {
         throw new Error('CSV vazio ou sem dados válidos');
       }
 
+      console.log(`📋 Total de registros encontrados: ${records.length}`);
+
       const requiredColumns = ['codigo', 'nome', 'unidade', 'quantidade', 'preco_unitario'];
       const csvColumns = Object.keys(records[0]);
       
+      console.log(`📝 Colunas encontradas no CSV: ${csvColumns.join(', ')}`);
+      console.log(`📝 Colunas obrigatórias: ${requiredColumns.join(', ')}`);
+      
+      // Verificar colunas obrigatórias (case-insensitive)
+      const csvColumnsLower = csvColumns.map(c => c.toLowerCase());
+      const missingColumns: string[] = [];
+      
       for (const column of requiredColumns) {
-        if (!csvColumns.includes(column)) {
-          throw new Error(`Coluna obrigatória não encontrada: ${column}`);
+        if (!csvColumnsLower.includes(column.toLowerCase())) {
+          missingColumns.push(column);
         }
+      }
+      
+      if (missingColumns.length > 0) {
+        throw new Error(`Colunas obrigatórias não encontradas: ${missingColumns.join(', ')}. Colunas encontradas: ${csvColumns.join(', ')}`);
       }
 
       // Processar cada item
@@ -99,7 +133,10 @@ export class ComparacaoPrecosService {
         }
       }
 
-      return {
+      console.log(`✅ Processamento concluído - ${processedItems.length} itens processados`);
+      console.log(`📊 Estatísticas: ${lowerPrices} menores, ${higherPrices} maiores, ${equalPrices} iguais, ${noHistory} sem histórico`);
+
+      const result = {
         items: processedItems,
         summary: {
           total_items: processedItems.length,
@@ -111,6 +148,8 @@ export class ComparacaoPrecosService {
           total_extra_cost: totalExtraCost
         }
       };
+
+      return result;
 
     } catch (error) {
       console.error('Erro ao processar CSV:', error);

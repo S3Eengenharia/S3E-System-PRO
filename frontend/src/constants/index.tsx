@@ -144,6 +144,16 @@ export const ElectricalServiceIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+// Ícone de Operações Fiscais (Documento com Selo)
+export const FiscalOpsIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6"/>
+        <circle cx="10" cy="16" r="2"/>
+        <path d="m16 16-3.5-3.5"/>
+    </svg>
+);
+
 // ============================================
 // ÍCONES AUXILIARES E DE STATUS
 // ============================================
@@ -282,6 +292,7 @@ export const navLinks = [
     // ========== FINANCEIRO / CONTÁBIL ==========
     { name: 'Financeiro', icon: FinanceIcon },
     { name: 'Emissão NF-e', icon: InvoiceIcon },
+    { name: 'Operações Fiscais', icon: FiscalOpsIcon },
     { name: 'Movimentações', icon: MovementIcon },
     { name: 'Histórico', icon: HistoryIcon },
 ];
