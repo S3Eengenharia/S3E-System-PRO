@@ -193,8 +193,8 @@ export class ConfiguracaoService {
         throw new Error('Email já cadastrado');
       }
 
-      // Importar bcrypt dinamicamente
-      const bcrypt = await import('bcrypt');
+      // Importar bcryptjs (instalado no projeto)
+      const bcrypt = await import('bcryptjs');
       
       // Criptografar senha
       const hashedPassword = await bcrypt.hash(data.password, 10);

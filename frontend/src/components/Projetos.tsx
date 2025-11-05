@@ -132,11 +132,12 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             setLoading(true);
             setError(null);
             
-            const [projectsRes, clientsRes, materialsRes, budgetsRes] = await Promise.all([
+            const [projectsRes, clientsRes, materialsRes, budgetsRes, usuariosRes] = await Promise.all([
                 axiosApiService.get<Project[]>(ENDPOINTS.PROJETOS),
                 axiosApiService.get<Client[]>(ENDPOINTS.CLIENTES),
                 axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS),
-                axiosApiService.get<Budget[]>('/api/orcamentos')
+                axiosApiService.get<Budget[]>('/api/orcamentos'),
+                axiosApiService.get<User[]>('/api/configuracoes/usuarios')
             ]);
 
             if (projectsRes.success && projectsRes.data) {
@@ -150,6 +151,15 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
             }
             if (budgetsRes.success && budgetsRes.data) {
                 setBudgets(budgetsRes.data);
+            }
+            if (usuariosRes.success && usuariosRes.data) {
+                // Filtrar apenas: admin, gerente, engenheiro, orcamentista (responsáveis técnicos)
+                const usuariosFiltrados = Array.isArray(usuariosRes.data) 
+                    ? usuariosRes.data.filter((u: any) => 
+                        ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
+                    )
+                    : [];
+                setTeamMembers(usuariosFiltrados as User[]);
             }
         } catch (err) {
             setError('Erro ao carregar dados');
@@ -897,12 +907,43 @@ const Projetos: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBu
                                             </label>
                                             <select 
                                                 value={formState.budgetId || ''} 
-                                                onChange={e => setFormState({...formState, budgetId: e.target.value})} 
+                                                onChange={e => {
+                                                    const selectedBudgetId = e.target.value;
+                                                    setFormState({...formState, budgetId: selectedBudgetId});
+                                                    
+                                                    // Preencher datas automaticamente do orçamento
+                                                    if (selectedBudgetId) {
+                                                        const selectedBudget = budgets.find(b => b.id === selectedBudgetId);
+                                                        if (selectedBudget) {
+                                                            const hoje = new Date().toISOString().split('T')[0];
+                                                            const validade = selectedBudget.validity ? new Date(selectedBudget.validity).toISOString().split('T')[0] : '';
+                                                            
+                                                            setFormState(prev => ({
+                                                                ...prev,
+                                                                budgetId: selectedBudgetId,
+                                                                startDate: hoje,
+                                                                endDate: validade || hoje
+                                                            }));
+                                                        }
+                                                    }
+                                                }} 
                                                 className="w-full px-4 py-3 border-2 border-brand-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-green-600 focus:border-green-600 transition-all"
                                             >
                                                 <option value="">Nenhum orçamento vinculado</option>
-                                                {budgets.filter(b => b.status === BudgetStatus.Aprovado).map(b => <option key={b.id} value={b.id}>{b.id} - {b.projectName}</option>)}
+                                                {budgets.filter(b => b.status === BudgetStatus.Aprovado).map(b => (
+                                                    <option key={b.id} value={b.id}>
+                                                        {b.projectName || b.id} - R$ {b.totalPrice?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </option>
+                                                ))}
                                             </select>
+                                            {formState.budgetId && (
+                                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Datas preenchidas automaticamente
+                                                </p>
+                                            )}
                                         </div>
                                         <div>
                                             <label className="block text-sm font-semibold text-brand-gray-700 mb-2 flex items-center gap-2">

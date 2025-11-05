@@ -390,14 +390,14 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     const renderNovaVenda = () => (
         <div className="bg-white border-2 border-gray-200 rounded-2xl shadow-soft max-w-7xl mx-auto">
             {/* Header */}
-            <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
+            <div className="relative p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-green-600 to-green-700">
                 <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center shadow-medium ring-2 ring-green-100">
+                    <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-medium">
                         <CurrencyDollarIcon className="w-7 h-7 text-white" />
                     </div>
                     <div className="flex-1">
-                        <h2 className="text-2xl font-bold text-gray-900">Nova Venda / Projeto</h2>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h2 className="text-2xl font-bold text-white">Nova Venda / Projeto</h2>
+                        <p className="text-sm text-white/80 mt-1">
                             Converta um orçamento aprovado em venda e defina as condições financeiras
                         </p>
                     </div>

@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ========== BACKGROUND GRADIENTE SUAVE ========== */
 body {
@@ -176,6 +178,113 @@ button:active {
 
 .dark {
   color-scheme: dark;
+}
+
+/* Forçar dark mode em elementos comuns que não têm classes dark: */
+.dark .bg-white:not([class*="dark:bg-"]) {
+  background-color: #1E293B !important; /* dark-card */
+}
+
+.dark .bg-gray-50:not([class*="dark:bg-"]) {
+  background-color: #0F172A !important; /* dark-bg */
+}
+
+.dark .text-gray-900:not([class*="dark:text-"]) {
+  color: #F8FAFC !important; /* dark-text */
+}
+
+.dark .text-gray-800:not([class*="dark:text-"]) {
+  color: #F8FAFC !important; /* dark-text */
+}
+
+.dark .text-gray-700:not([class*="dark:text-"]) {
+  color: #F8FAFC !important; /* dark-text */
+}
+
+.dark .text-gray-600:not([class*="dark:text-"]) {
+  color: #CBD5E1 !important; /* dark-text-secondary */
+}
+
+.dark .text-gray-500:not([class*="dark:text-"]) {
+  color: #CBD5E1 !important; /* dark-text-secondary */
+}
+
+.dark .border-gray-200:not([class*="dark:border-"]),
+.dark .border-gray-300:not([class*="dark:border-"]) {
+  border-color: #334155 !important; /* dark-border */
+}
+
+.dark .text-brand-gray-800:not([class*="dark:text-"]) {
+  color: #F8FAFC !important;
+}
+
+.dark .text-brand-gray-500:not([class*="dark:text-"]) {
+  color: #CBD5E1 !important;
+}
+
+/* Inputs, selects e textareas no dark mode */
+.dark input:not([class*="dark:"]),
+.dark select:not([class*="dark:"]),
+.dark textarea:not([class*="dark:"]) {
+  background-color: #0F172A !important; /* dark-bg */
+  border-color: #334155 !important; /* dark-border */
+  color: #F8FAFC !important; /* dark-text */
+}
+
+.dark input::placeholder,
+.dark select::placeholder,
+.dark textarea::placeholder {
+  color: #CBD5E1 !important; /* dark-text-secondary */
+}
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover:not([class*="dark:hover:"]) {
+  background-color: #0F172A !important;
+}
+
+.dark .hover\:bg-gray-100:hover:not([class*="dark:hover:"]) {
+  background-color: #1E293B !important;
+}
+
+/* Headers de Modais com gradiente claro → escuro */
+/* Força headers com from-xxx-50 to-xxx-50 a usar cores vibrantes */
+.dark [class*="from-green-50"][class*="to-"] {
+  background: linear-gradient(to right, #059669, #047857) !important; /* green-600 to green-700 */
+}
+
+.dark [class*="from-blue-50"][class*="to-purple-50"],
+.dark [class*="from-purple-50"][class*="to-blue-50"] {
+  background: linear-gradient(to right, #7c3aed, #6d28d9) !important; /* purple-600 to purple-700 */
+}
+
+.dark [class*="from-orange-50"][class*="to-yellow-50"],
+.dark [class*="from-yellow-50"][class*="to-orange-50"] {
+  background: linear-gradient(to right, #ea580c, #c2410c) !important; /* orange-600 to orange-700 */
+}
+
+.dark [class*="from-blue-50"][class*="to-blue-"] {
+  background: linear-gradient(to right, #2563eb, #1d4ed8) !important; /* blue-600 to blue-700 */
+}
+
+.dark [class*="from-red-50"][class*="to-red-"] {
+  background: linear-gradient(to right, #dc2626, #b91c1c) !important; /* red-600 to red-700 */
+}
+
+/* Texto branco em headers com gradiente claro */
+.dark [class*="from-"][class*="-50"] h2,
+.dark [class*="from-"][class*="-50"] h3,
+.dark [class*="from-"][class*="-50"] p {
+  color: white !important;
+}
+
+/* Ícone de fechar em headers */
+.dark [class*="from-"][class*="-50"] button[class*="text-gray-400"] {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.dark [class*="from-"][class*="-50"] button[class*="text-gray-400"]:hover {
+  color: white !important;
+  background-color: rgba(255, 255, 255, 0.2) !important;
 }
 
 /* Scrollbar no dark mode */

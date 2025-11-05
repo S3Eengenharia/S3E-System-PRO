@@ -26,7 +26,6 @@ import Obras from './components/Obras';
 import Servicos from './components/Servicos';
 import Financeiro from './components/Financeiro';
 import EmissaoNFe from './components/EmissaoNFe';
-import FiscalOperations from './components/FiscalOperations';
 import Configuracoes from './components/Configuracoes';
 import ComparacaoPrecos from './components/ComparacaoPrecos';
 import Vendas from './components/Vendas';
@@ -104,8 +103,6 @@ const MainApp: React.FC = () => {
         return <Vendas toggleSidebar={toggleSidebar} />;
       case 'Emissão NF-e':
         return <EmissaoNFe toggleSidebar={toggleSidebar} />;
-      case 'Operações Fiscais':
-        return <FiscalOperations toggleSidebar={toggleSidebar} />;
       case 'Serviços':
         return <Servicos toggleSidebar={toggleSidebar} />;
       case 'Configurações':

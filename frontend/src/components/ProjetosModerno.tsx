@@ -187,6 +187,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     
     // Gestão de equipe
     const [teamManagementMode, setTeamManagementMode] = useState<'view' | 'add' | 'edit'>('view');
+    const [usuarios, setUsuarios] = useState<Usuario[]>([]);
     const [usuarioToEdit, setUsuarioToEdit] = useState<Usuario | null>(null);
     const [memberToDelete, setMemberToDelete] = useState<Usuario | null>(null);
     const [usuarioFormState, setUsuarioFormState] = useState({
@@ -223,9 +224,10 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             setLoading(true);
             setError(null);
 
-            const [projetosRes, clientesRes] = await Promise.all([
+            const [projetosRes, clientesRes, usuariosRes] = await Promise.all([
                 projetosService.listar(),
-                clientesService.listar()
+                clientesService.listar(),
+                axiosApiService.get<any[]>('/api/configuracoes/usuarios')
             ]);
 
             if (projetosRes.success && projetosRes.data) {
@@ -242,6 +244,17 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 setClientes(clientesArray);
             } else {
                 setClientes([]);
+            }
+
+            if (usuariosRes.success && usuariosRes.data) {
+                // Filtrar apenas roles técnicas: admin, gerente, engenheiro, orcamentista
+                const usuariosArray = Array.isArray(usuariosRes.data) ? usuariosRes.data : [];
+                const usuariosFiltrados = usuariosArray.filter((u: any) => 
+                    ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
+                );
+                setUsuarios(usuariosFiltrados);
+            } else {
+                setUsuarios([]);
             }
 
         } catch (err) {
@@ -1717,140 +1730,17 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 <TeamManagerModal
                     isOpen={isTeamModalOpen}
                     onClose={() => setIsTeamModalOpen(false)}
+                    usuarios={usuarios}
+                    onAddUsuario={(usuario) => {
+                        setUsuarios(prev => [...prev, usuario]);
+                    }}
+                    onUpdateUsuario={(usuario) => {
+                        setUsuarios(prev => prev.map(u => u.id === usuario.id ? usuario : u));
+                    }}
+                    onDeleteUsuario={(usuarioId) => {
+                        setUsuarios(prev => prev.filter(u => u.id !== usuarioId));
+                    }}
                 />
-            )}
-
-            {/* MODAL DE GESTÃO DE EQUIPE */}
-            {isTeamModalOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-100">
-                            <div className="flex justify-between items-center">
-                                <h2 className="text-2xl font-bold text-gray-900">Gerenciamento de Equipe</h2>
-                                <button
-                                    onClick={() => setIsTeamModalOpen(false)}
-                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl"
-                                >
-                                    <XMarkIcon className="w-6 h-6" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6">
-                            {teamManagementMode === 'view' && (
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-bold text-gray-900">Membros da Equipe ({usuarios.length})</h3>
-                                        <button
-                                            onClick={() => {
-                                                setTeamManagementMode('add');
-                                                setUsuarioFormState({ nome: '', email: '', funcao: '' });
-                                            }}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold"
-                                        >
-                                            + Adicionar Membro
-                                        </button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {usuarios.map(usuario => (
-                                            <div key={usuario.id} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                                                <div className="flex items-start justify-between">
-                                                    <div className="flex-1">
-                                                        <h4 className="font-bold text-gray-900">{usuario.nome}</h4>
-                                                        <p className="text-sm text-gray-600">{usuario.email}</p>
-                                                        <p className="text-xs text-gray-500 mt-1">{usuario.funcao}</p>
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setUsuarioToEdit(usuario);
-                                                                setUsuarioFormState({
-                                                                    nome: usuario.nome,
-                                                                    email: usuario.email,
-                                                                    funcao: usuario.funcao
-                                                                });
-                                                                setTeamManagementMode('edit');
-                                                            }}
-                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                                                        >
-                                                            <PencilIcon className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setMemberToDelete(usuario)}
-                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {(teamManagementMode === 'add' || teamManagementMode === 'edit') && (
-                                <form onSubmit={handleSubmitUsuario} className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Nome *</label>
-                                        <input
-                                            type="text"
-                                            value={usuarioFormState.nome}
-                                            onChange={(e) => setUsuarioFormState({...usuarioFormState, nome: e.target.value})}
-                                            required
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Nome completo"
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
-                                        <input
-                                            type="email"
-                                            value={usuarioFormState.email}
-                                            onChange={(e) => setUsuarioFormState({...usuarioFormState, email: e.target.value})}
-                                            required
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
-                                            placeholder="email@empresa.com"
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Função *</label>
-                                        <input
-                                            type="text"
-                                            value={usuarioFormState.funcao}
-                                            onChange={(e) => setUsuarioFormState({...usuarioFormState, funcao: e.target.value})}
-                                            required
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Ex: Engenheiro Elétrico"
-                                        />
-                                    </div>
-                                    
-                                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setTeamManagementMode('view');
-                                                setUsuarioToEdit(null);
-                                            }}
-                                            className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-semibold"
-                                        >
-                                            Voltar
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 font-semibold"
-                                        >
-                                            {teamManagementMode === 'edit' ? 'Atualizar' : 'Adicionar'} Membro
-                                        </button>
-                                    </div>
-                                </form>
-                            )}
-                        </div>
-                    </div>
-                </div>
             )}
 
             {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}

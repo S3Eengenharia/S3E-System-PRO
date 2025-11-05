@@ -220,21 +220,21 @@ const ClientesAPI: React.FC<ClientesProps> = ({ toggleSidebar }) => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 dark:bg-dark-bg">
             {/* Header */}
-            <div className="bg-white shadow">
+            <div className="bg-white dark:bg-dark-card shadow border-b border-gray-200 dark:border-dark-border">
                 <div className="px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-6">
                         <div className="flex items-center">
                             <button
                                 onClick={toggleSidebar}
-                                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 lg:hidden"
+                                className="p-2 rounded-md text-gray-400 dark:text-dark-text-secondary hover:text-gray-500 dark:hover:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg lg:hidden"
                             >
                                 <Bars3Icon className="h-6 w-6" />
                             </button>
                             <div className="ml-4">
-                                <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-                                <p className="text-sm text-gray-500">Gerencie seus clientes</p>
+                                <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Clientes</h1>
+                                <p className="text-sm text-gray-500 dark:text-dark-text-secondary">Gerencie seus clientes e parceiros</p>
                             </div>
                         </div>
                         <button

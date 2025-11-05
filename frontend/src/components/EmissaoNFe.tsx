@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { empresaFiscalService, type EmpresaFiscal } from '../services/empresaFiscalService';
+import { nfeFiscalService } from '../services/nfeFiscalService';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -18,11 +19,23 @@ const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+const XCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+const PencilSquareIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    </svg>
+);
+
 interface EmissaoNFeProps {
     toggleSidebar: () => void;
 }
 
-type SectionType = 'emitir' | 'configurar';
+type SectionType = 'emitir' | 'operacoes' | 'configurar';
 
 const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     const [activeSection, setActiveSection] = useState<SectionType>('emitir');
@@ -59,10 +72,25 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     const [certificadoFile, setCertificadoFile] = useState<File | null>(null);
     const [certificadoSenha, setCertificadoSenha] = useState('');
     const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
+    const [usarCertificadoExistente, setUsarCertificadoExistente] = useState(false);
+    const [empresaCertificadoId, setEmpresaCertificadoId] = useState('');
 
-    // Carregar empresas ao montar componente
+    // Estados para Operações Fiscais (Cancelamento e Correção)
+    const [chaveAcessoCancelamento, setChaveAcessoCancelamento] = useState('');
+    const [justificativaCancelamento, setJustificativaCancelamento] = useState('');
+    const [empresaCancelamentoId, setEmpresaCancelamentoId] = useState('');
+    const [cancelando, setCancelando] = useState(false);
+    const [resultadoCancelamento, setResultadoCancelamento] = useState<any>(null);
+
+    const [chaveAcessoCorrecao, setChaveAcessoCorrecao] = useState('');
+    const [textoCorrecao, setTextoCorrecao] = useState('');
+    const [empresaCorrecaoId, setEmpresaCorrecaoId] = useState('');
+    const [corrigindo, setCorrigindo] = useState(false);
+    const [resultadoCorrecao, setResultadoCorrecao] = useState<any>(null);
+
+    // Carregar empresas ao montar componente ou trocar de seção
     useEffect(() => {
-        if (activeSection === 'configurar') {
+        if (activeSection === 'configurar' || activeSection === 'operacoes') {
             loadEmpresas();
         }
     }, [activeSection]);
@@ -108,6 +136,8 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
         });
         setCertificadoFile(null);
         setCertificadoSenha('');
+        setUsarCertificadoExistente(false);
+        setEmpresaCertificadoId('');
         setIsModalEmpresaOpen(true);
     };
 
@@ -116,6 +146,8 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
         setEditandoEmpresaId(null);
         setCertificadoFile(null);
         setCertificadoSenha('');
+        setUsarCertificadoExistente(false);
+        setEmpresaCertificadoId('');
     };
 
     const handleEditarEmpresa = (empresa: EmpresaFiscal) => {
@@ -138,6 +170,8 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
         setEditandoEmpresaId(empresa.id);
         setCertificadoFile(null);
         setCertificadoSenha('');
+        setUsarCertificadoExistente(false);
+        setEmpresaCertificadoId('');
         setIsModalEmpresaOpen(true);
     };
 
@@ -153,14 +187,26 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
 
             // Converter certificado para Base64 se fornecido
             let certificadoBase64 = undefined;
-            if (certificadoFile && certificadoSenha) {
+            let certificadoSenhaFinal = undefined;
+            
+            if (usarCertificadoExistente && empresaCertificadoId) {
+                // Usar certificado de outra empresa
+                const empresaOrigem = empresas.find(e => e.id === empresaCertificadoId);
+                if (empresaOrigem) {
+                    // Nota: Backend deve copiar certificado da empresa origem
+                    console.log('📋 Usando certificado da empresa:', empresaOrigem.razaoSocial);
+                }
+            } else if (certificadoFile && certificadoSenha) {
+                // Upload de novo certificado
                 certificadoBase64 = await empresaFiscalService.converterCertificadoParaBase64(certificadoFile);
+                certificadoSenhaFinal = certificadoSenha;
             }
 
             const dataToSave = {
                 ...empresaForm,
                 certificadoBase64,
-                certificadoSenha: certificadoSenha || undefined
+                certificadoSenha: certificadoSenhaFinal,
+                copiarCertificadoDeEmpresaId: usarCertificadoExistente ? empresaCertificadoId : undefined
             };
 
             if (editandoEmpresaId) {
@@ -215,6 +261,81 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
         }
     };
 
+    // Handlers para Operações Fiscais
+    const handleCancelarNFe = async () => {
+        try {
+            if (!chaveAcessoCancelamento || !justificativaCancelamento || !empresaCancelamentoId) {
+                alert('❌ Preencha todos os campos');
+                return;
+            }
+
+            if (justificativaCancelamento.length < 15) {
+                alert('❌ A justificativa deve ter pelo menos 15 caracteres');
+                return;
+            }
+
+            setCancelando(true);
+            setResultadoCancelamento(null);
+
+            const response = await nfeFiscalService.cancelarNFe({
+                chaveAcesso: chaveAcessoCancelamento,
+                justificativa: justificativaCancelamento,
+                empresaId: empresaCancelamentoId
+            });
+
+            if (response.success) {
+                setResultadoCancelamento(response.data);
+                alert('✅ NF-e cancelada com sucesso!');
+                setChaveAcessoCancelamento('');
+                setJustificativaCancelamento('');
+            } else {
+                alert(`❌ ${response.error || 'Erro ao cancelar NF-e'}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao cancelar NF-e:', error);
+            alert(`❌ Erro: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setCancelando(false);
+        }
+    };
+
+    const handleCorrigirNFe = async () => {
+        try {
+            if (!chaveAcessoCorrecao || !textoCorrecao || !empresaCorrecaoId) {
+                alert('❌ Preencha todos os campos');
+                return;
+            }
+
+            if (textoCorrecao.length < 15) {
+                alert('❌ O texto da correção deve ter pelo menos 15 caracteres');
+                return;
+            }
+
+            setCorrigindo(true);
+            setResultadoCorrecao(null);
+
+            const response = await nfeFiscalService.corrigirNFe({
+                chaveAcesso: chaveAcessoCorrecao,
+                correcao: textoCorrecao,
+                empresaId: empresaCorrecaoId
+            });
+
+            if (response.success) {
+                setResultadoCorrecao(response.data);
+                alert('✅ Carta de Correção enviada com sucesso!');
+                setChaveAcessoCorrecao('');
+                setTextoCorrecao('');
+            } else {
+                alert(`❌ ${response.error || 'Erro ao enviar CC-e'}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao enviar CC-e:', error);
+            alert(`❌ Erro: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setCorrigindo(false);
+        }
+    };
+
     return (
         <div className="p-4 sm:p-8">
             {/* Header Principal */}
@@ -231,14 +352,14 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
             </header>
 
             {/* Navegação entre seções */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6">
+            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-2 mb-6">
                 <nav className="flex gap-2">
                     <button
                         onClick={() => setActiveSection('emitir')}
                         className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                             activeSection === 'emitir'
                                 ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg'
-                                : 'text-gray-600 hover:bg-gray-100'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-100 dark:hover:bg-dark-bg'
                         }`}
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,11 +368,24 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                         Emitir NF-e
                     </button>
                     <button
+                        onClick={() => setActiveSection('operacoes')}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                            activeSection === 'operacoes'
+                                ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-100 dark:hover:bg-dark-bg'
+                        }`}
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                        </svg>
+                        Operações (Cancelar/Corrigir)
+                    </button>
+                    <button
                         onClick={() => setActiveSection('configurar')}
                         className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                             activeSection === 'configurar'
                                 ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                                : 'text-gray-600 hover:bg-gray-100'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-100 dark:hover:bg-dark-bg'
                         }`}
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -455,6 +589,202 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                     )}
                 </div>
             </div>
+            )}
+
+            {/* SEÇÃO: Operações Fiscais (Cancelar e Corrigir) */}
+            {activeSection === 'operacoes' && (
+                <div className="space-y-6">
+                    {/* GRID de Cards */}
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {/* CARD: CANCELAMENTO DE NF-E */}
+                        <div className="bg-white dark:bg-dark-card rounded-2xl shadow-lg border-2 border-red-200 dark:border-red-800 overflow-hidden">
+                            <div className="bg-gradient-to-r from-red-600 to-red-500 px-6 py-4 flex items-center gap-3">
+                                <XCircleIcon className="w-8 h-8 text-white" />
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Cancelamento de NF-e</h2>
+                                    <p className="text-sm text-white/80">Cancelar NF-e autorizada na SEFAZ</p>
+                                </div>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                {/* Selecionar Empresa */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                        Empresa *
+                                    </label>
+                                    <select
+                                        value={empresaCancelamentoId}
+                                        onChange={(e) => setEmpresaCancelamentoId(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-red-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                    >
+                                        <option value="">Selecione a empresa...</option>
+                                        {empresas.map(emp => (
+                                            <option key={emp.id} value={emp.id}>
+                                                {emp.razaoSocial} ({emp.cnpj})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Chave de Acesso */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                        Chave de Acesso da NF-e *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={chaveAcessoCancelamento}
+                                        onChange={(e) => setChaveAcessoCancelamento(e.target.value)}
+                                        placeholder="44 dígitos"
+                                        maxLength={44}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-red-500 font-mono bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                    />
+                                </div>
+
+                                {/* Justificativa */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                        Justificativa do Cancelamento *
+                                    </label>
+                                    <textarea
+                                        value={justificativaCancelamento}
+                                        onChange={(e) => setJustificativaCancelamento(e.target.value)}
+                                        placeholder="Mínimo de 15 caracteres..."
+                                        rows={3}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-red-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+                                        {justificativaCancelamento.length}/15 caracteres mínimos
+                                    </p>
+                                </div>
+
+                                {/* Botão Cancelar */}
+                                <button
+                                    onClick={handleCancelarNFe}
+                                    disabled={cancelando}
+                                    className="w-full px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 text-white font-bold rounded-xl hover:from-red-700 hover:to-red-600 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {cancelando ? (
+                                        <>
+                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Cancelando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XCircleIcon className="w-5 h-5 inline mr-2" />
+                                            Cancelar NF-e
+                                        </>
+                                    )}
+                                </button>
+
+                                {/* Resultado */}
+                                {resultadoCancelamento && (
+                                    <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                                        <h4 className="font-bold text-red-800 dark:text-red-400 mb-2">✅ NF-e Cancelada</h4>
+                                        <div className="text-sm text-red-700 dark:text-red-300 space-y-1">
+                                            <p><strong>Protocolo:</strong> {resultadoCancelamento.protocolo}</p>
+                                            <p><strong>Mensagem:</strong> {resultadoCancelamento.mensagem}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* CARD: CARTA DE CORREÇÃO (CC-E) */}
+                        <div className="bg-white dark:bg-dark-card rounded-2xl shadow-lg border-2 border-blue-200 dark:border-blue-800 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 flex items-center gap-3">
+                                <PencilSquareIcon className="w-8 h-8 text-white" />
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Carta de Correção (CC-e)</h2>
+                                    <p className="text-sm text-white/80">Corrigir informações de NF-e já autorizada</p>
+                                </div>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                {/* Selecionar Empresa */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                        Empresa *
+                                    </label>
+                                    <select
+                                        value={empresaCorrecaoId}
+                                        onChange={(e) => setEmpresaCorrecaoId(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-blue-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                    >
+                                        <option value="">Selecione a empresa...</option>
+                                        {empresas.map(emp => (
+                                            <option key={emp.id} value={emp.id}>
+                                                {emp.razaoSocial} ({emp.cnpj})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Chave de Acesso */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                        Chave de Acesso da NF-e *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={chaveAcessoCorrecao}
+                                        onChange={(e) => setChaveAcessoCorrecao(e.target.value)}
+                                        placeholder="44 dígitos"
+                                        maxLength={44}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                    />
+                                </div>
+
+                                {/* Texto da Correção */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-2">
+                                        Texto da Correção *
+                                    </label>
+                                    <textarea
+                                        value={textoCorrecao}
+                                        onChange={(e) => setTextoCorrecao(e.target.value)}
+                                        placeholder="Descreva a correção necessária (mínimo 15 caracteres)..."
+                                        rows={5}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-blue-500 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+                                        {textoCorrecao.length}/15 caracteres mínimos
+                                    </p>
+                                </div>
+
+                                {/* Botão Corrigir */}
+                                <button
+                                    onClick={handleCorrigirNFe}
+                                    disabled={corrigindo}
+                                    className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {corrigindo ? (
+                                        <>
+                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Enviando CC-e...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <PencilSquareIcon className="w-5 h-5 inline mr-2" />
+                                            Enviar Carta de Correção
+                                        </>
+                                    )}
+                                </button>
+
+                                {/* Resultado */}
+                                {resultadoCorrecao && (
+                                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                                        <h4 className="font-bold text-blue-800 dark:text-blue-400 mb-2">✅ CC-e Registrada</h4>
+                                        <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                                            <p><strong>Protocolo:</strong> {resultadoCorrecao.protocolo}</p>
+                                            <p><strong>Mensagem:</strong> {resultadoCorrecao.mensagem}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* SEÇÃO: Configurar Empresas */}
@@ -793,35 +1123,90 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                             Certificado Digital A1
                                         </h3>
                                         <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Arquivo .pfx/.p12 *</label>
-                                                <input
-                                                    type="file"
-                                                    accept=".pfx,.p12"
-                                                    onChange={handleCertificadoChange}
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                                                    required
-                                                />
-                                                {certificadoFile && (
-                                                    <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                        Arquivo selecionado: {certificadoFile.name}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Senha do Certificado *</label>
-                                                <input
-                                                    type="password"
-                                                    value={certificadoSenha}
-                                                    onChange={(e) => setCertificadoSenha(e.target.value)}
-                                                    placeholder="Digite a senha do certificado"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                                                    required
-                                                />
-                                            </div>
+                                            {/* Opção: Usar Certificado Existente */}
+                                            {empresas.filter(e => e.certificadoValidade && e.id !== editandoEmpresaId).length > 0 && (
+                                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                    <label className="flex items-center gap-3 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={usarCertificadoExistente}
+                                                            onChange={(e) => {
+                                                                setUsarCertificadoExistente(e.target.checked);
+                                                                if (e.target.checked) {
+                                                                    setCertificadoFile(null);
+                                                                    setCertificadoSenha('');
+                                                                } else {
+                                                                    setEmpresaCertificadoId('');
+                                                                }
+                                                            }}
+                                                            className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                                        />
+                                                        <div>
+                                                            <p className="font-semibold text-gray-800">Usar Certificado Existente</p>
+                                                            <p className="text-xs text-gray-600">Compartilhar certificado de outra empresa</p>
+                                                        </div>
+                                                    </label>
+                                                    
+                                                    {usarCertificadoExistente && (
+                                                        <div className="mt-4">
+                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Selecione a Empresa *</label>
+                                                            <select
+                                                                value={empresaCertificadoId}
+                                                                onChange={(e) => setEmpresaCertificadoId(e.target.value)}
+                                                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                                required
+                                                            >
+                                                                <option value="">Selecione...</option>
+                                                                {empresas
+                                                                    .filter(e => e.certificadoValidade && e.id !== editandoEmpresaId)
+                                                                    .map(emp => (
+                                                                        <option key={emp.id} value={emp.id}>
+                                                                            {emp.razaoSocial} ({emp.cnpj}) - Válido até {emp.certificadoValidade}
+                                                                        </option>
+                                                                    ))
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Upload de Novo Certificado */}
+                                            {!usarCertificadoExistente && (
+                                                <>
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                            Arquivo .pfx/.p12 {!editandoEmpresaId && '*'}
+                                                        </label>
+                                                        <input
+                                                            type="file"
+                                                            accept=".pfx,.p12"
+                                                            onChange={handleCertificadoChange}
+                                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                                        />
+                                                        {certificadoFile && (
+                                                            <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                                Arquivo selecionado: {certificadoFile.name}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                            Senha do Certificado {!editandoEmpresaId && '*'}
+                                                        </label>
+                                                        <input
+                                                            type="password"
+                                                            value={certificadoSenha}
+                                                            onChange={(e) => setCertificadoSenha(e.target.value)}
+                                                            placeholder="Digite a senha do certificado"
+                                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
                                             <div className="bg-white border-l-4 border-orange-400 p-4 rounded-r-lg">
                                                 <div className="flex gap-3">
                                                     <svg className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
