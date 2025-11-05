@@ -65,22 +65,21 @@ export class EquipesService {
           }
         });
 
-        if (membrosIds.length > 0) {
-          await tx.pessoa.updateMany({
-            where: { id: { in: membrosIds } },
-            data: { disponivel: false }
-          });
-        }
-
-        const pessoas = membrosIds.length
-          ? await tx.pessoa.findMany({ where: { id: { in: membrosIds } } })
+        // Buscar usuários (eletricistas) ao invés de pessoas
+        const usuarios = membrosIds.length
+          ? await tx.user.findMany({ 
+              where: { 
+                id: { in: membrosIds },
+                role: 'eletricista'
+              } 
+            })
           : [];
 
-        const membros: EquipeMembro[] = pessoas.map((p) => ({
-          id: p.id,
-          nome: p.nome,
-          funcao: p.funcao as unknown as string,
-          email: p.email ?? null
+        const membros: EquipeMembro[] = usuarios.map((u) => ({
+          id: u.id,
+          nome: u.name,
+          funcao: u.role,
+          email: u.email
         }));
 
         return { equipe, membros };
@@ -118,24 +117,25 @@ export class EquipesService {
         orderBy: { nome: 'asc' }
       });
 
-      const allPessoaIds = Array.from(
+      const allUsuarioIds = Array.from(
         new Set(equipes.flatMap((e) => e.membros))
       );
 
-      const pessoas = allPessoaIds.length
-        ? await prisma.pessoa.findMany({ where: { id: { in: allPessoaIds } } })
+      // Buscar usuários ao invés de pessoas
+      const usuarios = allUsuarioIds.length
+        ? await prisma.user.findMany({ where: { id: { in: allUsuarioIds } } })
         : [];
-      const pessoaById = new Map(pessoas.map((p) => [p.id, p]));
+      const usuarioById = new Map(usuarios.map((u) => [u.id, u]));
 
       return equipes.map((equipe) => {
         const membros: EquipeMembro[] = equipe.membros
-          .map((id) => pessoaById.get(id))
+          .map((id) => usuarioById.get(id))
           .filter(Boolean)
-          .map((p) => ({
-            id: (p as any).id,
-            nome: (p as any).nome,
-            funcao: (p as any).funcao as unknown as string,
-            email: (p as any).email ?? null
+          .map((u) => ({
+            id: (u as any).id,
+            nome: (u as any).name,
+            funcao: (u as any).role,
+            email: (u as any).email
           }));
         return { ...equipe, membros };
       });
@@ -170,14 +170,15 @@ export class EquipesService {
         return null;
       }
 
-      const pessoas = equipe.membros.length
-        ? await prisma.pessoa.findMany({ where: { id: { in: equipe.membros } } })
+      // Buscar usuários ao invés de pessoas
+      const usuarios = equipe.membros.length
+        ? await prisma.user.findMany({ where: { id: { in: equipe.membros } } })
         : [];
-      const membros: EquipeMembro[] = pessoas.map((p) => ({
-        id: p.id,
-        nome: p.nome,
-        funcao: p.funcao as unknown as string,
-        email: p.email ?? null
+      const membros: EquipeMembro[] = usuarios.map((u) => ({
+        id: u.id,
+        nome: u.name,
+        funcao: u.role,
+        email: u.email
       }));
 
       return { ...equipe, membros };
@@ -229,21 +230,15 @@ export class EquipesService {
           }
         });
 
-        if (removed.length > 0) {
-          await tx.pessoa.updateMany({ where: { id: { in: removed } }, data: { disponivel: true } });
-        }
-        if (added.length > 0) {
-          await tx.pessoa.updateMany({ where: { id: { in: added } }, data: { disponivel: false } });
-        }
-
-        const pessoas = newMembros.length
-          ? await tx.pessoa.findMany({ where: { id: { in: newMembros } } })
+        // Buscar usuários ao invés de pessoas
+        const usuarios = newMembros.length
+          ? await tx.user.findMany({ where: { id: { in: newMembros } } })
           : [];
-        const membros: EquipeMembro[] = pessoas.map((p) => ({
-          id: p.id,
-          nome: p.nome,
-          funcao: p.funcao as unknown as string,
-          email: p.email ?? null
+        const membros: EquipeMembro[] = usuarios.map((u) => ({
+          id: u.id,
+          nome: u.name,
+          funcao: u.role,
+          email: u.email
         }));
 
         return { equipe, membros };

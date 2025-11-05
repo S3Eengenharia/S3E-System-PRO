@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { navLinks, S3ELogoIcon } from '../constants';
 import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
+import { ThemeToggle } from './theme-toggle';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -245,16 +246,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                             <p className="text-xs text-gray-500 dark:text-dark-text-secondary font-medium">{user?.role || 'Admin'}</p>
                         </div>
                     </div>
-                    <button 
-                        onClick={() => {
-                            onNavigate('Configurações');
-                            if (window.innerWidth < 1024) toggleSidebar();
-                        }} 
-                        className="p-2 rounded-xl text-gray-400 dark:text-dark-text-secondary hover:bg-white dark:hover:bg-dark-bg hover:text-gray-600 dark:hover:text-dark-text hover:shadow-soft transition-all duration-200" 
-                        title="Configurações do Sistema"
-                    >
-                        <Cog6ToothIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Botão de alternar tema */}
+                        <div className="scale-90">
+                            <ThemeToggle />
+                        </div>
+                        {/* Botão de configurações */}
+                        <button 
+                            onClick={() => {
+                                onNavigate('Configurações');
+                                if (window.innerWidth < 1024) toggleSidebar();
+                            }} 
+                            className="p-2 rounded-xl text-gray-400 dark:text-dark-text-secondary hover:bg-white dark:hover:bg-dark-bg hover:text-gray-600 dark:hover:text-dark-text hover:shadow-soft transition-all duration-200" 
+                            title="Configurações do Sistema"
+                        >
+                            <Cog6ToothIcon className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
                 <button 
                     onClick={handleLogout}

@@ -44,6 +44,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
     // Aplicar tema ao documento
     const root = document.documentElement;
+    
     if (appliedTheme === 'dark') {
       root.classList.add('dark');
     } else {

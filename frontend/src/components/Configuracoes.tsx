@@ -162,20 +162,16 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             setLoadingUsuarios(true);
             const response = await configuracoesService.listarUsuarios();
             
-            console.log('📥 Resposta de listarUsuarios:', response);
-            
             if (response.success && response.data) {
                 // Garantir que sempre seja um array
                 const usuariosArray = Array.isArray(response.data) ? response.data : [];
-                console.log('👥 Usuários carregados:', usuariosArray);
                 setUsuarios(usuariosArray);
             } else {
-                console.warn('⚠️ Resposta sem dados, inicializando array vazio');
                 setUsuarios([]);
             }
         } catch (error) {
             console.error('Erro ao carregar usuários:', error);
-            setUsuarios([]); // Garantir array vazio em caso de erro
+            setUsuarios([]);
             alert('❌ Erro ao carregar usuários');
         } finally {
             setLoadingUsuarios(false);
@@ -306,7 +302,7 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                 alert(`❌ ${response.error || 'Erro ao criar usuário'}`);
             }
         } catch (error) {
-            console.error('Erro ao criar usuário:', error);
+            console.error('❌ Erro ao criar usuário:', error);
             alert('❌ Erro ao criar usuário');
         } finally {
             setCreatingUser(false);
@@ -450,7 +446,12 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                     {/* Light Theme */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormConfig({...formConfig, temaPreferido: 'light'})}
+                                        onClick={() => {
+                                            setFormConfig({...formConfig, temaPreferido: 'light'});
+                                            if (themeContext) {
+                                                themeContext.setTheme('light');
+                                            }
+                                        }}
                                         className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
                                             formConfig.temaPreferido === 'light'
                                                 ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
@@ -472,7 +473,12 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                     {/* Dark Theme */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormConfig({...formConfig, temaPreferido: 'dark'})}
+                                        onClick={() => {
+                                            setFormConfig({...formConfig, temaPreferido: 'dark'});
+                                            if (themeContext) {
+                                                themeContext.setTheme('dark');
+                                            }
+                                        }}
                                         className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
                                             formConfig.temaPreferido === 'dark'
                                                 ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
@@ -494,7 +500,12 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                     {/* System Theme */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormConfig({...formConfig, temaPreferido: 'system'})}
+                                        onClick={() => {
+                                            setFormConfig({...formConfig, temaPreferido: 'system'});
+                                            if (themeContext) {
+                                                themeContext.setTheme('system');
+                                            }
+                                        }}
                                         className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
                                             formConfig.temaPreferido === 'system'
                                                 ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'

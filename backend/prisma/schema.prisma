@@ -564,7 +564,8 @@ model Equipe {
   id        String     @id @default(uuid())
   nome      String     @unique // Ex: Equipe A, Equipe B, Equipe C
   tipo      TipoEquipe
-  membros   String[] // Array de IDs de usuários
+  descricao String     @default("")
+  membros   String[] // Array de IDs de usuários (eletricistas)
   ativa     Boolean    @default(true)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt

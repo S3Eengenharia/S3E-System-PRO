@@ -292,7 +292,6 @@ export const navLinks = [
     // ========== FINANCEIRO / CONTÁBIL ==========
     { name: 'Financeiro', icon: FinanceIcon },
     { name: 'Emissão NF-e', icon: InvoiceIcon },
-    { name: 'Operações Fiscais', icon: FiscalOpsIcon },
     { name: 'Movimentações', icon: MovementIcon },
     { name: 'Histórico', icon: HistoryIcon },
 ];

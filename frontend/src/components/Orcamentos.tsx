@@ -4,6 +4,7 @@ import { clientesService, type Cliente } from '../services/clientesService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import EditorDescricaoAvancada from './EditorDescricaoAvancada';
+import { generateOrcamentoPDF, type OrcamentoPDFData } from '../utils/pdfGenerator';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -40,6 +41,11 @@ const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.432 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+const DocumentArrowDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     </svg>
 );
 
@@ -142,6 +148,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         // Novos campos
         empresaCNPJ: '',
         enderecoObra: '',
+        cidade: '',
+        bairro: '',
+        cep: '',
         responsavelObra: '',
         previsaoInicio: '',
         previsaoTermino: '',
@@ -275,6 +284,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 // Novos campos
                 empresaCNPJ: (orcamento as any).empresaCNPJ || '',
                 enderecoObra: (orcamento as any).enderecoObra || '',
+                cidade: (orcamento as any).cidade || '',
+                bairro: (orcamento as any).bairro || '',
+                cep: (orcamento as any).cep || '',
                 responsavelObra: (orcamento as any).responsavelObra || '',
                 previsaoInicio: (orcamento as any).previsaoInicio ? new Date((orcamento as any).previsaoInicio).toISOString().split('T')[0] : '',
                 previsaoTermino: (orcamento as any).previsaoTermino ? new Date((orcamento as any).previsaoTermino).toISOString().split('T')[0] : '',
@@ -325,6 +337,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             observacoes: '',
             empresaCNPJ: '',
             enderecoObra: '',
+            cidade: '',
+            bairro: '',
+            cep: '',
             responsavelObra: '',
             previsaoInicio: '',
             previsaoTermino: '',
@@ -481,6 +496,43 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         } catch (err) {
             console.error('❌ Erro crítico ao alterar status:', err);
             alert('Erro de conexão ao alterar status');
+        }
+    };
+
+    // Gerar PDF do orçamento
+    const handleGerarPDF = (orcamento: Orcamento) => {
+        try {
+            console.log('📄 Gerando PDF do orçamento:', orcamento.id);
+
+            const pdfData: OrcamentoPDFData = {
+                id: orcamento.id.substring(0, 8).toUpperCase(),
+                titulo: orcamento.titulo,
+                cliente: {
+                    nome: orcamento.cliente?.nome || 'Cliente não informado',
+                    cpfCnpj: orcamento.cliente?.cpfCnpj || '',
+                    endereco: orcamento.cliente?.endereco,
+                    telefone: orcamento.cliente?.telefone
+                },
+                data: new Date(orcamento.createdAt).toLocaleDateString('pt-BR'),
+                validade: new Date(orcamento.validade).toLocaleDateString('pt-BR'),
+                descricao: orcamento.descricao,
+                items: orcamento.items.map(item => ({
+                    nome: item.nome,
+                    quantidade: item.quantidade,
+                    valorUnit: item.precoUnit,
+                    valorTotal: item.subtotal
+                })),
+                subtotal: orcamento.custoTotal,
+                bdi: orcamento.bdi,
+                valorTotal: orcamento.precoVenda,
+                observacoes: orcamento.observacoes
+            };
+
+            generateOrcamentoPDF(pdfData);
+            alert('✅ PDF gerado com sucesso!');
+        } catch (error) {
+            console.error('❌ Erro ao gerar PDF:', error);
+            alert('❌ Erro ao gerar PDF. Verifique o console.');
         }
     };
 
@@ -708,6 +760,14 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     Ver
                                 </button>
                                 <button
+                                    onClick={() => handleGerarPDF(orcamento)}
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold"
+                                    title="Gerar PDF"
+                                >
+                                    <DocumentArrowDownIcon className="w-4 h-4" />
+                                    PDF
+                                </button>
+                                <button
                                     onClick={() => handleOpenModal(orcamento)}
                                     className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-semibold"
                                 >
@@ -732,25 +792,25 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             {/* MODAL DE CRIAÇÃO/EDIÇÃO */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-6xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong max-w-6xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
-                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50">
+                        <div className="relative p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-purple-600 to-purple-700">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center shadow-medium ring-2 ring-purple-100">
+                                <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-medium">
                                     {orcamentoToEdit ? <PencilIcon className="w-7 h-7 text-white" /> : <PlusIcon className="w-7 h-7 text-white" />}
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">
+                                    <h2 className="text-2xl font-bold text-white">
                                         {orcamentoToEdit ? 'Editar Orçamento' : 'Novo Orçamento'}
                                     </h2>
-                                    <p className="text-sm text-gray-600 mt-1">
+                                    <p className="text-sm text-white/80 mt-1">
                                         {orcamentoToEdit ? 'Atualize as informações do orçamento' : 'Crie uma nova proposta comercial'}
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={handleCloseModal}
-                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                className="absolute top-4 right-4 p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -831,7 +891,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Endereço da Obra *
+                                            Endereço da Obra (Rua e Número) *
                                         </label>
                                         <input
                                             type="text"
@@ -839,7 +899,50 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                             onChange={(e) => setFormState(prev => ({ ...prev, enderecoObra: e.target.value }))}
                                             required
                                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                            placeholder="Rua, Número, Bairro, Cidade - UF, CEP"
+                                            placeholder="Ex: Rua das Flores, 123"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Bairro *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formState.bairro}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, bairro: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="Ex: Centro"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Cidade *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formState.cidade}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, cidade: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="Ex: Florianópolis"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            CEP *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formState.cep}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, cep: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            placeholder="00000-000"
+                                            maxLength={9}
                                         />
                                     </div>
 
@@ -1178,14 +1281,14 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
             {/* MODAL DE SELEÇÃO DE ITENS */}
             {showItemModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-60 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong w-full max-w-4xl max-h-[80vh] overflow-hidden">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong w-full max-w-4xl max-h-[80vh] overflow-hidden">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-blue-700">
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900">Adicionar Item ao Orçamento</h3>
-                                <p className="text-sm text-gray-600 mt-1">Escolha o tipo e selecione o item</p>
+                                <h3 className="text-xl font-bold text-white">Adicionar Item ao Orçamento</h3>
+                                <p className="text-sm text-white/80 mt-1">Escolha o tipo e selecione o item</p>
                             </div>
-                            <button onClick={() => setShowItemModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
+                            <button onClick={() => setShowItemModal(false)} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
@@ -1267,13 +1370,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             {/* MODAL DE VISUALIZAÇÃO */}
             {orcamentoToView && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-blue-700">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-900">Detalhes do Orçamento</h2>
-                                <p className="text-sm text-gray-600 mt-1">Visualização completa do orçamento</p>
+                                <h2 className="text-2xl font-bold text-white">Detalhes do Orçamento</h2>
+                                <p className="text-sm text-white/80 mt-1">Visualização completa do orçamento</p>
                             </div>
-                            <button onClick={() => setOrcamentoToView(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
+                            <button onClick={() => setOrcamentoToView(null)} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
@@ -1344,6 +1447,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
                             {/* Ações do Orçamento */}
                             <div className="flex gap-3 pt-6 border-t border-gray-100">
+                                <button
+                                    onClick={() => handleGerarPDF(orcamentoToView)}
+                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl hover:from-red-700 hover:to-red-600 transition-all shadow-medium font-semibold"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5" />
+                                    Gerar PDF
+                                </button>
                                 {orcamentoToView.status === 'Pendente' && (
                                     <>
                                         <button
