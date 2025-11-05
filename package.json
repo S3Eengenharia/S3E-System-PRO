@@ -16,7 +16,19 @@
     "build:backend": "npm run build --workspace=backend",
     "install:all": "npm install --workspaces"
   },
-  "keywords": ["s3e", "engenharia", "gestão", "erp"],
+  "keywords": [
+    "s3e",
+    "engenharia",
+    "gestão",
+    "erp"
+  ],
   "author": "S3E Engenharia",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.552.0",
+    "next-themes": "^0.4.6",
+    "tailwind-merge": "^3.3.1"
+  }
 }

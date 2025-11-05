@@ -23,19 +23,21 @@ import Projetos from './components/Projetos';
 import ProjetosAPI from './components/ProjetosAPI';
 import ProjetosModerno from './components/ProjetosModerno';
 import Obras from './components/Obras';
-import ServicosAPI from './components/ServicosAPI';
+import Servicos from './components/Servicos';
 import Financeiro from './components/Financeiro';
 import EmissaoNFe from './components/EmissaoNFe';
+import Configuracoes from './components/Configuracoes';
 import ComparacaoPrecos from './components/ComparacaoPrecos';
 import Vendas from './components/Vendas';
-import SettingsModal from './components/SettingsModal';
+import ObrasKanban from './pages/ObrasKanban';
+// import SettingsModal from './components/SettingsModal'; // DESCONTINUADO - Substituído por página Configuracoes.tsx
 import GestaoObras from './components/GestaoObras';
 import { type Project } from './types';
 
 const MainApp: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState('Dashboard');
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  // const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // DESCONTINUADO
   const [initialBudgetId, setInitialBudgetId] = useState<string | null>(null);
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -92,12 +94,7 @@ const MainApp: React.FC = () => {
                  onViewBudget={handleViewBudget}
                />;
       case 'Obras':
-        return <Obras 
-                 toggleSidebar={toggleSidebar} 
-                 onViewProject={handleViewProject}
-                 projects={projects}
-                 setProjects={setProjects}
-               />;
+        return <ObrasKanban toggleSidebar={toggleSidebar} />;
       case 'Gestão de Obras':
         return <GestaoObras toggleSidebar={toggleSidebar} />;
       case 'Financeiro':
@@ -107,20 +104,22 @@ const MainApp: React.FC = () => {
       case 'Emissão NF-e':
         return <EmissaoNFe toggleSidebar={toggleSidebar} />;
       case 'Serviços':
-        return <ServicosAPI toggleSidebar={toggleSidebar} />;
+        return <Servicos toggleSidebar={toggleSidebar} />;
+      case 'Configurações':
+        return <Configuracoes toggleSidebar={toggleSidebar} />;
       default:
         return <DashboardAPI toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
     }
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-brand-gray-50 font-sans">
+    <div className="flex h-screen overflow-hidden bg-brand-gray-50 dark:bg-dark-bg font-sans">
       <Sidebar 
         isOpen={isSidebarOpen} 
         toggleSidebar={toggleSidebar}
         activeView={activeView}
         onNavigate={handleNavigate}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => {}} // DESCONTINUADO - Agora usa onNavigate('Configurações')
       />
       {isSidebarOpen && (
         <div 
@@ -129,13 +128,14 @@ const MainApp: React.FC = () => {
           aria-hidden="true"
         ></div>
       )}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg">
         {renderActiveView()}
       </main>
-      <SettingsModal 
+      {/* SettingsModal DESCONTINUADO - Substituído por página Configuracoes.tsx */}
+      {/* <SettingsModal 
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-      />
+      /> */}
     </div>
   );
 };

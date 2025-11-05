@@ -76,14 +76,21 @@ class ComprasService {
     dataFim?: string;
   }) {
     const resp = await apiService.get<any>('/api/compras', params);
-    // Desenvelopa: alguns endpoints retornam { success, data } ou apenas []
-    const raw = Array.isArray(resp)
-      ? resp
-      : Array.isArray((resp as any).data)
-      ? (resp as any).data
-      : Array.isArray((resp as any)?.data?.data)
-      ? (resp as any).data.data
-      : [];
+    
+    // Backend retorna: { success: true, data: { compras: [], pagination: {} } }
+    let raw: any[] = [];
+    
+    if (Array.isArray(resp)) {
+      raw = resp;
+    } else if ((resp as any)?.data?.compras && Array.isArray((resp as any).data.compras)) {
+      raw = (resp as any).data.compras;
+    } else if (Array.isArray((resp as any)?.data)) {
+      raw = (resp as any).data;
+    } else if (Array.isArray((resp as any)?.data?.data)) {
+      raw = (resp as any).data.data;
+    }
+    
+    console.log('📦 Compras carregadas do backend:', raw.length, raw);
     return (raw as any[]).map((c) => this.mapCompraToPurchaseOrder(c));
   }
 

@@ -92,6 +92,13 @@ class AxiosApiService {
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
     try {
       const response = await this.axiosInstance.get(endpoint, { params });
+      
+      // Se o backend já retorna { success, data }, retornar direto
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        return response.data as ApiResponse<T>;
+      }
+      
+      // Caso contrário, envolver na estrutura padrão
       return {
         success: true,
         data: response.data,
@@ -105,9 +112,16 @@ class AxiosApiService {
   }
 
   // POST request
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, data?: any, config?: any): Promise<ApiResponse<T>> {
     try {
-      const response = await this.axiosInstance.post(endpoint, data);
+      const response = await this.axiosInstance.post(endpoint, data, config);
+      
+      // Se o backend já retorna { success, data }, retornar direto
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        return response.data as ApiResponse<T>;
+      }
+      
+      // Caso contrário, envolver na estrutura padrão
       return {
         success: true,
         data: response.data,
@@ -124,6 +138,13 @@ class AxiosApiService {
   async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
     try {
       const response = await this.axiosInstance.put(endpoint, data);
+      
+      // Se o backend já retorna { success, data }, retornar direto
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        return response.data as ApiResponse<T>;
+      }
+      
+      // Caso contrário, envolver na estrutura padrão
       return {
         success: true,
         data: response.data,
@@ -140,6 +161,13 @@ class AxiosApiService {
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
       const response = await this.axiosInstance.delete(endpoint);
+      
+      // Se o backend já retorna { success, data }, retornar direto
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        return response.data as ApiResponse<T>;
+      }
+      
+      // Caso contrário, envolver na estrutura padrão
       return {
         success: true,
         data: response.data,
@@ -160,6 +188,13 @@ class AxiosApiService {
           'Content-Type': 'multipart/form-data',
         },
       });
+      
+      // Se o backend já retorna { success, data }, retornar direto
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        return response.data as ApiResponse<T>;
+      }
+      
+      // Caso contrário, envolver na estrutura padrão
       return {
         success: true,
         data: response.data,

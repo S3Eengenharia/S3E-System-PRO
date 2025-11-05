@@ -81,6 +81,10 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [purchaseToEdit, setPurchaseToEdit] = useState<PurchaseOrder | null>(null);
     const [purchaseToDelete, setPurchaseToDelete] = useState<PurchaseOrder | null>(null);
     
+    // Estados para recebimento de remessa
+    const [isReceivingModalOpen, setIsReceivingModalOpen] = useState(false);
+    const [dataRecebimento, setDataRecebimento] = useState(new Date().toISOString().split('T')[0]);
+    
     // Form state
     const [selectedSupplierId, setSelectedSupplierId] = useState('');
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -137,10 +141,12 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         const load = async () => {
             setIsLoading(true);
             try {
+                console.log('🔍 Carregando compras...');
                 const data = await comprasService.getCompras();
+                console.log('✅ Compras carregadas:', data.length, data);
                 setPurchaseOrders(data);
             } catch (e) {
-                console.error('Erro ao carregar compras', e);
+                console.error('❌ Erro ao carregar compras:', e);
             } finally {
                 setIsLoading(false);
             }
@@ -195,6 +201,34 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         setSupplierAddress('');
     };
 
+    const handleOpenReceivingModal = () => {
+        setDataRecebimento(new Date().toISOString().split('T')[0]);
+        setIsReceivingModalOpen(true);
+    };
+
+    const handleReceberRemessa = async () => {
+        if (!purchaseToView) return;
+        
+        try {
+            console.log('📦 Recebendo remessa:', purchaseToView.id, 'Data:', dataRecebimento);
+            
+            await comprasService.updateCompraStatus(purchaseToView.id, PurchaseStatus.Recebido, dataRecebimento);
+            
+            // Recarregar lista
+            const data = await comprasService.getCompras();
+            setPurchaseOrders(data);
+            
+            // Fechar modais
+            setIsReceivingModalOpen(false);
+            setPurchaseToView(null);
+            
+            alert('✅ Remessa recebida com sucesso! O estoque foi atualizado.');
+        } catch (error) {
+            console.error('❌ Erro ao receber remessa:', error);
+            alert('❌ Erro ao receber remessa');
+        }
+    };
+
     const handleCloseModal = () => {
         setIsModalOpen(false);
         resetForm();
@@ -244,6 +278,21 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         }
 
         try {
+            // Se está editando, apenas atualizar o status
+            if (purchaseToEdit) {
+                console.log('✏️ Atualizando status da compra:', purchaseToEdit.id, 'para', status);
+                await comprasService.updateCompraStatus(purchaseToEdit.id, status);
+                
+                // reload list
+                const data = await comprasService.getCompras();
+                setPurchaseOrders(data);
+
+                alert('✅ Status da compra atualizado com sucesso!');
+                handleCloseModal();
+                return;
+            }
+
+            // Se não está editando, criar nova compra
             const payload: any = {
                 fornecedorNome: supplierName,
                 fornecedorCNPJ: supplierCNPJ,
@@ -273,7 +322,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                 duplicatas
             };
 
-            // cria via service
+            console.log('📤 Criando nova compra:', payload);
             await comprasService.createCompra(payload);
 
             // reload list
@@ -283,7 +332,8 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             alert('✅ Compra registrada com sucesso!');
             handleCloseModal();
         } catch (error) {
-            alert('❌ Erro ao registrar compra');
+            console.error('❌ Erro:', error);
+            alert('❌ Erro ao processar compra');
         }
     };
 
@@ -360,20 +410,28 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             setStatusImportacao('XML');
 
             // Duplicatas / Parcelas
-            if (Array.isArray(data.parcelas)) {
-                setParcelas(
-                    data.parcelas.map((d: any, idx: number) => ({
-                        numero: d.numero || d.nDup || String(idx + 1).padStart(3, '0'),
-                        dataVencimento: (d.dataVencimento || d.dVenc || '').slice(0, 10),
-                        valor: parseFloat(String(d.valor || d.vDup || 0))
-                    }))
-                );
+            if (Array.isArray(data.parcelas) && data.parcelas.length > 0) {
+                const parcelasXML = data.parcelas.map((d: any, idx: number) => ({
+                    numero: d.numero || d.nDup || String(idx + 1).padStart(3, '0'),
+                    dataVencimento: (d.dataVencimento || d.dVenc || '').slice(0, 10),
+                    valor: parseFloat(String(d.valor || d.vDup || 0))
+                }));
+                
+                setDuplicatas(parcelasXML);
+                setParcelas(parcelasXML);
+                
+                // Se tem duplicatas, configurar como PARCELADO
+                setCondicaoPagamento('PARCELADO');
+                setNumParcelas(String(parcelasXML.length));
+                setDataPrimeiroVencimento(parcelasXML[0]?.dataVencimento || '');
+            } else {
+                // Se não tem duplicatas no XML, mantém à vista
+                setDuplicatas([]);
+                setParcelas([]);
+                setCondicaoPagamento('AVISTA');
+                setNumParcelas('1');
+                setDataPrimeiroVencimento('');
             }
-
-            // Mantém à vista por padrão (NF-e não traz parcelamento padrão)
-            setCondicaoPagamento('AVISTA');
-            setNumParcelas('1');
-            setDataPrimeiroVencimento('');
 
             // Abrir modal de compra preenchido
             setIsXMLModalOpen(false);
@@ -556,15 +614,22 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
                                 >
                                     <EyeIcon className="w-4 h-4" />
-                                    Ver
+                                    Ver Detalhes
                                 </button>
-                                <button
-                                    onClick={() => handleOpenModal(purchase)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm font-semibold"
-                                >
-                                    <PencilIcon className="w-4 h-4" />
-                                    Editar
-                                </button>
+                                {purchase.status === PurchaseStatus.Pendente && (
+                                    <button
+                                        onClick={() => {
+                                            setPurchaseToView(purchase);
+                                            handleOpenReceivingModal();
+                                        }}
+                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-semibold"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Receber
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -576,16 +641,16 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
                     <div className="bg-white rounded-2xl shadow-strong max-w-6xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
-                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-yellow-50">
+                        <div className="relative p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-orange-600 to-orange-700">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-600 to-orange-700 flex items-center justify-center shadow-medium ring-2 ring-orange-100">
+                                <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-medium">
                                     {purchaseToEdit ? <PencilIcon className="w-7 h-7 text-white" /> : <PlusIcon className="w-7 h-7 text-white" />}
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">
+                                    <h2 className="text-2xl font-bold text-white">
                                         {purchaseToEdit ? 'Editar Compra' : 'Nova Compra'}
                                     </h2>
-                                    <p className="text-sm text-gray-600 mt-1">
+                                    <p className="text-sm text-white/80 mt-1">
                                         {purchaseToEdit ? 'Atualize as informações da compra' : 'Registre uma nova compra ou pedido'}
                                     </p>
                                 </div>
@@ -901,7 +966,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                             {/* Custos e Pagamento */}
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Custos e Pagamento</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Valor do Frete</label>
                                         <input
@@ -959,6 +1024,24 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                             <option value="AVISTA">À vista</option>
                                             <option value="PARCELADO">Parcelado</option>
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Status da Compra *
+                                        </label>
+                                        <select
+                                            value={status}
+                                            onChange={(e) => setStatus(e.target.value as PurchaseStatus)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 font-semibold"
+                                            required
+                                        >
+                                            <option value={PurchaseStatus.Pendente}>⏳ Pendente</option>
+                                            <option value={PurchaseStatus.Recebido}>✅ Recebido (Entrada no Estoque)</option>
+                                            <option value={PurchaseStatus.Cancelado}>❌ Cancelado</option>
+                                        </select>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            ⚠️ Somente compras com status "Recebido" atualizam o estoque
+                                        </p>
                                     </div>
                                     {condicaoPagamento === 'PARCELADO' && (
                                         <div>
@@ -1163,13 +1246,13 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             {/* MODAL DE VISUALIZAÇÃO */}
             {purchaseToView && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-orange-600 to-orange-700">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-900">Detalhes da Compra</h2>
-                                <p className="text-sm text-gray-600 mt-1">Visualização completa do pedido</p>
+                                <h2 className="text-2xl font-bold text-white">Detalhes da Compra</h2>
+                                <p className="text-sm text-orange-100 mt-1">Visualização completa do pedido</p>
                             </div>
-                            <button onClick={() => setPurchaseToView(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
+                            <button onClick={() => setPurchaseToView(null)} className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
@@ -1407,6 +1490,157 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Rodapé com Ações */}
+                        <div className="p-6 bg-gray-50 border-t border-gray-200">
+                            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                {/* Status Atual */}
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-3 h-3 rounded-full ${
+                                            purchaseToView.status === PurchaseStatus.Recebido ? 'bg-green-500' :
+                                            purchaseToView.status === PurchaseStatus.Pendente ? 'bg-yellow-500' :
+                                            'bg-red-500'
+                                        }`}></div>
+                                        <span className="text-sm font-medium text-gray-700">
+                                            Status: <strong>{purchaseToView.status}</strong>
+                                        </span>
+                                    </div>
+                                    {(purchaseToView as any).dataRecebimento && (
+                                        <div className="text-sm text-gray-600 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
+                                            📅 Recebido em: {new Date((purchaseToView as any).dataRecebimento).toLocaleDateString('pt-BR')}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Botões de Ação */}
+                                <div className="flex gap-3">
+                                    {purchaseToView.status === PurchaseStatus.Pendente && (
+                                        <button
+                                            onClick={handleOpenReceivingModal}
+                                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            Receber Remessa
+                                        </button>
+                                    )}
+                                    {purchaseToView.status === PurchaseStatus.Recebido && (
+                                        <div className="flex items-center gap-2 px-6 py-3 bg-green-100 text-green-800 rounded-xl font-semibold">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Remessa Recebida
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => setPurchaseToView(null)}
+                                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-semibold"
+                                    >
+                                        Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE RECEBIMENTO DE REMESSA */}
+            {isReceivingModalOpen && purchaseToView && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
+                        {/* Header */}
+                        <div className="p-6 bg-gradient-to-r from-green-600 to-green-700">
+                            <div className="flex items-center gap-3 text-white">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold">Confirmar Recebimento</h3>
+                                    <p className="text-sm text-green-100">NF #{purchaseToView.invoiceNumber}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-6">
+                            {/* Informações da Compra */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <h4 className="text-sm font-semibold text-blue-900 mb-3">Resumo da Compra</h4>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Fornecedor:</span>
+                                        <span className="font-semibold text-gray-900">{purchaseToView.supplierName}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Total de Itens:</span>
+                                        <span className="font-semibold text-gray-900">{purchaseToView.items.length} produtos</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Valor Total:</span>
+                                        <span className="font-bold text-lg text-green-700">
+                                            R$ {purchaseToView.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Data de Recebimento */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data de Recebimento *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={dataRecebimento}
+                                    onChange={(e) => setDataRecebimento(e.target.value)}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    required
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    📅 Data em que a mercadoria foi recebida fisicamente
+                                </p>
+                            </div>
+
+                            {/* Alerta de Impacto */}
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                <div className="flex gap-3">
+                                    <svg className="w-5 h-5 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div>
+                                        <p className="text-sm font-semibold text-yellow-800 mb-1">⚠️ Atenção</p>
+                                        <p className="text-xs text-yellow-700">
+                                            Ao confirmar o recebimento, os seguintes itens vinculados ao catálogo serão automaticamente adicionados ao estoque.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Rodapé com Botões */}
+                        <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsReceivingModalOpen(false)}
+                                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-semibold"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleReceberRemessa}
+                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Confirmar Recebimento
+                            </button>
                         </div>
                     </div>
                 </div>

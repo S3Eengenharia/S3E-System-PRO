@@ -63,16 +63,17 @@ export class ComprasService {
             throw new Error('Número da NF é obrigatório');
         }
 
-        // Buscar ou criar fornecedor
+        // Buscar ou criar fornecedor (garantir que CNPJ seja string)
+        const cnpjString = String(fornecedorCNPJ);
         let fornecedor = await prisma.fornecedor.findUnique({
-            where: { cnpj: fornecedorCNPJ }
+            where: { cnpj: cnpjString }
         });
 
         if (!fornecedor) {
             fornecedor = await prisma.fornecedor.create({
                 data: {
                     nome: fornecedorNome,
-                    cnpj: fornecedorCNPJ,
+                    cnpj: cnpjString,
                     telefone: fornecedorTel || null
                 }
             });
@@ -91,9 +92,9 @@ export class ComprasService {
                 data: {
                     fornecedorId: fornecedor.id,
                     fornecedorNome,
-                    fornecedorCNPJ,
+                    fornecedorCNPJ: cnpjString,
                     fornecedorTel: fornecedorTel || null,
-                    numeroNF,
+                    numeroNF: String(numeroNF),
                     dataEmissaoNF,
                     dataCompra,
                     dataRecebimento: dataRecebimento || null,
@@ -107,7 +108,7 @@ export class ComprasService {
                         create: items.map(item => ({
                             materialId: item.materialId || null,
                             nomeProduto: item.nomeProduto,
-                            ncm: item.ncm || null,
+                            ncm: item.ncm ? String(item.ncm) : null,
                             quantidade: item.quantidade,
                             valorUnit: item.valorUnit,
                             valorTotal: item.quantidade * item.valorUnit
@@ -138,7 +139,7 @@ export class ComprasService {
                             where: {
                                 OR: [
                                     { nome: { contains: item.nomeProduto, mode: 'insensitive' } },
-                                    { sku: item.ncm || '' }
+                                    { sku: item.ncm ? String(item.ncm) : '' }
                                 ]
                             }
                         });
@@ -157,14 +158,17 @@ export class ComprasService {
                 }
             }
 
-            // 3. Gerar contas a pagar se for parcelado
+            // 3. Gerar contas a pagar (sempre gerar, mesmo se for à vista com 1 parcela)
             let contasPagar = null;
             if (condicoesPagamento && parcelas && parcelas > 0) {
                 const dataVencimento = dataPrimeiroVencimento || new Date(dataCompra);
                 if (!dataPrimeiroVencimento) {
-                    dataVencimento.setDate(dataVencimento.getDate() + 30);
+                    // Se for à vista, vencimento em 7 dias; se parcelado, 30 dias
+                    dataVencimento.setDate(dataVencimento.getDate() + (parcelas === 1 ? 7 : 30));
                 }
 
+                console.log(`💰 Gerando ${parcelas} conta(s) a pagar para compra NF ${numeroNF}`);
+                
                 contasPagar = await ContasPagarService.criarContasPagarParceladas({
                     fornecedorId: fornecedor.id,
                     compraId: compra.id,
@@ -174,6 +178,10 @@ export class ComprasService {
                     dataPrimeiroVencimento: dataVencimento,
                     observacoes: condicoesPagamento
                 });
+                
+                console.log(`✅ ${parcelas} conta(s) a pagar criada(s) com sucesso!`);
+            } else {
+                console.warn(`⚠️ Nenhuma conta a pagar gerada - Condições: ${condicoesPagamento}, Parcelas: ${parcelas}`);
             }
 
             return {

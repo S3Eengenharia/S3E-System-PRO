@@ -85,6 +85,10 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         membrosIds: [] as string[], // IDs dos membros (backend espera array de strings)
         ativa: true
     });
+    
+    // Estados para listar eletricistas
+    const [eletricistas, setEletricistas] = useState<any[]>([]);
+    const [loadingEletricistas, setLoadingEletricistas] = useState(false);
 
     // Carregar equipes do backend
     const loadEquipes = async () => {
@@ -137,6 +141,30 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         loadData();
     }, []);
 
+    // Carregar eletricistas do backend
+    const loadEletricistas = async () => {
+        try {
+            setLoadingEletricistas(true);
+            const response = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
+            
+            if (response.success && response.data) {
+                // Filtrar apenas eletricistas
+                const usuariosArray = Array.isArray(response.data) ? response.data : [];
+                const eletricistasFiltered = usuariosArray.filter((u: any) => 
+                    u.role?.toLowerCase() === 'eletricista'
+                );
+                setEletricistas(eletricistasFiltered);
+            } else {
+                setEletricistas([]);
+            }
+        } catch (err) {
+            console.error('Erro ao carregar eletricistas:', err);
+            setEletricistas([]);
+        } finally {
+            setLoadingEletricistas(false);
+        }
+    };
+
     const handleOpenModal = (equipe: Equipe | null = null) => {
         if (equipe) {
             setEquipeToEdit(equipe);
@@ -155,6 +183,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 ativa: true
             });
         }
+        loadEletricistas(); // Carregar eletricistas ao abrir o modal
         setIsModalOpen(true);
     };
 
@@ -239,20 +268,19 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         setFormState(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleAddMembroId = () => {
-        const userId = prompt('Digite o ID do usuário para adicionar à equipe:');
-        if (userId && userId.trim()) {
+    const handleAddEletricista = (eletricistaId: string) => {
+        if (!formState.membrosIds.includes(eletricistaId)) {
             setFormState(prev => ({ 
                 ...prev, 
-                membrosIds: [...prev.membrosIds, userId.trim()] 
+                membrosIds: [...prev.membrosIds, eletricistaId] 
             }));
         }
     };
 
-    const handleRemoveMembroId = (index: number) => {
+    const handleRemoveMembroId = (membroId: string) => {
         setFormState(prev => ({ 
             ...prev, 
-            membrosIds: prev.membrosIds.filter((_, i) => i !== index) 
+            membrosIds: prev.membrosIds.filter(id => id !== membroId) 
         }));
     };
 
@@ -940,41 +968,63 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
 
                             <div>
-                                <div className="flex justify-between items-center mb-3">
-                                    <label className="block text-sm font-semibold text-gray-700">
-                                        Membros da Equipe (IDs de Usuários) *
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={handleAddMembroId}
-                                        className="text-blue-600 hover:text-blue-700 text-sm font-semibold transition-colors"
-                                    >
-                                        + Adicionar Membro
-                                    </button>
-                                </div>
-                                <div className="space-y-2">
-                                    {formState.membrosIds.map((membroId, index) => (
-                                        <div key={index} className="flex gap-3 items-center p-3 bg-gray-50 rounded-xl border border-gray-200">
-                                            <div className="flex-1 flex items-center gap-2">
-                                                <UsersIcon className="w-4 h-4 text-gray-400" />
-                                                <span className="text-sm font-mono text-gray-700">{membroId}</span>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveMembroId(index)}
-                                                className="px-3 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all text-sm"
-                                            >
-                                                Remover
-                                            </button>
-                                        </div>
-                                    ))}
-                                    {formState.membrosIds.length === 0 && (
-                                        <div className="text-center py-8 text-gray-500 text-sm bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                                            <UsersIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                                            <p>Nenhum membro adicionado.</p>
-                                            <p className="text-xs mt-1">Clique em "Adicionar Membro" e insira o ID do usuário</p>
-                                        </div>
-                                    )}
+                                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                    Eletricistas Disponíveis *
+                                </label>
+                                {loadingEletricistas ? (
+                                    <div className="text-center py-4">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                    </div>
+                                ) : eletricistas.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500 text-sm bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                        <UsersIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                                        <p>Nenhum eletricista cadastrado no sistema.</p>
+                                        <p className="text-xs mt-1">Cadastre eletricistas em Configurações → Usuários</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
+                                        {eletricistas.map((eletricista) => {
+                                            const isSelected = formState.membrosIds.includes(eletricista.id);
+                                            return (
+                                                <button
+                                                    key={eletricista.id}
+                                                    type="button"
+                                                    onClick={() => isSelected ? handleRemoveMembroId(eletricista.id) : handleAddEletricista(eletricista.id)}
+                                                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+                                                        isSelected 
+                                                            ? 'border-blue-500 bg-blue-50' 
+                                                            : 'border-gray-200 bg-white hover:border-blue-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start gap-2">
+                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                                                            isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                                                        }`}>
+                                                            {isSelected && (
+                                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className={`text-sm font-semibold ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                                                                {eletricista.name}
+                                                            </p>
+                                                            <p className={`text-xs ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}>
+                                                                {eletricista.email}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Selecionados: <strong>{formState.membrosIds.length}</strong> eletricista(s)</span>
                                 </div>
                             </div>
 

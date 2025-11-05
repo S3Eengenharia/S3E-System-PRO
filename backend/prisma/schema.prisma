@@ -27,6 +27,19 @@ model User {
   @@map("users")
 }
 
+model ConfiguracaoSistema {
+  id              String   @id @default("sistema-config") // ID fixo para garantir registro único
+  temaPreferido   String   @default("light") // light, dark, system
+  logoUrl         String?  // URL da logo/perfil da empresa
+  nomeEmpresa     String   @default("S3E Engenharia")
+  emailContato    String?
+  telefoneContato String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("configuracoes_sistema")
+}
+
 // ============================================
 // CADASTROS BÁSICOS
 // ============================================
@@ -148,22 +161,35 @@ model KitItem {
 // ============================================
 
 model Orcamento {
-  id          String    @id @default(uuid())
-  clienteId   String
-  titulo      String
-  descricao   String? // HTML do Quill editor
-  validade    DateTime
-  status      String    @default("Rascunho") // Rascunho, Enviado, Aprovado, Rejeitado
-  bdi         Float     @default(0) // Margem de lucro
-  custoTotal  Float     @default(0)
-  precoVenda  Float     @default(0)
-  observacoes String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  aprovedAt   DateTime?
+  id                  String    @id @default(uuid())
+  clienteId           String
+  titulo              String
+  descricao           String? // HTML do Quill editor ou texto rico
+  descricaoProjeto    String? // Descrição técnica avançada do projeto
+  validade            DateTime
+  status              String    @default("Rascunho") // Rascunho, Enviado, Aprovado, Rejeitado
+  bdi                 Float     @default(0) // Margem de lucro (%)
+  custoTotal          Float     @default(0)
+  precoVenda          Float     @default(0)
+  observacoes         String?
+  
+  // NOVOS CAMPOS - Engenharia Elétrica
+  empresaCNPJ         String? // CNPJ da empresa executora
+  enderecoObra        String? // Endereço completo da obra
+  responsavelObra     String? // Responsável técnico no local
+  previsaoInicio      DateTime? // Data prevista de início
+  previsaoTermino     DateTime? // Data prevista de término
+  descontoValor       Float     @default(0) // Desconto em R$
+  impostoPercentual   Float     @default(0) // Impostos em %
+  condicaoPagamento   String? // Ex: "À Vista", "30/60/90 dias"
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  aprovedAt           DateTime?
 
-  cliente Cliente         @relation(fields: [clienteId], references: [id])
+  cliente Cliente           @relation(fields: [clienteId], references: [id])
   items   OrcamentoItem[]
+  fotos   OrcamentoFoto[]
   projeto Projeto?
   venda   Venda? // Relação 1:1 com venda (quando orçamento é vendido)
 
@@ -173,10 +199,11 @@ model Orcamento {
 model OrcamentoItem {
   id          String  @id @default(uuid())
   orcamentoId String
-  tipo        String // MATERIAL, KIT, SERVICO
+  tipo        String // MATERIAL, KIT, SERVICO, QUADRO_PRONTO, CUSTO_EXTRA
   materialId  String?
   kitId       String?
   servicoNome String? // Para serviços avulsos
+  descricao   String? // Descrição adicional do item
   quantidade  Float
   custoUnit   Float
   precoUnit   Float
@@ -187,6 +214,19 @@ model OrcamentoItem {
   kit       Kit?      @relation(fields: [kitId], references: [id])
 
   @@map("orcamento_items")
+}
+
+model OrcamentoFoto {
+  id          String   @id @default(uuid())
+  orcamentoId String
+  url         String // URL da foto armazenada
+  legenda     String? // Descrição/legenda da foto
+  ordem       Int      @default(0) // Ordem de exibição
+  createdAt   DateTime @default(now())
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+
+  @@map("orcamento_fotos")
 }
 
 // ============================================
@@ -222,6 +262,7 @@ model Projeto {
   alocacoes    AlocacaoObra[]
   etapasAdmin  EtapaAdmin[]
   tarefasCampo TarefaCampo[]
+  obra         Obra? // Relação 1:1 com Obra (quando projeto vai para execução)
 
   @@map("projetos")
 }
@@ -523,7 +564,8 @@ model Equipe {
   id        String     @id @default(uuid())
   nome      String     @unique // Ex: Equipe A, Equipe B, Equipe C
   tipo      TipoEquipe
-  membros   String[] // Array de IDs de usuários
+  descricao String     @default("")
+  membros   String[] // Array de IDs de usuários (eletricistas)
   ativa     Boolean    @default(true)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -549,6 +591,67 @@ model AlocacaoObra {
   projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
   @@map("alocacoes_obra")
+}
+
+// Obra representa o Projeto em fase de execução (Kanban)
+model Obra {
+  id                String       @id @default(uuid())
+  projetoId         String       @unique
+  nomeObra          String
+  status            StatusObra   @default(BACKLOG)
+  dataPrevistaInicio DateTime?
+  dataPrevistaFim   DateTime?
+  dataInicioReal    DateTime?
+  dataFimReal       DateTime?
+  observacoes       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  projeto Projeto     @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  tarefas TarefaObra[]
+
+  @@map("obras")
+}
+
+enum StatusObra {
+  BACKLOG
+  A_FAZER
+  ANDAMENTO
+  CONCLUIDO
+}
+
+// Tarefas dentro de cada Obra
+model TarefaObra {
+  id                  String    @id @default(uuid())
+  obraId              String
+  descricao           String
+  atribuidoA          String? // ID do User (eletricista/operador)
+  progresso           Int       @default(0) // 0 a 100
+  dataPrevista        DateTime?
+  dataConclusaoReal   DateTime?
+  observacoes         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  obra               Obra                  @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  registrosAtividade RegistroAtividade[]
+
+  @@map("tarefas_obra")
+}
+
+// Registro de atividades/relatos diários
+model RegistroAtividade {
+  id                  String    @id @default(uuid())
+  tarefaId            String
+  dataRegistro        DateTime  @default(now())
+  descricaoAtividade  String // O que foi feito
+  horasTrabalhadas    Float     @default(0)
+  observacoes         String?
+  createdAt           DateTime  @default(now())
+
+  tarefa TarefaObra @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+
+  @@map("registros_atividade")
 }
 
 model HistoryLog {

@@ -9,7 +9,7 @@ const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: 
 // Listar compras
 export const getCompras = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, fornecedorId, page = 1, limit = 10 } = req.query;
+    const { status, fornecedorId, page = 1, limit = 100 } = req.query; // Aumentado de 10 para 100
 
     const resultado = await ComprasService.listarCompras(
       status as string,
@@ -19,6 +19,8 @@ export const getCompras = async (req: Request, res: Response): Promise<void> => 
       parseInt(page as string),
       parseInt(limit as string)
     );
+
+    console.log(`📦 Listando compras - Total: ${resultado.pagination.total}, Página: ${page}, Retornando: ${resultado.compras.length}`);
 
     res.json({
       success: true,
@@ -55,9 +57,23 @@ export const createCompra = async (req: Request, res: Response): Promise<void> =
     };
 
     // Validar dados obrigatórios
+    console.log('🔍 Validando compra:', {
+      fornecedorNome: compraData.fornecedorNome,
+      fornecedorCNPJ: compraData.fornecedorCNPJ,
+      numeroNF: compraData.numeroNF,
+      itemsLength: compraData.items?.length
+    });
+    
     if (!compraData.fornecedorNome || !compraData.fornecedorCNPJ || !compraData.numeroNF || !compraData.items || compraData.items.length === 0) {
+      const missing = [];
+      if (!compraData.fornecedorNome) missing.push('fornecedorNome');
+      if (!compraData.fornecedorCNPJ) missing.push('fornecedorCNPJ');
+      if (!compraData.numeroNF) missing.push('numeroNF');
+      if (!compraData.items || compraData.items.length === 0) missing.push('items');
+      
+      console.error('❌ Dados obrigatórios ausentes:', missing);
       res.status(400).json({
-        error: 'Dados obrigatórios ausentes: fornecedorNome, fornecedorCNPJ, numeroNF, items'
+        error: 'Dados obrigatórios ausentes: ' + missing.join(', ')
       });
       return;
     }
