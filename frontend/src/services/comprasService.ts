@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 import { type PurchaseOrder } from '../types';
 
 export interface ItemCompra {
@@ -75,7 +75,7 @@ class ComprasService {
     dataInicio?: string;
     dataFim?: string;
   }) {
-    const resp = await apiService.get<any>('/api/compras', params);
+    const resp = await axiosApiService.get<any>('/api/compras', params);
     
     // Backend retorna: { success: true, data: { compras: [], pagination: {} } }
     let raw: any[] = [];
@@ -98,7 +98,7 @@ class ComprasService {
    * Criar nova compra
    */
   async createCompra(data: any) {
-    const resp = await apiService.post<any>('/api/compras', data);
+    const resp = await axiosApiService.post<any>('/api/compras', data);
     return (resp as any)?.data ?? resp;
   }
 
@@ -106,7 +106,7 @@ class ComprasService {
    * Atualizar status da compra
    */
   async updateCompraStatus(id: string, status: 'Pendente' | 'Aprovado' | 'Recebido' | 'Cancelado', dataEntregaReal?: string) {
-    return apiService.put<Compra>(`/api/compras/${id}/status`, { 
+    return axiosApiService.put<Compra>(`/api/compras/${id}/status`, { 
       status,
       dataEntregaReal 
     });
@@ -117,7 +117,7 @@ class ComprasService {
    * Envia o conteúdo XML como JSON { xml: string }
    */
   async parseXML(xmlText: string) {
-    return apiService.post<any>('/api/compras/parse-xml', { xml: xmlText });
+    return axiosApiService.post<any>('/api/compras/parse-xml', { xml: xmlText });
   }
 }
 

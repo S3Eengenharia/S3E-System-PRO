@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
 export interface Equipe {
   id: string;
@@ -49,31 +49,31 @@ class AlocacaoService {
   // =============================================
 
   async criarEquipe(data: Partial<Equipe>) {
-    return apiService.post<Equipe>('/api/obras/equipes', data);
+    return axiosApiService.post<Equipe>('/api/obras/equipes', data);
   }
 
   async listarEquipes(todas?: boolean) {
     const params = todas ? { todas: 'true' } : {};
-    return apiService.get<Equipe[]>('/api/obras/equipes', params);
+    return axiosApiService.get<Equipe[]>('/api/obras/equipes', params);
   }
 
   async buscarEquipe(id: string) {
-    return apiService.get<Equipe>(`/api/obras/equipes/${id}`);
+    return axiosApiService.get<Equipe>(`/api/obras/equipes/${id}`);
   }
 
   async getEquipesDisponiveis(dataInicio: string, dataFim: string) {
-    return apiService.get<Equipe[]>('/api/obras/equipes/disponiveis', {
+    return axiosApiService.get<Equipe[]>('/api/obras/equipes/disponiveis', {
       dataInicio,
       dataFim,
     });
   }
 
   async atualizarEquipe(id: string, data: Partial<Equipe>) {
-    return apiService.put<Equipe>(`/api/obras/equipes/${id}`, data);
+    return axiosApiService.put<Equipe>(`/api/obras/equipes/${id}`, data);
   }
 
   async desativarEquipe(id: string) {
-    return apiService.delete<void>(`/api/obras/equipes/${id}`);
+    return axiosApiService.delete<void>(`/api/obras/equipes/${id}`);
   }
 
   // =============================================
@@ -87,7 +87,7 @@ class AlocacaoService {
     dataFim: string;
     observacoes?: string;
   }) {
-    return apiService.post<Alocacao>('/api/obras/alocar', data);
+    return axiosApiService.post<Alocacao>('/api/obras/alocar', data);
   }
 
   async listarAlocacoes(filtros?: {
@@ -97,34 +97,34 @@ class AlocacaoService {
     dataInicio?: string;
     dataFim?: string;
   }) {
-    return apiService.get<Alocacao[]>('/api/obras/alocacoes', filtros);
+    return axiosApiService.get<Alocacao[]>('/api/obras/alocacoes', filtros);
   }
 
   async buscarAlocacao(id: string) {
-    return apiService.get<Alocacao>(`/api/obras/alocacoes/${id}`);
+    return axiosApiService.get<Alocacao>(`/api/obras/alocacoes/${id}`);
   }
 
   async getAlocacoesCalendario(mes?: number, ano?: number) {
     const params: any = {};
     if (mes) params.mes = mes;
     if (ano) params.ano = ano;
-    return apiService.get<AlocacaoCalendario[]>('/api/obras/alocacoes/calendario', params);
+    return axiosApiService.get<AlocacaoCalendario[]>('/api/obras/alocacoes/calendario', params);
   }
 
   async atualizarAlocacao(id: string, data: Partial<Alocacao>) {
-    return apiService.put<Alocacao>(`/api/obras/alocacoes/${id}`, data);
+    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}`, data);
   }
 
   async iniciarAlocacao(id: string) {
-    return apiService.put<Alocacao>(`/api/obras/alocacoes/${id}/iniciar`);
+    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}/iniciar`);
   }
 
   async concluirAlocacao(id: string) {
-    return apiService.put<Alocacao>(`/api/obras/alocacoes/${id}/concluir`);
+    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}/concluir`);
   }
 
   async cancelarAlocacao(id: string) {
-    return apiService.put<Alocacao>(`/api/obras/alocacoes/${id}/cancelar`);
+    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}/cancelar`);
   }
 
   // =============================================
@@ -132,7 +132,7 @@ class AlocacaoService {
   // =============================================
 
   async getEstatisticas() {
-    return apiService.get<Estatisticas>('/api/obras/estatisticas');
+    return axiosApiService.get<Estatisticas>('/api/obras/estatisticas');
   }
 }
 

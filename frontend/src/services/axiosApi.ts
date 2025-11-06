@@ -25,16 +25,29 @@ class AxiosApiService {
     // Interceptor para adicionar token automaticamente
     this.axiosInstance.interceptors.request.use(
       (config) => {
+        // Sempre buscar o token mais recente do localStorage a cada requisição
         const currentToken = localStorage.getItem('token');
-        if (currentToken && currentToken !== 'null' && currentToken !== 'undefined' && currentToken.trim() !== '') {
-          config.headers.Authorization = `Bearer ${currentToken}`;
-          console.log('🔐 Enviando token:', currentToken.substring(0, 20) + '...');
-        } else {
-          console.log('❌ Nenhum token válido encontrado para enviar. Token atual:', currentToken);
+        
+        // Garantir que headers existe
+        if (!config.headers) {
+          config.headers = {} as any;
         }
+        
+        if (currentToken && currentToken !== 'null' && currentToken !== 'undefined' && currentToken.trim() !== '') {
+          config.headers['Authorization'] = `Bearer ${currentToken}`;
+          console.log('🔐 [AxiosApi] Token enviado para:', config.url, '| Token:', currentToken.substring(0, 20) + '...');
+        } else {
+          console.warn('⚠️ [AxiosApi] ATENÇÃO: Token não encontrado!', {
+            url: config.url,
+            tokenNoStorage: currentToken,
+            headers: config.headers
+          });
+        }
+        
         return config;
       },
       (error) => {
+        console.error('❌ [AxiosApi] Erro no interceptor de request:', error);
         return Promise.reject(error);
       }
     );
@@ -54,8 +67,14 @@ class AxiosApiService {
           
           if (status === 401) {
             // Token expirado ou inválido
+            console.warn('⚠️ [AxiosApi] Erro 401 - Token inválido ou expirado. Redirecionando para login...');
             this.clearToken();
-            window.location.href = '/login';
+            
+            // Evitar loop infinito - só redirecionar se não estiver já na página de login
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
+            
             return Promise.reject(new Error('Sessão expirada. Faça login novamente.'));
           }
           
@@ -84,6 +103,8 @@ class AxiosApiService {
   }
 
   clearToken() {
+    console.warn('🧹 [AxiosApi] clearToken() chamado - REMOVENDO TOKEN');
+    console.trace('Stack trace de quem chamou clearToken:');
     this.token = null;
     localStorage.removeItem('token');
   }

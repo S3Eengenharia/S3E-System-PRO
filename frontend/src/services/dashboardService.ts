@@ -323,6 +323,116 @@ class DashboardService {
     }
 
     /**
+     * Carrega evolução de obras com filtro de período
+     */
+    async getEvolucaoObras(periodo: 'monthly' | 'semester' | 'annual' = 'monthly'): Promise<{ success: boolean; data?: any[]; error?: string }> {
+        try {
+            console.log(`📊 Carregando evolução de obras (${periodo})...`);
+            
+            const response = await axiosApiService.get(`/api/dashboard/evolucao-obras?periodo=${periodo}`);
+            
+            if (response.success && response.data) {
+                console.log('✅ Evolução de obras carregada:', response.data);
+                return { success: true, data: response.data };
+            } else {
+                console.warn('⚠️ Resposta inválida da API:', response);
+                return { success: false, error: 'Dados inválidos' };
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar evolução de obras:', error);
+            return { success: false, error: 'Erro de conexão' };
+        }
+    }
+
+    /**
+     * Carrega produção de quadros com filtro de período
+     */
+    async getProducaoQuadros(periodo: 'daily' | 'weekly' | 'monthly' = 'daily'): Promise<{ success: boolean; data?: any[]; error?: string }> {
+        try {
+            console.log(`🔧 Carregando produção de quadros (${periodo})...`);
+            
+            const response = await axiosApiService.get(`/api/dashboard/producao-quadros?periodo=${periodo}`);
+            
+            if (response.success && response.data) {
+                console.log('✅ Produção de quadros carregada:', response.data);
+                return { success: true, data: response.data };
+            } else {
+                console.warn('⚠️ Resposta inválida da API:', response);
+                return { success: false, error: 'Dados inválidos' };
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar produção de quadros:', error);
+            return { success: false, error: 'Erro de conexão' };
+        }
+    }
+
+    /**
+     * Exporta dados do dashboard
+     */
+    async exportarDados(formato: 'json' | 'pdf' | 'excel' = 'json'): Promise<{ success: boolean; data?: any; error?: string }> {
+        try {
+            console.log(`📥 Exportando dados (${formato})...`);
+            
+            const response = await axiosApiService.get(`/api/dashboard/exportar?formato=${formato}`);
+            
+            if (response.success && response.data) {
+                console.log('✅ Dados exportados com sucesso');
+                return { success: true, data: response.data };
+            } else {
+                console.warn('⚠️ Erro ao exportar dados:', response);
+                return { success: false, error: 'Erro na exportação' };
+            }
+        } catch (error) {
+            console.error('❌ Erro ao exportar dados:', error);
+            return { success: false, error: 'Erro ao exportar' };
+        }
+    }
+
+    /**
+     * Carrega atividades do sistema
+     */
+    async getAtividades(periodo: 'daily' | 'weekly' | 'monthly' = 'daily'): Promise<{ success: boolean; data?: any[]; error?: string }> {
+        try {
+            console.log(`📊 Carregando atividades do sistema (${periodo})...`);
+            
+            const response = await axiosApiService.get(`/api/dashboard/atividades?periodo=${periodo}`);
+            
+            if (response.success && response.data) {
+                console.log('✅ Atividades carregadas:', response.data);
+                return { success: true, data: response.data };
+            } else {
+                console.warn('⚠️ Resposta inválida da API:', response);
+                return { success: false, error: 'Dados inválidos' };
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar atividades:', error);
+            return { success: false, error: 'Erro de conexão' };
+        }
+    }
+
+    /**
+     * Carrega resumo financeiro
+     */
+    async getResumoFinanceiro(): Promise<{ success: boolean; data?: any; error?: string }> {
+        try {
+            console.log('💰 Carregando resumo financeiro...');
+            
+            const response = await axiosApiService.get('/api/dashboard/resumo-financeiro');
+            
+            if (response.success && response.data) {
+                console.log('✅ Resumo financeiro carregado:', response.data);
+                return { success: true, data: response.data };
+            } else {
+                console.warn('⚠️ Resposta inválida da API:', response);
+                return { success: false, error: 'Dados inválidos' };
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar resumo financeiro:', error);
+            return { success: false, error: 'Erro de conexão' };
+        }
+    }
+
+    /**
      * Testa conectividade com o backend
      */
     async testarConectividade(): Promise<{ success: boolean; message: string; responseTime?: number }> {
