@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { axiosApiService } from '../services/axiosApi';
 
 export interface User {
   id: string;
@@ -37,10 +37,10 @@ export const useAuth = () => {
       setState(prev => ({ ...prev, isLoading: true }));
       
       // Atualizar token no serviço de API
-      apiService.setToken(token);
+      axiosApiService.setToken(token);
       
       // Verificar se o token é válido
-      const response = await apiService.get<User>('/api/auth/me');
+      const response = await axiosApiService.get<User>('/api/auth/me');
       
       if (response.success && response.data) {
         setState({
@@ -68,7 +68,7 @@ export const useAuth = () => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
       
-      const response = await apiService.post<{ user: User; token: string }>('/api/auth/login', {
+      const response = await axiosApiService.post<{ user: User; token: string }>('/api/auth/login', {
         email,
         password
       });
@@ -78,7 +78,7 @@ export const useAuth = () => {
         
         // Salvar token
         localStorage.setItem('token', token);
-        apiService.setToken(token);
+        axiosApiService.setToken(token);
         
         setState({
           user,
@@ -100,7 +100,7 @@ export const useAuth = () => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
-    apiService.clearToken();
+    axiosApiService.clearToken();
     
     setState({
       user: null,

@@ -136,7 +136,7 @@ export class DashboardController {
       const materiaisProcessados = await Promise.all(
         materiaisMaisVendidos.map(async (item) => {
           const material = await prisma.material.findUnique({
-            where: { id: item.materialId },
+            where: { id: item.materialId! },
             select: { nome: true, sku: true }
           });
           return {
@@ -273,7 +273,7 @@ export class DashboardController {
           itens: contasVencidas.map(conta => ({
             id: conta.id,
             descricao: conta.descricao,
-            fornecedor: conta.fornecedor.nome,
+            fornecedor: conta.fornecedor?.nome || 'N/A',
             valor: conta.valorParcela,
             vencimento: conta.dataVencimento,
             diasAtraso: Math.ceil((hoje.getTime() - conta.dataVencimento.getTime()) / (1000 * 60 * 60 * 24))
@@ -297,5 +297,456 @@ export class DashboardController {
       console.error('Erro ao buscar alertas:', error);
       res.status(500).json({ success: false, message: 'Erro ao buscar alertas', error: error.message });
     }
+  }
+
+  static async getEvolucaoObras(req: Request, res: Response): Promise<void> {
+    try {
+      const { periodo = 'monthly' } = req.query;
+      const hoje = new Date();
+      let dataInicio: Date;
+      let agrupamento: 'day' | 'week' | 'month' | 'semester' | 'year';
+
+      // Definir período de análise
+      switch (periodo) {
+        case 'monthly':
+          dataInicio = new Date(hoje.getFullYear(), 0, 1); // Início do ano
+          agrupamento = 'month';
+          break;
+        case 'semester':
+          dataInicio = new Date(hoje.getFullYear() - 2, 0, 1); // Últimos 2 anos
+          agrupamento = 'semester';
+          break;
+        case 'annual':
+          dataInicio = new Date(hoje.getFullYear() - 5, 0, 1); // Últimos 5 anos
+          agrupamento = 'year';
+          break;
+        default:
+          dataInicio = new Date(hoje.getFullYear(), 0, 1);
+          agrupamento = 'month';
+      }
+
+      // Buscar projetos/obras
+      const projetos = await prisma.projeto.findMany({
+        where: {
+          createdAt: { gte: dataInicio }
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          dataInicio: true,
+          valorTotal: true
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Processar dados por período
+      const dadosAgrupados = DashboardController.processarEvolucaoObras(projetos, agrupamento, dataInicio, hoje);
+
+      res.status(200).json({ success: true, data: dadosAgrupados });
+    } catch (error: any) {
+      console.error('Erro ao buscar evolução de obras:', error);
+      res.status(500).json({ success: false, message: 'Erro ao buscar evolução de obras', error: error.message });
+    }
+  }
+
+  static async getProducaoQuadros(req: Request, res: Response): Promise<void> {
+    try {
+      const { periodo = 'daily' } = req.query;
+      const hoje = new Date();
+      let dataInicio: Date;
+
+      // Definir período de análise
+      switch (periodo) {
+        case 'daily':
+          dataInicio = new Date(hoje);
+          dataInicio.setHours(0, 0, 0, 0);
+          break;
+        case 'weekly':
+          dataInicio = new Date(hoje);
+          dataInicio.setDate(hoje.getDate() - 7);
+          break;
+        case 'monthly':
+          dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+          break;
+        default:
+          dataInicio = new Date(hoje);
+          dataInicio.setHours(0, 0, 0, 0);
+      }
+
+      // Buscar dados de produção de quadros
+      // Vamos usar projetos do tipo "Quadro Elétrico" ou orçamentos com categoria específica
+      const quadrosProduzidos = await prisma.projeto.findMany({
+        where: {
+          createdAt: { gte: dataInicio },
+          OR: [
+            { titulo: { contains: 'Quadro', mode: 'insensitive' } },
+            { titulo: { contains: 'Painel', mode: 'insensitive' } },
+            { descricao: { contains: 'Quadro Elétrico', mode: 'insensitive' } }
+          ]
+        },
+        select: {
+          id: true,
+          titulo: true,
+          createdAt: true,
+          status: true
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Processar dados por período
+      const dadosProducao = DashboardController.processarProducaoQuadros(quadrosProduzidos, periodo as string);
+
+      res.status(200).json({ success: true, data: dadosProducao });
+    } catch (error: any) {
+      console.error('Erro ao buscar produção de quadros:', error);
+      res.status(500).json({ success: false, message: 'Erro ao buscar produção de quadros', error: error.message });
+    }
+  }
+
+  static async exportarDados(req: Request, res: Response): Promise<void> {
+    try {
+      const { formato = 'json' } = req.query;
+
+      // Buscar todos os dados do dashboard
+      const [estatisticas, graficos, alertas] = await Promise.all([
+        DashboardController.getEstatisticasData(),
+        DashboardController.getGraficosData(),
+        DashboardController.getAlertasData()
+      ]);
+
+      const dadosExportacao = {
+        timestamp: new Date().toISOString(),
+        estatisticas,
+        graficos,
+        alertas,
+        geradoPor: 'S3E Engenharia - Sistema de Gestão'
+      };
+
+      if (formato === 'json') {
+        res.status(200).json({
+          success: true,
+          data: dadosExportacao,
+          formato: 'JSON'
+        });
+      } else {
+        // Para PDF/Excel, retornar dados estruturados que o frontend vai processar
+        res.status(200).json({
+          success: true,
+          data: dadosExportacao,
+          formato: formato.toString().toUpperCase(),
+          message: 'Dados preparados para exportação'
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao exportar dados:', error);
+      res.status(500).json({ success: false, message: 'Erro ao exportar dados', error: error.message });
+    }
+  }
+
+  // Métodos auxiliares
+  private static processarEvolucaoObras(projetos: any[], agrupamento: string, dataInicio: Date, dataFim: Date): any[] {
+    const resultado: any[] = [];
+    
+    if (agrupamento === 'month') {
+      // Agrupar por mês
+      for (let mes = 0; mes < 12; mes++) {
+        const nomeMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][mes];
+        const projetosDoMes = projetos.filter(p => new Date(p.createdAt).getMonth() === mes);
+        
+        resultado.push({
+          name: nomeMes,
+          concluidas: projetosDoMes.filter(p => p.status === 'CONCLUIDO').length,
+          emAndamento: projetosDoMes.filter(p => p.status === 'EXECUCAO').length,
+          planejadas: projetosDoMes.filter(p => p.status === 'PLANEJAMENTO' || p.status === 'ORCAMENTO').length,
+          receita: projetosDoMes.reduce((sum, p) => sum + (p.valorTotal || 0), 0)
+        });
+      }
+    } else if (agrupamento === 'semester') {
+      // Agrupar por semestre
+      const ano = dataInicio.getFullYear();
+      for (let i = 0; i < 4; i++) {
+        const anoSem = Math.floor(ano + i / 2);
+        const semestre = (i % 2) + 1;
+        const label = `${semestre}º Sem ${anoSem}`;
+        
+        const projetosSemestre = projetos.filter(p => {
+          const data = new Date(p.createdAt);
+          const projetoAno = data.getFullYear();
+          const projetoSemestre = data.getMonth() < 6 ? 1 : 2;
+          return projetoAno === anoSem && projetoSemestre === semestre;
+        });
+        
+        resultado.push({
+          name: label,
+          concluidas: projetosSemestre.filter(p => p.status === 'CONCLUIDO').length,
+          emAndamento: projetosSemestre.filter(p => p.status === 'EXECUCAO').length,
+          planejadas: projetosSemestre.filter(p => p.status === 'PLANEJAMENTO' || p.status === 'ORCAMENTO').length,
+          receita: projetosSemestre.reduce((sum, p) => sum + (p.valorTotal || 0), 0)
+        });
+      }
+    } else if (agrupamento === 'year') {
+      // Agrupar por ano
+      const anoInicio = dataInicio.getFullYear();
+      const anoFim = dataFim.getFullYear();
+      
+      for (let ano = anoInicio; ano <= anoFim; ano++) {
+        const projetosAno = projetos.filter(p => new Date(p.createdAt).getFullYear() === ano);
+        
+        resultado.push({
+          name: ano.toString(),
+          concluidas: projetosAno.filter(p => p.status === 'CONCLUIDO').length,
+          emAndamento: projetosAno.filter(p => p.status === 'EXECUCAO').length,
+          planejadas: projetosAno.filter(p => p.status === 'PLANEJAMENTO' || p.status === 'ORCAMENTO').length,
+          receita: projetosAno.reduce((sum, p) => sum + (p.valorTotal || 0), 0)
+        });
+      }
+    }
+    
+    return resultado;
+  }
+
+  private static processarProducaoQuadros(quadros: any[], periodo: string): any[] {
+    const resultado: any[] = [];
+    
+    if (periodo === 'daily') {
+      // Agrupar por hora (últimas 12 horas)
+      const horaAtual = new Date().getHours();
+      for (let i = 0; i < 6; i++) {
+        const hora = (horaAtual - 10 + i * 2) % 24;
+        const horaFormatada = `${hora.toString().padStart(2, '0')}h`;
+        
+        const quadrosHora = quadros.filter(q => {
+          const horaQuadro = new Date(q.createdAt).getHours();
+          return horaQuadro >= hora - 1 && horaQuadro < hora + 1;
+        });
+        
+        resultado.push({
+          hora: horaFormatada,
+          producao: quadrosHora.length
+        });
+      }
+    } else if (periodo === 'weekly') {
+      // Agrupar por dia da semana
+      const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      for (let i = 0; i < 7; i++) {
+        const quadrosDia = quadros.filter(q => new Date(q.createdAt).getDay() === i);
+        resultado.push({
+          hora: diasSemana[i],
+          producao: quadrosDia.length
+        });
+      }
+    } else if (periodo === 'monthly') {
+      // Agrupar por semana do mês
+      for (let semana = 1; semana <= 4; semana++) {
+        const quadrosSemana = quadros.filter(q => {
+          const dia = new Date(q.createdAt).getDate();
+          return dia >= (semana - 1) * 7 + 1 && dia <= semana * 7;
+        });
+        
+        resultado.push({
+          hora: `Sem ${semana}`,
+          producao: quadrosSemana.length
+        });
+      }
+    }
+    
+    return resultado;
+  }
+
+  // Métodos auxiliares para exportação
+  private static async getEstatisticasData() {
+    const [totalClientes, totalFornecedores, projetosAtivos, vendasMes] = await Promise.all([
+      prisma.cliente.count({ where: { ativo: true } }),
+      prisma.fornecedor.count({ where: { ativo: true } }),
+      prisma.projeto.count({ where: { status: 'EXECUCAO' } }),
+      prisma.venda.count({
+        where: {
+          createdAt: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          }
+        }
+      })
+    ]);
+
+    return { totalClientes, totalFornecedores, projetosAtivos, vendasMes };
+  }
+
+  private static async getGraficosData() {
+    return { message: 'Dados de gráficos' };
+  }
+
+  private static async getAlertasData() {
+    return { message: 'Dados de alertas' };
+  }
+
+  static async getAtividades(req: Request, res: Response): Promise<void> {
+    try {
+      const { periodo = 'daily' } = req.query;
+      const hoje = new Date();
+      let dataInicio: Date;
+
+      switch (periodo) {
+        case 'daily':
+          dataInicio = new Date(hoje);
+          dataInicio.setHours(0, 0, 0, 0);
+          break;
+        case 'weekly':
+          dataInicio = new Date(hoje);
+          dataInicio.setDate(hoje.getDate() - 7);
+          break;
+        case 'monthly':
+          dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+          break;
+        default:
+          dataInicio = new Date(hoje);
+          dataInicio.setHours(0, 0, 0, 0);
+      }
+
+      // Buscar atividades (vendas, orçamentos, movimentações)
+      const [vendas, orcamentos, movimentacoes] = await Promise.all([
+        prisma.venda.findMany({
+          where: { createdAt: { gte: dataInicio } },
+          select: { id: true, createdAt: true }
+        }),
+        prisma.orcamento.findMany({
+          where: { createdAt: { gte: dataInicio } },
+          select: { id: true, createdAt: true }
+        }),
+        prisma.movimentacaoEstoque.findMany({
+          where: { data: { gte: dataInicio } },
+          select: { id: true, data: true }
+        })
+      ]);
+
+      // Processar por hora/dia
+      const dadosAtividades = DashboardController.processarAtividades(
+        [...vendas, ...orcamentos, ...movimentacoes.map(m => ({ id: m.id, createdAt: m.data }))],
+        periodo as string
+      );
+
+      res.status(200).json({ success: true, data: dadosAtividades });
+    } catch (error: any) {
+      console.error('Erro ao buscar atividades:', error);
+      res.status(500).json({ success: false, message: 'Erro ao buscar atividades', error: error.message });
+    }
+  }
+
+  static async getResumoFinanceiro(req: Request, res: Response): Promise<void> {
+    try {
+      const hoje = new Date();
+      const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const inicioAno = new Date(hoje.getFullYear(), 0, 1);
+
+      // Buscar dados financeiros
+      const [
+        vendasMes,
+        vendasAno,
+        orcamentosAbertos,
+        contasPagar,
+        totalProjetos
+      ] = await Promise.all([
+        // Vendas do mês
+        prisma.venda.aggregate({
+          where: { createdAt: { gte: inicioMes } },
+          _sum: { valorTotal: true },
+          _count: { id: true }
+        }),
+        // Vendas do ano
+        prisma.venda.aggregate({
+          where: { createdAt: { gte: inicioAno } },
+          _sum: { valorTotal: true }
+        }),
+        // Orçamentos em aberto
+        prisma.orcamento.aggregate({
+          where: { status: { in: ['Rascunho', 'Enviado'] } },
+          _sum: { precoVenda: true },
+          _count: { id: true }
+        }),
+        // Contas a pagar
+        prisma.contaPagar.aggregate({
+          where: { status: { not: 'Pago' } },
+          _sum: { valorParcela: true }
+        }),
+        // Projetos em execução
+        prisma.projeto.aggregate({
+          where: { status: 'EXECUCAO' },
+          _sum: { valorTotal: true },
+          _count: { id: true }
+        })
+      ]);
+
+      const resumoFinanceiro = {
+        receitaTotal: (vendasAno._sum.valorTotal || 0) + (totalProjetos._sum.valorTotal || 0),
+        receitaMes: vendasMes._sum.valorTotal || 0,
+        obrasConcluidas: vendasMes._sum.valorTotal || 0,
+        obrasAndamento: totalProjetos._sum.valorTotal || 0,
+        orcamentosAbertos: orcamentosAbertos._sum.precoVenda || 0,
+        contasPagar: contasPagar._sum.valorParcela || 0,
+        vendasMes: vendasMes._count.id || 0,
+        projetosAtivos: totalProjetos._count.id || 0,
+        orcamentosPendentes: orcamentosAbertos._count.id || 0
+      };
+
+      res.status(200).json({ success: true, data: resumoFinanceiro });
+    } catch (error: any) {
+      console.error('Erro ao buscar resumo financeiro:', error);
+      res.status(500).json({ success: false, message: 'Erro ao buscar resumo financeiro', error: error.message });
+    }
+  }
+
+  private static processarAtividades(atividades: any[], periodo: string): any[] {
+    const resultado: any[] = [];
+    
+    if (periodo === 'daily') {
+      // Últimas 6 horas (intervalos de 2h)
+      const horaAtual = new Date().getHours();
+      for (let i = 0; i < 6; i++) {
+        const hora = Math.max(0, horaAtual - 10 + i * 2);
+        const horaFormatada = `${hora}h`;
+        
+        const atividadesHora = atividades.filter(a => {
+          const horaAtividade = new Date(a.createdAt).getHours();
+          return horaAtividade >= hora && horaAtividade < hora + 2;
+        });
+        
+        resultado.push({
+          hora: horaFormatada,
+          sessoes: atividadesHora.length
+        });
+      }
+    } else if (periodo === 'weekly') {
+      // Últimos 7 dias
+      for (let i = 6; i >= 0; i--) {
+        const data = new Date();
+        data.setDate(data.getDate() - i);
+        const dia = data.toLocaleDateString('pt-BR', { weekday: 'short' });
+        
+        const atividadesDia = atividades.filter(a => {
+          const dataAtividade = new Date(a.createdAt);
+          return dataAtividade.toDateString() === data.toDateString();
+        });
+        
+        resultado.push({
+          hora: dia,
+          sessoes: atividadesDia.length
+        });
+      }
+    } else if (periodo === 'monthly') {
+      // Últimas 4 semanas
+      for (let semana = 1; semana <= 4; semana++) {
+        const atividadesSemana = atividades.filter(a => {
+          const dia = new Date(a.createdAt).getDate();
+          return dia >= (semana - 1) * 7 + 1 && dia <= semana * 7;
+        });
+        
+        resultado.push({
+          hora: `Sem ${semana}`,
+          sessoes: atividadesSemana.length
+        });
+      }
+    }
+    
+    return resultado;
   }
 }

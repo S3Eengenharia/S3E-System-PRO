@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
 export interface LoginData {
   email: string;
@@ -28,47 +28,47 @@ export interface AuthResponse {
 
 class AuthService {
   async login(data: LoginData) {
-    const response = await apiService.post<AuthResponse>('/api/auth/login', data);
+    const response = await axiosApiService.post<AuthResponse>('/api/auth/login', data);
     
     if (response.success && response.data) {
-      apiService.setToken(response.data.token);
+      axiosApiService.setToken(response.data.token);
     }
     
     return response;
   }
 
   async register(data: RegisterData) {
-    const response = await apiService.post<AuthResponse>('/api/auth/register', data);
+    const response = await axiosApiService.post<AuthResponse>('/api/auth/register', data);
     
     if (response.success && response.data) {
-      apiService.setToken(response.data.token);
+      axiosApiService.setToken(response.data.token);
     }
     
     return response;
   }
 
   async logout() {
-    apiService.clearToken();
+    axiosApiService.clearToken();
   }
 
   async getProfile() {
-    return apiService.get<User>('/api/auth/profile');
+    return axiosApiService.get<User>('/api/auth/profile');
   }
 
   async updateProfile(data: Partial<User>) {
-    return apiService.put<User>('/api/auth/profile', data);
+    return axiosApiService.put<User>('/api/auth/profile', data);
   }
 
   async changePassword(data: { currentPassword: string; newPassword: string }) {
-    return apiService.put<{ message: string }>('/api/auth/change-password', data);
+    return axiosApiService.put<{ message: string }>('/api/auth/change-password', data);
   }
 
   isAuthenticated(): boolean {
-    return !!apiService['token'];
+    return !!axiosApiService['token'];
   }
 
   getToken(): string | null {
-    return apiService['token'];
+    return axiosApiService['token'];
   }
 }
 

@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
 export interface NotaFiscal {
   id: string;
@@ -69,27 +69,27 @@ export interface ValidacaoResponse {
 
 class NFeService {
   async listar(filters?: NotaFiscalFilters) {
-    return apiService.get<NotaFiscal[]>('/api/nfe', filters);
+    return axiosApiService.get<NotaFiscal[]>('/api/nfe', filters);
   }
 
   async buscar(id: string) {
-    return apiService.get<NotaFiscal>(`/api/nfe/${id}`);
+    return axiosApiService.get<NotaFiscal>(`/api/nfe/${id}`);
   }
 
   async criar(data: CreateNotaFiscalData) {
-    return apiService.post<NotaFiscal>('/api/nfe', data);
+    return axiosApiService.post<NotaFiscal>('/api/nfe', data);
   }
 
   async atualizar(id: string, data: UpdateNotaFiscalData) {
-    return apiService.put<NotaFiscal>(`/api/nfe/${id}`, data);
+    return axiosApiService.put<NotaFiscal>(`/api/nfe/${id}`, data);
   }
 
   async cancelar(id: string, motivo?: string) {
-    return apiService.delete<NotaFiscal>(`/api/nfe/${id}`, { motivo });
+    return axiosApiService.delete<NotaFiscal>(`/api/nfe/${id}`, { motivo });
   }
 
   async validar(data: ValidarNotaFiscalData) {
-    return apiService.post<ValidacaoResponse>('/api/nfe/validar', data);
+    return axiosApiService.post<ValidacaoResponse>('/api/nfe/validar', data);
   }
 }
 

@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
 export interface Fornecedor {
   id: string;
@@ -40,27 +40,27 @@ export interface FornecedorFilters {
 
 class FornecedoresService {
   async listar(filters?: FornecedorFilters) {
-    return apiService.get<Fornecedor[]>('/api/fornecedores', filters);
+    return axiosApiService.get<Fornecedor[]>('/api/fornecedores', filters);
   }
 
   async buscar(id: string) {
-    return apiService.get<Fornecedor>(`/api/fornecedores/${id}`);
+    return axiosApiService.get<Fornecedor>(`/api/fornecedores/${id}`);
   }
 
   async criar(data: CreateFornecedorData) {
-    return apiService.post<Fornecedor>('/api/fornecedores', data);
+    return axiosApiService.post<Fornecedor>('/api/fornecedores', data);
   }
 
   async atualizar(id: string, data: UpdateFornecedorData) {
-    return apiService.put<Fornecedor>(`/api/fornecedores/${id}`, data);
+    return axiosApiService.put<Fornecedor>(`/api/fornecedores/${id}`, data);
   }
 
   async desativar(id: string) {
-    return apiService.delete<Fornecedor>(`/api/fornecedores/${id}`);
+    return axiosApiService.delete<Fornecedor>(`/api/fornecedores/${id}`);
   }
 
   async reativar(id: string) {
-    return apiService.put<Fornecedor>(`/api/fornecedores/${id}/reativar`);
+    return axiosApiService.put<Fornecedor>(`/api/fornecedores/${id}/reativar`);
   }
 }
 

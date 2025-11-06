@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
 export interface Empresa {
   id: string;
@@ -55,23 +55,23 @@ export interface EmpresaFilters {
 
 class EmpresasService {
   async listar(filters?: EmpresaFilters) {
-    return apiService.get<Empresa[]>('/api/empresas', filters);
+    return axiosApiService.get<Empresa[]>('/api/empresas', filters);
   }
 
   async buscar(id: string) {
-    return apiService.get<Empresa>(`/api/empresas/${id}`);
+    return axiosApiService.get<Empresa>(`/api/empresas/${id}`);
   }
 
   async criar(data: CreateEmpresaData) {
-    return apiService.post<Empresa>('/api/empresas', data);
+    return axiosApiService.post<Empresa>('/api/empresas', data);
   }
 
   async atualizar(id: string, data: UpdateEmpresaData) {
-    return apiService.put<Empresa>(`/api/empresas/${id}`, data);
+    return axiosApiService.put<Empresa>(`/api/empresas/${id}`, data);
   }
 
   async desativar(id: string) {
-    return apiService.delete<Empresa>(`/api/empresas/${id}`);
+    return axiosApiService.delete<Empresa>(`/api/empresas/${id}`);
   }
 }
 
