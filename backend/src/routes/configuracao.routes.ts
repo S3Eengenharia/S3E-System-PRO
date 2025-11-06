@@ -56,5 +56,12 @@ router.put('/usuarios/:id/status', authorize('admin'), ConfiguracaoController.to
  */
 router.post('/usuarios/criar', authorize('admin'), ConfiguracaoController.criarUsuario);
 
+/**
+ * @route DELETE /api/configuracoes/usuarios/:id
+ * @desc Exclui um usuário
+ * @access Admin only
+ */
+router.delete('/usuarios/:id', authorize('admin'), ConfiguracaoController.excluirUsuario);
+
 export default router;
 

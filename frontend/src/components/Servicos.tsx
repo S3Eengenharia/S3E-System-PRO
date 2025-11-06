@@ -458,18 +458,18 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
             {/* MODAL DE CRIAÇÃO/EDIÇÃO */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
-                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-cyan-50 to-blue-50">
+                        <div className="relative p-6 border-b border-gray-100 dark:border-dark-border bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/30 dark:to-blue-900/30">
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-600 to-cyan-700 flex items-center justify-center shadow-lg ring-2 ring-cyan-100">
                                     {serviceToEdit ? <PencilIcon className="w-7 h-7 text-white" /> : <PlusIcon className="w-7 h-7 text-white" />}
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">
                                         {serviceToEdit ? 'Editar Serviço' : 'Novo Serviço'}
                                     </h2>
-                                    <p className="text-sm text-gray-600 mt-1">
+                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">
                                         {serviceToEdit ? 'Atualize as informações do serviço' : 'Cadastre um novo serviço técnico'}
                                     </p>
                                 </div>
@@ -477,7 +477,7 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                             <button
                                 type="button"
                                 onClick={handleCloseModal}
-                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                className="absolute top-4 right-4 p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -487,7 +487,7 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                             {/* Informações Básicas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Nome do Serviço *
                                     </label>
                                     <input
@@ -496,13 +496,13 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                                         value={formState.name}
                                         onChange={handleInputChange}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500"
+                                        className="input-field"
                                         placeholder="Ex: Instalação Elétrica Residencial"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Código Interno *
                                     </label>
                                     <input
@@ -511,13 +511,13 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                                         value={formState.internalCode}
                                         onChange={handleInputChange}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500"
+                                        className="input-field"
                                         placeholder="SRV-001"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Tipo de Serviço *
                                     </label>
                                     <select
@@ -525,14 +525,14 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                                         value={formState.type}
                                         onChange={handleInputChange}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500"
+                                        className="select-field"
                                     >
                                         {Object.values(ServiceType).map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
 
                                 <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Descrição *
                                     </label>
                                     <textarea
@@ -541,13 +541,13 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                                         onChange={handleInputChange}
                                         required
                                         rows={3}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500"
+                                        className="textarea-field"
                                         placeholder="Descreva detalhadamente o serviço oferecido..."
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Preço (R$) *
                                     </label>
                                     <input
@@ -558,23 +558,23 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                                         required
                                         min="0"
                                         step="0.01"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500"
+                                        className="input-field"
                                         placeholder="0,00"
                                     />
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-dark-border">
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
-                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                    className="btn-secondary"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-3 bg-gradient-to-r from-cyan-600 to-cyan-500 text-white rounded-xl hover:from-cyan-700 hover:to-cyan-600 transition-all shadow-lg font-semibold"
+                                    className="btn-info"
                                 >
                                     {serviceToEdit ? 'Atualizar' : 'Cadastrar'} Serviço
                                 </button>

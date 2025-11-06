@@ -60,20 +60,20 @@ const ClipboardDocumentListIcon = (props: React.SVGProps<SVGSVGElement>) => <svg
 
 const getStatusClass = (status: ClientStatus | OpportunityStatus | BudgetStatus) => {
     const statusMap = {
-        [ClientStatus.Ativo]: 'bg-green-100 text-green-800',
-        [ClientStatus.Inativo]: 'bg-gray-200 text-gray-700',
-        [ClientStatus.Potencial]: 'bg-yellow-100 text-yellow-800',
-        [ClientStatus.Retroativo]: 'bg-blue-100 text-blue-800',
-        [OpportunityStatus.Qualificacao]: 'bg-blue-100 text-blue-800',
-        [OpportunityStatus.Proposta]: 'bg-cyan-100 text-cyan-800',
-        [OpportunityStatus.Negociacao]: 'bg-purple-100 text-purple-800',
-        [OpportunityStatus.Ganha]: 'bg-green-100 text-green-800',
-        [OpportunityStatus.Perdida]: 'bg-red-100 text-red-800',
-        [BudgetStatus.Aprovado]: 'bg-green-100 text-green-800',
-        [BudgetStatus.Pendente]: 'bg-yellow-100 text-yellow-800',
-        [BudgetStatus.Recusado]: 'bg-red-100 text-red-800',
+        [ClientStatus.Ativo]: 'badge-status-active',
+        [ClientStatus.Inativo]: 'badge-status-inactive',
+        [ClientStatus.Potencial]: 'badge-status-pending',
+        [ClientStatus.Retroativo]: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-800',
+        [OpportunityStatus.Qualificacao]: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-800',
+        [OpportunityStatus.Proposta]: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300 ring-1 ring-cyan-200 dark:ring-cyan-800',
+        [OpportunityStatus.Negociacao]: 'badge-type',
+        [OpportunityStatus.Ganha]: 'badge-status-active',
+        [OpportunityStatus.Perdida]: 'badge-status-inactive',
+        [BudgetStatus.Aprovado]: 'badge-status-active',
+        [BudgetStatus.Pendente]: 'badge-status-pending',
+        [BudgetStatus.Recusado]: 'badge-status-inactive',
     };
-    return statusMap[status as keyof typeof statusMap] || 'bg-gray-100 text-gray-800';
+    return statusMap[status as keyof typeof statusMap] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300';
 };
 
 const getStatusBorderClass = (status: ClientStatus) => {
@@ -358,7 +358,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                 {!loading && !error && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredClients.map((client) => (
-                        <div key={client.id} className={`bg-white rounded-lg border border-brand-gray-100 shadow-sm flex flex-col p-4 transition-all duration-200 hover:shadow-md hover:border-brand-gray-200 ${getStatusBorderClass(client.status)}`}>
+                        <div key={client.id} className={`card-primary flex flex-col ${getStatusBorderClass(client.status)}`}>
                              <div className="flex justify-between items-start mb-2">
                                 <h3 className="font-bold text-lg text-brand-gray-800 leading-tight flex-1 pr-2">{client.name}</h3>
                                 <div className="relative">
@@ -402,10 +402,10 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
-                    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-full flex flex-col">
-                        <div className="p-6 border-b border-brand-gray-200 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-brand-gray-800">{clientToEdit ? 'Editar Cliente' : 'Adicionar Novo Cliente'}</h2>
-                            <button type="button" onClick={handleCloseModal} className="p-1 rounded-full text-brand-gray-400 hover:bg-brand-gray-100"><XMarkIcon className="w-6 h-6" /></button>
+                    <form onSubmit={handleSubmit} className="modal-content w-full max-w-2xl max-h-full flex flex-col">
+                        <div className="modal-header flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-dark-text">{clientToEdit ? 'Editar Cliente' : 'Adicionar Novo Cliente'}</h2>
+                            <button type="button" onClick={handleCloseModal} className="p-1 rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700"><XMarkIcon className="w-6 h-6" /></button>
                         </div>
                         
                         <div className="p-6 space-y-4 overflow-y-auto">
@@ -473,9 +473,9 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                                 <textarea name="notes" value={formState.notes} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" />
                             </div>
                         </div>
-                        <div className="p-6 bg-brand-gray-50 border-t border-brand-gray-200 flex justify-end gap-3">
-                            <button type="button" onClick={handleCloseModal} className="px-4 py-2 bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold rounded-lg hover:bg-brand-gray-50">Cancelar</button>
-                            <button type="submit" className="px-6 py-2 bg-brand-blue text-white font-semibold rounded-lg shadow-sm hover:bg-brand-blue/90">{clientToEdit ? 'Salvar Alterações' : 'Salvar Cliente'}</button>
+                        <div className="modal-footer">
+                            <button type="button" onClick={handleCloseModal} className="btn-secondary">Cancelar</button>
+                            <button type="submit" className="btn-primary">{clientToEdit ? 'Salvar Alterações' : 'Salvar Cliente'}</button>
                         </div>
                     </form>
                 </div>
@@ -490,9 +490,9 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                                 Você tem certeza que deseja excluir o cliente <strong className="text-brand-gray-800">{clientToDelete.name}</strong>?
                             </p>
                         </div>
-                        <div className="p-4 bg-brand-gray-50 border-t border-brand-gray-200 flex justify-end gap-3">
-                            <button type="button" onClick={handleCloseDeleteModal} className="px-4 py-2 bg-white border border-brand-gray-300 text-brand-gray-700 font-semibold rounded-lg hover:bg-brand-gray-50">Cancelar</button>
-                            <button type="button" onClick={handleConfirmDelete} className="px-4 py-2 bg-brand-red text-white font-semibold rounded-lg shadow-sm hover:bg-brand-red/90">Confirmar Exclusão</button>
+                        <div className="modal-footer">
+                            <button type="button" onClick={handleCloseDeleteModal} className="btn-secondary">Cancelar</button>
+                            <button type="button" onClick={handleConfirmDelete} className="btn-danger">Confirmar Exclusão</button>
                         </div>
                     </div>
                 </div>

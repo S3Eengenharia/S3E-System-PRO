@@ -243,7 +243,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
             case 'Atrasado':
                 return 'bg-red-100 text-red-800 ring-1 ring-red-200';
             default:
-                return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+                return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 ring-1 ring-gray-200 dark:ring-gray-700';
         }
     };
 
@@ -282,7 +282,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                     {setAbaAtiva && (
                         <button
                             onClick={() => setAbaAtiva('dashboard')}
-                            className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                            className="btn-secondary flex items-center gap-2"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -292,7 +292,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                     )}
                     <button
                         onClick={loadContasPagar}
-                        className="flex items-center gap-2 px-4 py-3 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 transition-all font-semibold"
+                        className="btn-danger flex items-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -304,7 +304,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
 
             {/* Cards de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft">
+                <div className="card-primary">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center">
                             <CurrencyDollarIcon className="w-6 h-6 text-red-600" />
@@ -319,7 +319,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft">
+                <div className="card-primary">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
                             <CheckCircleIcon className="w-6 h-6 text-green-600" />
@@ -333,7 +333,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft">
+                <div className="card-primary">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
                             <CalendarIcon className="w-6 h-6 text-orange-600" />
@@ -348,7 +348,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft">
+                <div className="card-primary">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
                             <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -364,7 +364,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
             </div>
 
             {/* Filtros */}
-            <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 mb-6">
+            <div className="card-primary mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-1">
                         <div className="relative">
@@ -374,7 +374,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="Buscar por fornecedor ou descrição..."
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                className="input-field pl-10 focus:ring-red-500 focus:border-red-500"
                             />
                         </div>
                     </div>
@@ -382,7 +382,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                         <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500"
+                            className="select-field focus:ring-red-500"
                         >
                             <option value="Todos">Todos os Status</option>
                             <option value="Pendente">Pendente</option>
@@ -394,7 +394,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                         <select
                             value={filterPeriodo}
                             onChange={(e) => setFilterPeriodo(e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500"
+                            className="select-field focus:ring-red-500"
                         >
                             <option value="Todos">Todos os Períodos</option>
                             <option value="Vencidas">Vencidas</option>
@@ -405,7 +405,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
             </div>
 
             {/* Tabela de Contas */}
-            <div className="bg-white rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
+            <div className="card-primary overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
@@ -523,7 +523,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
             {/* Modal de Pagamento */}
             {isPagamentoModalOpen && contaSelecionada && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="modal-content max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         {/* Header */}
                         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-red-50 to-orange-50">
                             <div>
@@ -576,7 +576,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                         value={dataPagamento}
                                         onChange={(e) => setDataPagamento(e.target.value)}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        className="select-field focus:ring-red-500 focus:border-red-500"
                                     />
                                 </div>
 
@@ -592,7 +592,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                         max={contaSelecionada.valor}
                                         step="0.01"
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        className="select-field focus:ring-red-500 focus:border-red-500"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
                                         Valor original: R$ {contaSelecionada.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -607,7 +607,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                         value={observacoesPagamento}
                                         onChange={(e) => setObservacoesPagamento(e.target.value)}
                                         rows={3}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        className="select-field focus:ring-red-500 focus:border-red-500"
                                         placeholder="Informações adicionais sobre o pagamento..."
                                     />
                                 </div>
@@ -628,13 +628,13 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                         <div className="flex justify-end gap-3 p-6 border-t border-gray-100">
                             <button
                                 onClick={handleClosePagamentoModal}
-                                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                className="btn-secondary"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handlePagarConta}
-                                className="px-8 py-3 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl hover:from-red-700 hover:to-red-600 transition-all shadow-medium font-semibold flex items-center gap-2"
+                                className="btn-danger flex items-center gap-2"
                             >
                                 <CheckCircleIcon className="w-5 h-5" />
                                 Confirmar Pagamento
