@@ -1358,17 +1358,17 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white dark:bg-dark-card rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+                <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/30">
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-900">Criar Quadro Elétrico Modular</h2>
-                            <p className="text-sm text-gray-600 mt-1">Configure seu quadro elétrico personalizado</p>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Criar Quadro Elétrico Modular</h2>
+                            <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Configure seu quadro elétrico personalizado</p>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl transition-colors"
+                            className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
                         >
                             <XMarkIcon className="w-6 h-6" />
                         </button>
@@ -1377,21 +1377,21 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                     {/* Informações básicas */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Nome do Quadro *</label>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">Nome do Quadro *</label>
                             <input
                                 type="text"
                                 value={nomeQuadro}
                                 onChange={(e) => setNomeQuadro(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                className="input-field"
                                 placeholder="Ex: Quadro Medidor 3 Fases"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Tipo</label>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">Tipo</label>
                             <select
                                 value={tipoQuadro}
                                 onChange={(e) => setTipoQuadro(e.target.value as any)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                className="select-field"
                             >
                                 <option value="POLICARBONATO">Policarbonato</option>
                                 <option value="ALUMINIO">Alumínio</option>
@@ -1399,12 +1399,12 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Descrição</label>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">Descrição</label>
                             <input
                                 type="text"
                                 value={descricaoQuadro}
                                 onChange={(e) => setDescricaoQuadro(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                className="input-field"
                                 placeholder="Opcional"
                             />
                         </div>

@@ -303,6 +303,59 @@ export class ConfiguracaoController {
       });
     }
   }
+
+  /**
+   * DELETE /api/configuracoes/usuarios/:id
+   * Exclui um usuário permanentemente
+   * Requer: Admin
+   */
+  static async excluirUsuario(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      // Validação básica
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: 'ID do usuário é obrigatório'
+        });
+        return;
+      }
+
+      // Proteção: não permitir que o admin exclua a si mesmo
+      const userId = (req as any).userId; // userId do token JWT
+      if (userId === id) {
+        res.status(400).json({
+          success: false,
+          message: 'Você não pode excluir sua própria conta'
+        });
+        return;
+      }
+
+      const result = await configuracaoService.excluirUsuario(id);
+
+      res.status(200).json({
+        success: true,
+        message: result.message
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir usuário:', error);
+
+      if (error.message === 'Usuário não encontrado') {
+        res.status(404).json({
+          success: false,
+          message: 'Usuário não encontrado'
+        });
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao excluir usuário',
+        error: error.message
+      });
+    }
+  }
 }
 
 export default new ConfiguracaoController();

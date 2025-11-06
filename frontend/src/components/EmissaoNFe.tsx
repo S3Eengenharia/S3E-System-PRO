@@ -904,7 +904,7 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                     {/* Modal de Adicionar/Editar Empresa */}
                     {isModalEmpresaOpen && (
                         <div className="fixed inset-0 bg-gradient-to-br from-black/70 via-black/60 to-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col border border-gray-200/50 animate-in zoom-in-95 duration-300">
+                            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col border border-gray-200/50 dark:border-dark-border animate-in zoom-in-95 duration-300">
                                 {/* Header */}
                                 <div className="p-6 rounded-t-2xl bg-gradient-to-r from-blue-600 to-blue-700 flex justify-between items-center">
                                     <div className="flex items-center gap-3">
@@ -930,8 +930,8 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                 {/* Conteúdo Scrollável */}
                                 <div className="p-6 overflow-y-auto flex-1 space-y-6">
                                     {/* Dados da Empresa */}
-                                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200">
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-900 rounded-xl p-5 border border-gray-200 dark:border-dark-border">
+                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-text mb-4 flex items-center gap-2">
                                             <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
@@ -939,58 +939,58 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">CNPJ *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">CNPJ *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.cnpj}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, cnpj: e.target.value})}
                                                     placeholder="00.000.000/0000-00"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                                    className="input-field disabled:bg-gray-100 dark:disabled:bg-slate-900 disabled:cursor-not-allowed"
                                                     required
                                                     disabled={!!editandoEmpresaId}
                                                 />
                                                 {editandoEmpresaId && (
-                                                    <p className="text-xs text-gray-500 mt-1">⚠️ CNPJ não pode ser alterado</p>
+                                                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">⚠️ CNPJ não pode ser alterado</p>
                                                 )}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Inscrição Estadual *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Inscrição Estadual *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.inscricaoEstadual}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, inscricaoEstadual: e.target.value})}
                                                     placeholder="000.000.000"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Razão Social *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Razão Social *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.razaoSocial}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, razaoSocial: e.target.value})}
                                                     placeholder="Nome completo da empresa"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Nome Fantasia</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Nome Fantasia</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.nomeFantasia}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, nomeFantasia: e.target.value})}
                                                     placeholder="Nome comercial (opcional)"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                    className="input-field"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Regime Tributário *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Regime Tributário *</label>
                                                 <select
                                                     value={empresaForm.regimeTributario}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, regimeTributario: e.target.value})}
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                    className="select-field"
                                                 >
                                                     <option value="SimplesNacional">Simples Nacional</option>
                                                     <option value="RegimeNormal">Regime Normal</option>
@@ -1001,9 +1001,9 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                     </div>
 
                                     {/* Endereço */}
-                                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-200">
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-xl p-5 border border-purple-200 dark:border-purple-800">
+                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-text mb-4 flex items-center gap-2">
+                                            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                             </svg>
@@ -1011,65 +1011,65 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Logradouro *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Logradouro *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.endereco}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, endereco: e.target.value})}
                                                     placeholder="Rua, Avenida, etc"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Número *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Número *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.numero}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, numero: e.target.value})}
                                                     placeholder="123"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Complemento</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Complemento</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.complemento}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, complemento: e.target.value})}
                                                     placeholder="Sala, Andar..."
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Bairro *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Bairro *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.bairro}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, bairro: e.target.value})}
                                                     placeholder="Centro"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Cidade *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Cidade *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.cidade}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, cidade: e.target.value})}
                                                     placeholder="Florianópolis"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Estado *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Estado *</label>
                                                 <select
                                                     value={empresaForm.estado}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, estado: e.target.value})}
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                     required
                                                 >
                                                     <option value="">Selecione...</option>
@@ -1081,43 +1081,43 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">CEP *</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">CEP *</label>
                                                 <input
                                                     type="text"
                                                     value={empresaForm.cep}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, cep: e.target.value})}
                                                     placeholder="00000-000"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                     required
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Telefone</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Telefone</label>
                                                 <input
                                                     type="tel"
                                                     value={empresaForm.telefone}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, telefone: e.target.value})}
                                                     placeholder="(00) 0000-0000"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">E-mail</label>
+                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">E-mail</label>
                                                 <input
                                                     type="email"
                                                     value={empresaForm.email}
                                                     onChange={(e) => setEmpresaForm({...empresaForm, email: e.target.value})}
                                                     placeholder="contato@empresa.com"
-                                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className="input-field"
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Certificado Digital */}
-                                    <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-5 border border-orange-200">
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 rounded-xl p-5 border border-orange-200 dark:border-orange-800">
+                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-text mb-4 flex items-center gap-2">
+                                            <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                             </svg>
                                             Certificado Digital A1
@@ -1125,7 +1125,7 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         <div className="space-y-4">
                                             {/* Opção: Usar Certificado Existente */}
                                             {empresas.filter(e => e.certificadoValidade && e.id !== editandoEmpresaId).length > 0 && (
-                                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                                     <label className="flex items-center gap-3 cursor-pointer">
                                                         <input
                                                             type="checkbox"
@@ -1142,18 +1142,18 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                                             className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                                                         />
                                                         <div>
-                                                            <p className="font-semibold text-gray-800">Usar Certificado Existente</p>
-                                                            <p className="text-xs text-gray-600">Compartilhar certificado de outra empresa</p>
+                                                            <p className="font-semibold text-gray-800 dark:text-dark-text">Usar Certificado Existente</p>
+                                                            <p className="text-xs text-gray-600 dark:text-dark-text-secondary">Compartilhar certificado de outra empresa</p>
                                                         </div>
                                                     </label>
                                                     
                                                     {usarCertificadoExistente && (
                                                         <div className="mt-4">
-                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Selecione a Empresa *</label>
+                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Selecione a Empresa *</label>
                                                             <select
                                                                 value={empresaCertificadoId}
                                                                 onChange={(e) => setEmpresaCertificadoId(e.target.value)}
-                                                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                                className="select-field"
                                                                 required
                                                             >
                                                                 <option value="">Selecione...</option>
@@ -1175,17 +1175,17 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                             {!usarCertificadoExistente && (
                                                 <>
                                                     <div>
-                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                                             Arquivo .pfx/.p12 {!editandoEmpresaId && '*'}
                                                         </label>
                                                         <input
                                                             type="file"
                                                             accept=".pfx,.p12"
                                                             onChange={handleCertificadoChange}
-                                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                                            className="input-field"
                                                         />
                                                         {certificadoFile && (
-                                                            <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
+                                                            <p className="text-sm text-green-600 dark:text-green-400 mt-2 flex items-center gap-1">
                                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                                 </svg>
@@ -1194,7 +1194,7 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                                             Senha do Certificado {!editandoEmpresaId && '*'}
                                                         </label>
                                                         <input
@@ -1202,19 +1202,19 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                                             value={certificadoSenha}
                                                             onChange={(e) => setCertificadoSenha(e.target.value)}
                                                             placeholder="Digite a senha do certificado"
-                                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                                                            className="input-field"
                                                         />
                                                     </div>
                                                 </>
                                             )}
-                                            <div className="bg-white border-l-4 border-orange-400 p-4 rounded-r-lg">
+                                            <div className="bg-white dark:bg-slate-800 border-l-4 border-orange-400 dark:border-orange-600 p-4 rounded-r-lg">
                                                 <div className="flex gap-3">
-                                                    <svg className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                     </svg>
-                                                    <div className="text-sm text-gray-700">
+                                                    <div className="text-sm text-gray-700 dark:text-dark-text">
                                                         <p className="font-semibold mb-1">Segurança do Certificado:</p>
-                                                        <ul className="text-xs space-y-1 text-gray-600">
+                                                        <ul className="text-xs space-y-1 text-gray-600 dark:text-dark-text-secondary">
                                                             <li>• O certificado será armazenado de forma segura no servidor</li>
                                                             <li>• A senha será criptografada antes do armazenamento</li>
                                                             <li>• Apenas administradores podem gerenciar certificados</li>
@@ -1227,17 +1227,17 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                 </div>
 
                                 {/* Footer */}
-                                <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 rounded-b-2xl">
+                                <div className="p-6 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-dark-border flex justify-end gap-3 rounded-b-2xl">
                                     <button
                                         onClick={handleCloseModalEmpresa}
-                                        className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                                        className="btn-secondary"
                                     >
                                         Cancelar
                                     </button>
                                     <button
                                         onClick={handleSalvarEmpresa}
                                         disabled={salvandoEmpresa}
-                                        className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {salvandoEmpresa ? (
                                             <>

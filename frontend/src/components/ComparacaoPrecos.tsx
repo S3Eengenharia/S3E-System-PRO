@@ -418,21 +418,21 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
             {/* MODAL DE UPLOAD CSV */}
             {isUploadModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full animate-slide-in-up">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong max-w-2xl w-full animate-slide-in-up">
                         {/* Header */}
-                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+                        <div className="relative p-6 border-b border-gray-100 dark:border-dark-border bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30">
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 flex items-center justify-center shadow-medium ring-2 ring-indigo-100">
                                     <DocumentArrowUpIcon className="w-7 h-7 text-white" />
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">Importar Comparação de Preços</h2>
-                                    <p className="text-sm text-gray-600 mt-1">Faça upload de um arquivo CSV para comparar preços</p>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Importar Comparação de Preços</h2>
+                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Faça upload de um arquivo CSV para comparar preços</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setIsUploadModalOpen(false)}
-                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                className="absolute top-4 right-4 p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -440,47 +440,47 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
 
                         <div className="p-6 space-y-6">
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                     Nome do Fornecedor *
                                 </label>
                                 <input
                                     type="text"
                                     value={supplierName}
                                     onChange={(e) => setSupplierName(e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    className="input-field"
                                     placeholder="Nome da empresa fornecedora"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                     Arquivo CSV *
                                 </label>
                                 <input
                                     type="file"
                                     accept=".csv"
                                     onChange={handleFileUpload}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    className="input-field"
                                 />
-                                <p className="text-xs text-gray-500 mt-2">
+                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-2">
                                     Formato esperado: código, nome, unidade, quantidade, preço_unitário
                                 </p>
                             </div>
 
                             {selectedFile && (
-                                <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl">
-                                    <p className="text-indigo-800 font-medium">
+                                <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 p-4 rounded-xl">
+                                    <p className="text-indigo-800 dark:text-indigo-300 font-medium">
                                         📁 Arquivo selecionado: {selectedFile.name}
                                     </p>
-                                    <p className="text-indigo-600 text-sm mt-1">
+                                    <p className="text-indigo-600 dark:text-indigo-400 text-sm mt-1">
                                         Tamanho: {(selectedFile.size / 1024).toFixed(1)} KB
                                     </p>
                                 </div>
                             )}
 
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                <h4 className="font-semibold text-blue-900 mb-2">📋 Instruções</h4>
-                                <ul className="text-blue-800 text-sm space-y-1">
+                            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📋 Instruções</h4>
+                                <ul className="text-blue-800 dark:text-blue-300 text-sm space-y-1">
                                     <li>• O arquivo deve estar em formato CSV</li>
                                     <li>• Deve conter as colunas: código, nome, unidade, quantidade, preço_unitário</li>
                                     <li>• Os preços serão comparados com o histórico de compras</li>
@@ -488,17 +488,17 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                                 </ul>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-dark-border">
                                 <button
                                     onClick={() => setIsUploadModalOpen(false)}
-                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                    className="btn-secondary"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={processCSV}
                                     disabled={!selectedFile || !supplierName.trim() || isProcessing}
-                                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isProcessing ? 'Processando...' : 'Processar CSV'}
                                 </button>

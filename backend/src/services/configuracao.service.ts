@@ -225,6 +225,39 @@ export class ConfiguracaoService {
       throw error;
     }
   }
+
+  /**
+   * Exclui um usuário permanentemente (Admin-only)
+   * ATENÇÃO: Esta operação é irreversível!
+   */
+  async excluirUsuario(userId: string) {
+    try {
+      // Verificar se o usuário existe
+      const usuario = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!usuario) {
+        throw new Error('Usuário não encontrado');
+      }
+
+      // Não permitir que o usuário exclua a si mesmo (proteção adicional)
+      // Isso pode ser implementado no controller se houver acesso ao userId do token
+
+      // Excluir o usuário
+      await prisma.user.delete({
+        where: { id: userId }
+      });
+
+      return { 
+        success: true, 
+        message: `Usuário ${usuario.name} excluído permanentemente` 
+      };
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error);
+      throw error;
+    }
+  }
 }
 
 export default new ConfiguracaoService();
