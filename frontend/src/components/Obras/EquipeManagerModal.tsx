@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../../services/api';
+import { axiosApiService } from '../../services/axiosApi';
 
 interface Membro {
   id: string;
@@ -43,7 +43,7 @@ const EquipeManagerModal: React.FC<EquipeManagerModalProps> = ({
       setError(null);
       
       console.log('🔍 Carregando equipes para o modal...');
-      const response = await apiService.get<Equipe[]>('/api/obras/equipes');
+      const response = await axiosApiService.get<Equipe[]>('/api/obras/equipes');
       
       if (response.success && response.data) {
         console.log('✅ Equipes carregadas para o modal:', response.data.length);

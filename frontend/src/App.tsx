@@ -5,7 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
+import Dashboard from './components/DashboardModerno';
 import DashboardAPI from './components/DashboardAPI';
 import Orcamentos from './components/Orcamentos';
 import Catalogo from './components/Catalogo';

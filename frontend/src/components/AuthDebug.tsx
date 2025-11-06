@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { apiService } from '../services/api';
+import { axiosApiService } from '../services/axiosApi';
 
 const AuthDebug: React.FC = () => {
   const { user, isAuthenticated, isLoading, token } = useAuth();
@@ -30,7 +30,7 @@ const AuthDebug: React.FC = () => {
       // Teste 3: Testar API diretamente
       if (localToken && localToken !== 'null') {
         try {
-          const response = await apiService.get('/api/auth/me');
+          const response = await axiosApiService.get('/api/auth/me');
           results.apiTest = {
             success: response.success,
             data: response.data,

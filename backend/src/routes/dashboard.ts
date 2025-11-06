@@ -28,4 +28,39 @@ router.get('/graficos', DashboardController.getGraficos);
  */
 router.get('/alertas', DashboardController.getAlertas);
 
+/**
+ * @route GET /api/dashboard/evolucao-obras
+ * @desc Retorna evolução de obras por período
+ * @access Authenticated
+ */
+router.get('/evolucao-obras', DashboardController.getEvolucaoObras);
+
+/**
+ * @route GET /api/dashboard/producao-quadros
+ * @desc Retorna dados de produção de quadros elétricos
+ * @access Authenticated
+ */
+router.get('/producao-quadros', DashboardController.getProducaoQuadros);
+
+/**
+ * @route GET /api/dashboard/exportar
+ * @desc Exporta dados do dashboard em formato PDF ou Excel
+ * @access Authenticated
+ */
+router.get('/exportar', DashboardController.exportarDados);
+
+/**
+ * @route GET /api/dashboard/atividades
+ * @desc Retorna atividades/sessões do sistema
+ * @access Authenticated
+ */
+router.get('/atividades', DashboardController.getAtividades);
+
+/**
+ * @route GET /api/dashboard/resumo-financeiro
+ * @desc Retorna resumo financeiro completo
+ * @access Authenticated
+ */
+router.get('/resumo-financeiro', DashboardController.getResumoFinanceiro);
+
 export default router;

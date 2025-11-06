@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { axiosApiService } from './axiosApi';
 
 export interface Membro {
   id: string;
@@ -33,21 +33,21 @@ class EquipesService {
    * Listar todas as equipes
    */
   async listarEquipes() {
-    return apiService.get<Equipe[]>('/api/equipes');
+    return axiosApiService.get<Equipe[]>('/api/equipes');
   }
 
   /**
    * Buscar equipe por ID
    */
   async buscarEquipePorId(id: string) {
-    return apiService.get<Equipe>(`/api/equipes/${id}`);
+    return axiosApiService.get<Equipe>(`/api/equipes/${id}`);
   }
 
   /**
    * Buscar estatísticas das equipes
    */
   async getEstatisticas() {
-    return apiService.get<EstatisticasEquipes>('/api/equipes/estatisticas');
+    return axiosApiService.get<EstatisticasEquipes>('/api/equipes/estatisticas');
   }
 
   /**
@@ -57,7 +57,7 @@ class EquipesService {
     const params: any = {};
     if (dataInicio) params.dataInicio = dataInicio;
     if (dataFim) params.dataFim = dataFim;
-    return apiService.get<Equipe[]>('/api/equipes/disponiveis', params);
+    return axiosApiService.get<Equipe[]>('/api/equipes/disponiveis', params);
   }
 
   /**
@@ -69,21 +69,21 @@ class EquipesService {
     lider: string;
     membros?: Membro[];
   }) {
-    return apiService.post<Equipe>('/api/equipes', data);
+    return axiosApiService.post<Equipe>('/api/equipes', data);
   }
 
   /**
    * Atualizar equipe
    */
   async atualizarEquipe(id: string, data: Partial<Equipe>) {
-    return apiService.put<Equipe>(`/api/equipes/${id}`, data);
+    return axiosApiService.put<Equipe>(`/api/equipes/${id}`, data);
   }
 
   /**
    * Desativar equipe
    */
   async desativarEquipe(id: string) {
-    return apiService.delete<void>(`/api/equipes/${id}`);
+    return axiosApiService.delete<void>(`/api/equipes/${id}`);
   }
 
   /**
@@ -94,14 +94,14 @@ class EquipesService {
     funcao: string;
     especialidade?: string;
   }) {
-    return apiService.post<Equipe>(`/api/equipes/${id}/membros`, membro);
+    return axiosApiService.post<Equipe>(`/api/equipes/${id}/membros`, membro);
   }
 
   /**
    * Remover membro da equipe
    */
   async removerMembro(id: string, membroId: string) {
-    return apiService.delete<void>(`/api/equipes/${id}/membros/${membroId}`);
+    return axiosApiService.delete<void>(`/api/equipes/${id}/membros/${membroId}`);
   }
 }
 
