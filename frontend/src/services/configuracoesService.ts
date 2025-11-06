@@ -91,6 +91,14 @@ class ConfiguracoesService {
   async criarUsuario(data: { email: string; password: string; name: string; role: string }) {
     return axiosApiService.post<Usuario>('/api/configuracoes/usuarios/criar', data);
   }
+
+  /**
+   * Exclui um usuário permanentemente (Admin-only)
+   * ATENÇÃO: Esta operação é irreversível!
+   */
+  async excluirUsuario(userId: string) {
+    return axiosApiService.delete(`/api/configuracoes/usuarios/${userId}`);
+  }
 }
 
 export const configuracoesService = new ConfiguracoesService();

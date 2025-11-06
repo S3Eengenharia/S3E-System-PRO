@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { configuracoesService, type ConfiguracaoSistema, type Usuario } from '../services/configuracoesService';
 import { ThemeContext } from '../contexts/ThemeContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -75,6 +83,12 @@ const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
+);
+
 interface ConfiguracoesProps {
     toggleSidebar: () => void;
 }
@@ -120,6 +134,11 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         role: 'user'
     });
     const [creatingUser, setCreatingUser] = useState(false);
+
+    // Estados do Modal de Excluir Usuário
+    const [isModalExcluirOpen, setIsModalExcluirOpen] = useState(false);
+    const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<Usuario | null>(null);
+    const [excluindoUsuario, setExcluindoUsuario] = useState(false);
 
     useEffect(() => {
         loadConfiguracoes();
@@ -306,6 +325,42 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             alert('❌ Erro ao criar usuário');
         } finally {
             setCreatingUser(false);
+        }
+    };
+
+    const handleOpenModalExcluir = (usuario: Usuario) => {
+        setUsuarioParaExcluir(usuario);
+        setIsModalExcluirOpen(true);
+    };
+
+    const handleCloseModalExcluir = () => {
+        setIsModalExcluirOpen(false);
+        setUsuarioParaExcluir(null);
+    };
+
+    const handleExcluirUsuario = async () => {
+        if (!usuarioParaExcluir) return;
+
+        try {
+            setExcluindoUsuario(true);
+            const response = await configuracoesService.excluirUsuario(usuarioParaExcluir.id);
+
+            if (response.success) {
+                alert('✅ Usuário excluído com sucesso!');
+                handleCloseModalExcluir();
+                await loadUsuarios();
+            } else {
+                alert(`❌ ${response.error || 'Erro ao excluir usuário'}`);
+            }
+        } catch (error: any) {
+            console.error('❌ Erro ao excluir usuário:', error);
+            if (error.response?.data?.message) {
+                alert(`❌ ${error.response.data.message}`);
+            } else {
+                alert('❌ Erro ao excluir usuário');
+            }
+        } finally {
+            setExcluindoUsuario(false);
         }
     };
 
@@ -732,9 +787,14 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                                             </button>
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                            <div className="text-xs text-gray-500">
-                                                                {new Date(usuario.updatedAt).toLocaleDateString('pt-BR')}
-                                                            </div>
+                                                            <button
+                                                                onClick={() => handleOpenModalExcluir(usuario)}
+                                                                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-red-100 text-red-800 ring-1 ring-red-200 hover:bg-red-200 transition-colors"
+                                                                title="Excluir usuário"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                                Excluir
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -1071,6 +1131,56 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                     </div>
                 </div>
             )}
+
+            {/* Modal de Confirmação de Exclusão */}
+            <Dialog open={isModalExcluirOpen} onOpenChange={setIsModalExcluirOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <TrashIcon className="w-6 h-6" />
+                            Confirmar Exclusão
+                        </DialogTitle>
+                        <DialogDescription className="pt-4">
+                            Tem certeza que deseja excluir o usuário{' '}
+                            <span className="font-bold text-gray-900 dark:text-dark-text">
+                                {usuarioParaExcluir?.name}
+                            </span>{' '}
+                            ({usuarioParaExcluir?.email})?
+                            <br />
+                            <br />
+                            <span className="text-red-600 font-semibold">
+                                ⚠️ Esta ação é irreversível e todos os dados do usuário serão permanentemente excluídos.
+                            </span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-3 sm:gap-2">
+                        <button
+                            onClick={handleCloseModalExcluir}
+                            disabled={excluindoUsuario}
+                            className="px-4 py-2.5 border-2 border-gray-300 dark:border-dark-border text-gray-700 dark:text-dark-text rounded-lg hover:bg-gray-50 dark:hover:bg-dark-bg transition-colors font-semibold disabled:opacity-50"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleExcluirUsuario}
+                            disabled={excluindoUsuario}
+                            className="px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {excluindoUsuario ? (
+                                <>
+                                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    Excluindo...
+                                </>
+                            ) : (
+                                <>
+                                    <TrashIcon className="w-4 h-4" />
+                                    Excluir Permanentemente
+                                </>
+                            )}
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

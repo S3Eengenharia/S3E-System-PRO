@@ -5,6 +5,7 @@ import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import EditorDescricaoAvancada from './EditorDescricaoAvancada';
 import { generateOrcamentoPDF, type OrcamentoPDFData } from '../utils/pdfGenerator';
+import NovoOrcamentoPage from '../pages/NovoOrcamentoPage';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -123,6 +124,9 @@ interface OrcamentosProps {
 }
 
 const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
+    // Estado de Navegação por Abas
+    const [abaAtiva, setAbaAtiva] = useState<'listagem' | 'novo'>('listagem');
+
     const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [materiais, setMateriais] = useState<Material[]>([]);
@@ -577,24 +581,34 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         );
     }
 
+    // Se a aba ativa for 'novo', renderiza a nova página
+    if (abaAtiva === 'novo') {
+        return (
+            <NovoOrcamentoPage
+                setAbaAtiva={setAbaAtiva}
+                onOrcamentoCriado={loadData}
+            />
+        );
+    }
+
     return (
-        <div className="min-h-screen p-4 sm:p-8">
+        <div className="min-h-screen p-4 sm:p-8 bg-gray-50 dark:bg-dark-bg">
             {/* Header */}
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 animate-fade-in">
                 <div className="flex items-center gap-4">
-                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 rounded-xl hover:bg-white hover:shadow-soft">
+                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 dark:text-dark-text-secondary rounded-xl hover:bg-white dark:hover:bg-dark-card hover:shadow-soft">
                         <Bars3Icon className="w-6 h-6" />
                     </button>
                     <div>
-                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">Orçamentos</h1>
-                        <p className="text-sm sm:text-base text-gray-500 mt-1">Gerencie seus orçamentos e propostas comerciais</p>
+                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 dark:text-dark-text tracking-tight">Orçamentos</h1>
+                        <p className="text-sm sm:text-base text-gray-500 dark:text-dark-text-secondary mt-1">Gerencie seus orçamentos e propostas comerciais</p>
                     </div>
                 </div>
                 <div className="flex gap-3">
                     <button
                         onClick={loadData}
                         disabled={loading}
-                        className="flex items-center gap-2 px-4 py-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold disabled:opacity-50"
+                        className="btn-info flex items-center gap-2 disabled:opacity-50"
                         title="Recarregar dados"
                     >
                         <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -603,8 +617,8 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         {loading ? 'Carregando...' : 'Atualizar'}
                     </button>
                     <button
-                        onClick={() => handleOpenModal()}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
+                        onClick={() => setAbaAtiva('novo')}
+                        className="btn-primary flex items-center gap-2"
                     >
                         <PlusIcon className="w-5 h-5" />
                         Novo Orçamento
@@ -698,10 +712,10 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     </p>
                     {!searchTerm && statusFilter === 'Todos' && (
                         <button
-                            onClick={() => handleOpenModal()}
-                            className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
+                            onClick={() => setAbaAtiva('novo')}
+                            className="btn-primary flex items-center gap-2"
                         >
-                            <PlusIcon className="w-5 h-5 inline mr-2" />
+                            <PlusIcon className="w-5 h-5" />
                             Criar Primeiro Orçamento
                         </button>
                     )}
@@ -1104,10 +1118,10 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     </h3>
                                     <div className="space-y-4">
                                         {/* Subtotal */}
-                                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-sm font-semibold text-blue-700">Subtotal (com BDI {formState.bdi}%)</span>
-                                                <span className="text-xl font-bold text-blue-900">
+                                                <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Subtotal (com BDI {formState.bdi}%)</span>
+                                                <span className="text-xl font-bold text-blue-900 dark:text-blue-200">
                                                     R$ {calculosOrcamento.subtotalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
@@ -1177,15 +1191,15 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                         )}
 
                                         {/* TOTAL FINAL */}
-                                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300 p-6 rounded-xl">
+                                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/30 border-2 border-purple-300 dark:border-purple-700 p-6 rounded-xl">
                                             <div className="flex justify-between items-center">
                                                 <div>
-                                                    <span className="text-lg font-semibold text-purple-700 uppercase">Valor Total Final</span>
-                                                    <p className="text-xs text-gray-600 mt-1">
+                                                    <span className="text-lg font-semibold text-purple-700 dark:text-purple-300 uppercase">Valor Total Final</span>
+                                                    <p className="text-xs text-gray-600 dark:text-dark-text-secondary mt-1">
                                                         Subtotal - Desconto + Impostos
                                                     </p>
                                                 </div>
-                                                <span className="text-4xl font-bold text-purple-700">
+                                                <span className="text-4xl font-bold text-purple-700 dark:text-purple-300">
                                                     R$ {calculosOrcamento.valorTotalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
