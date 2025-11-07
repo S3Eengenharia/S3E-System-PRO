@@ -25,7 +25,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relacionamentos
-  pdfTemplates PDFTemplate[]
+  pdfTemplates       PDFTemplate[]
+  projetosResponsavel Projeto[]    @relation("ProjetoResponsavel")
 
   @@map("users")
 }
@@ -186,12 +187,13 @@ model KitItem {
 
 model Orcamento {
   id                  String    @id @default(uuid())
+  numeroSequencial    Int       @unique @default(autoincrement()) // Número sequencial automático
   clienteId           String
   titulo              String
   descricao           String? // HTML do Quill editor ou texto rico
   descricaoProjeto    String? // Descrição técnica avançada do projeto
   validade            DateTime
-  status              String    @default("Rascunho") // Rascunho, Enviado, Aprovado, Rejeitado
+  status              String    @default("Pendente") // Pendente, Aprovado, Recusado
   bdi                 Float     @default(0) // Margem de lucro (%)
   custoTotal          Float     @default(0)
   precoVenda          Float     @default(0)
@@ -200,6 +202,9 @@ model Orcamento {
   // NOVOS CAMPOS - Engenharia Elétrica
   empresaCNPJ         String? // CNPJ da empresa executora
   enderecoObra        String? // Endereço completo da obra
+  cidade              String? // Cidade da obra
+  bairro              String? // Bairro da obra
+  cep                 String? // CEP da obra
   responsavelObra     String? // Responsável técnico no local
   previsaoInicio      DateTime? // Data prevista de início
   previsaoTermino     DateTime? // Data prevista de término
@@ -210,6 +215,8 @@ model Orcamento {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   aprovedAt           DateTime?
+  recusadoAt          DateTime?
+  motivoRecusa        String? // Motivo da recusa (se aplicável)
 
   cliente Cliente           @relation(fields: [clienteId], references: [id])
   items   OrcamentoItem[]
@@ -265,21 +272,25 @@ enum ProjetoStatus {
 }
 
 model Projeto {
-  id           String        @id @default(uuid())
-  orcamentoId  String        @unique
-  clienteId    String
-  titulo       String
-  descricao    String?
-  valorTotal   Float
-  dataInicio   DateTime      @default(now())
-  dataPrevisao DateTime?
-  dataFim      DateTime?
-  status       ProjetoStatus @default(PROPOSTA)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id            String        @id @default(uuid())
+  orcamentoId   String        @unique
+  clienteId     String
+  responsavelId String?
+  titulo        String
+  descricao     String?
+  tipo          String        @default("Instalacao") // Instalacao, Manutencao, Retrofit, Automacao
+  valorTotal    Float         @default(0)
+  dataInicio    DateTime      @default(now())
+  dataPrevisao  DateTime?
+  dataFim       DateTime?
+  dataConclusao DateTime?
+  status        ProjetoStatus @default(PROPOSTA)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   orcamento    Orcamento      @relation(fields: [orcamentoId], references: [id])
   cliente      Cliente        @relation(fields: [clienteId], references: [id])
+  responsavel  User?          @relation("ProjetoResponsavel", fields: [responsavelId], references: [id])
   tasks        Task[]
   notasFiscais NotaFiscal[]
   vendas       Venda[]

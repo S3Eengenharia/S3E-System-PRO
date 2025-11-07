@@ -87,7 +87,78 @@ export class ComprasService {
 
         // Usar transação para garantir consistência
         return await prisma.$transaction(async (tx) => {
-            // 1. Criar compra com items
+            // 0. CRIAR MATERIALS AUTOMATICAMENTE para itens novos
+            console.log('🔍 Processando items da compra...');
+            const itemsComMaterialId = [];
+            
+            for (const item of items) {
+                let materialId = item.materialId;
+                
+                // Se não tem materialId, criar ou buscar Material
+                if (!materialId) {
+                    console.log(`🆕 Item sem materialId: "${item.nomeProduto}". Criando Material...`);
+                    
+                    // Tentar encontrar material existente pelo NCM ou nome
+                    let material = null;
+                    if (item.ncm) {
+                        material = await tx.material.findFirst({
+                            where: { sku: String(item.ncm) }
+                        });
+                    }
+                    
+                    if (!material) {
+                        material = await tx.material.findFirst({
+                            where: { 
+                                descricao: { 
+                                    contains: item.nomeProduto.substring(0, 20), 
+                                    mode: 'insensitive' 
+                                } 
+                            }
+                        });
+                    }
+                    
+                    // Se não encontrou, CRIAR novo Material
+                    if (!material) {
+                        console.log(`✨ Criando novo Material: "${item.nomeProduto}"`);
+                        // Gerar SKU único (timestamp + random para garantir unicidade)
+                        const timestamp = Date.now();
+                        const random = Math.random().toString(36).substr(2, 9);
+                        const skuGerado = item.ncm ? `NCM-${item.ncm}-${random}` : `AUTO-${timestamp}-${random}`;
+                        
+                        material = await tx.material.create({
+                            data: {
+                                nome: item.nomeProduto, // ✅ Campo obrigatório
+                                sku: skuGerado, // ✅ Campo obrigatório e único
+                                tipo: 'Produto', // ✅ Campo obrigatório
+                                categoria: 'Importado XML', // ✅ Campo obrigatório
+                                descricao: `Produto importado via XML - NF ${numeroNF}`,
+                                unidadeMedida: 'UN',
+                                preco: item.valorUnit,
+                                estoque: 0, // Será atualizado depois se status = Recebido
+                                estoqueMinimo: 5,
+                                fornecedorId: fornecedor.id,
+                                ativo: true
+                            }
+                        });
+                        console.log(`✅ Material criado: ${material.id} (SKU: ${skuGerado})`);
+                    } else {
+                        console.log(`🔗 Material existente encontrado: ${material.id}`);
+                    }
+                    
+                    materialId = material.id;
+                }
+                
+                itemsComMaterialId.push({
+                    materialId,
+                    nomeProduto: item.nomeProduto,
+                    ncm: item.ncm ? String(item.ncm) : null,
+                    quantidade: item.quantidade,
+                    valorUnit: item.valorUnit,
+                    valorTotal: item.quantidade * item.valorUnit
+                });
+            }
+            
+            // 1. Criar compra com items (agora todos com materialId)
             const compra = await tx.compra.create({
                 data: {
                     fornecedorId: fornecedor.id,
@@ -105,14 +176,7 @@ export class ComprasService {
                     status,
                     observacoes,
                     items: {
-                        create: items.map(item => ({
-                            materialId: item.materialId || null,
-                            nomeProduto: item.nomeProduto,
-                            ncm: item.ncm ? String(item.ncm) : null,
-                            quantidade: item.quantidade,
-                            valorUnit: item.valorUnit,
-                            valorTotal: item.quantidade * item.valorUnit
-                        }))
+                        create: itemsComMaterialId
                     }
                 },
                 include: {
@@ -120,42 +184,26 @@ export class ComprasService {
                     fornecedor: true
                 }
             });
+            
+            console.log(`✅ Compra criada com ${compra.items.length} itens`);
 
             // 2. Se status for "Recebido", atualizar estoque
             if (status === 'Recebido') {
-                for (const item of items) {
-                    // Se tem materialId, incrementar estoque
-                    if (item.materialId) {
-                        await EstoqueService.incrementarEstoque(
-                            item.materialId,
-                            item.quantidade,
-                            'COMPRA',
-                            compra.id,
-                            `Compra NF: ${numeroNF} - ${item.nomeProduto}`
-                        );
-                    } else {
-                        // Tentar encontrar material pelo nome ou NCM
-                        const material = await tx.material.findFirst({
-                            where: {
-                                OR: [
-                                    { nome: { contains: item.nomeProduto, mode: 'insensitive' } },
-                                    { sku: item.ncm ? String(item.ncm) : '' }
-                                ]
-                            }
-                        });
-
-                        if (material) {
-                            await EstoqueService.incrementarEstoque(
-                                material.id,
-                                item.quantidade,
-                                'COMPRA',
-                                compra.id,
-                                `Compra NF: ${numeroNF} - ${item.nomeProduto} (vinculado automaticamente)`
-                            );
-                        }
-                        // Se não encontrar material, apenas registra a compra sem afetar estoque
-                    }
+                console.log('📦 Compra com status "Recebido" - Dando entrada no estoque...');
+                for (const itemData of itemsComMaterialId) {
+                    // Agora TODOS os itens têm materialId
+                    console.log(`  ➕ Entrada: ${itemData.nomeProduto} - Qtd: ${itemData.quantidade}`);
+                    await EstoqueService.incrementarEstoque(
+                        itemData.materialId,
+                        itemData.quantidade,
+                        'COMPRA',
+                        compra.id,
+                        `Compra NF: ${numeroNF} - ${itemData.nomeProduto}`
+                    );
                 }
+                console.log('✅ Estoque atualizado para todos os itens!');
+            } else {
+                console.log(`⚠️ Compra com status "${status}" - Estoque NÃO atualizado (aguardando recebimento)`);
             }
 
             // 3. Gerar contas a pagar (sempre gerar, mesmo se for à vista com 1 parcela)
@@ -305,37 +353,78 @@ export class ComprasService {
 
             // Atualizar estoque se necessário
             if (deveAtualizarEstoque) {
+                console.log('📦 Mudança para "Recebido" - Criando Materials e dando entrada no estoque...');
+                
                 for (const item of compra.items) {
-                    if (item.materialId) {
-                        await EstoqueService.incrementarEstoque(
-                            item.materialId,
-                            item.quantidade,
-                            'COMPRA',
-                            id,
-                            `Compra NF: ${compra.numeroNF} - Recebimento confirmado`
-                        );
-                    } else {
-                        // Tentar vincular automaticamente
-                        const material = await tx.material.findFirst({
-                            where: {
-                                OR: [
-                                    { nome: { contains: item.nomeProduto, mode: 'insensitive' } },
-                                    { sku: item.ncm || '' }
-                                ]
-                            }
-                        });
-
-                        if (material) {
-                            await EstoqueService.incrementarEstoque(
-                                material.id,
-                                item.quantidade,
-                                'COMPRA',
-                                id,
-                                `Compra NF: ${compra.numeroNF} - ${item.nomeProduto} (vinculado automaticamente)`
-                            );
+                    let materialIdFinal = item.materialId;
+                    
+                    // Se item não tem materialId, criar Material automaticamente
+                    if (!materialIdFinal) {
+                        console.log(`🆕 Item sem material vinculado: "${item.nomeProduto}". Criando...`);
+                        
+                        // Tentar encontrar material existente
+                        let material = null;
+                        if (item.ncm) {
+                            material = await tx.material.findFirst({
+                                where: { sku: String(item.ncm) }
+                            });
                         }
+                        
+                        if (!material) {
+                            material = await tx.material.findFirst({
+                                where: { 
+                                    descricao: { 
+                                        contains: item.nomeProduto.substring(0, 20), 
+                                        mode: 'insensitive' 
+                                    } 
+                                }
+                            });
+                        }
+                        
+                        // Criar novo Material se não encontrou
+                        if (!material) {
+                            // Gerar SKU único (timestamp + random para garantir unicidade)
+                            const timestamp = Date.now();
+                            const random = Math.random().toString(36).substr(2, 9);
+                            const skuGerado = item.ncm ? `NCM-${item.ncm}-${random}` : `AUTO-${timestamp}-${random}`;
+                            
+                            material = await tx.material.create({
+                                data: {
+                                    nome: item.nomeProduto, // ✅ Campo obrigatório
+                                    sku: skuGerado, // ✅ Campo obrigatório e único
+                                    tipo: 'Produto', // ✅ Campo obrigatório
+                                    categoria: 'Importado XML', // ✅ Campo obrigatório
+                                    descricao: `Produto importado via XML - NF ${compra.numeroNF}`,
+                                    unidadeMedida: 'UN',
+                                    preco: item.valorUnit,
+                                    estoque: 0,
+                                    estoqueMinimo: 5,
+                                    ativo: true
+                                }
+                            });
+                            console.log(`✅ Material criado: ${material.id} (SKU: ${skuGerado})`);
+                        }
+                        
+                        materialIdFinal = material.id;
+                        
+                        // Atualizar CompraItem com o materialId
+                        await tx.compraItem.update({
+                            where: { id: item.id },
+                            data: { materialId: material.id }
+                        });
                     }
+                    
+                    // Dar entrada no estoque
+                    await EstoqueService.incrementarEstoque(
+                        materialIdFinal,
+                        item.quantidade,
+                        'COMPRA',
+                        id,
+                        `Compra NF: ${compra.numeroNF} - Recebimento confirmado`
+                    );
                 }
+                
+                console.log('✅ Todos os Materials criados e estoque atualizado!');
             }
 
             return compraAtualizada;

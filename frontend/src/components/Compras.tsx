@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { type PurchaseOrder, type Supplier, PurchaseStatus, type PurchaseOrderItem, type Product, CatalogItemType } from '../types';
 import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
 import { comprasService } from '../services/comprasService';
@@ -222,10 +223,10 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             setIsReceivingModalOpen(false);
             setPurchaseToView(null);
             
-            alert('✅ Remessa recebida com sucesso! O estoque foi atualizado.');
+            toast.error('✅ Remessa recebida com sucesso! O estoque foi atualizado.');
         } catch (error) {
             console.error('❌ Erro ao receber remessa:', error);
-            alert('❌ Erro ao receber remessa');
+            toast.error('❌ Erro ao receber remessa');
         }
     };
 
@@ -236,7 +237,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
     const handleAddProduct = () => {
         if (!productToAdd.id || !productToAdd.quantity || !productToAdd.cost) {
-            alert('Preencha todos os campos do produto');
+            toast.error('Preencha todos os campos do produto');
             return;
         }
 
@@ -273,7 +274,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         e.preventDefault();
         
         if (purchaseItems.length === 0) {
-            alert('Adicione pelo menos um item à compra');
+            toast.error('Adicione pelo menos um item à compra');
             return;
         }
 
@@ -287,7 +288,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                 const data = await comprasService.getCompras();
                 setPurchaseOrders(data);
 
-                alert('✅ Status da compra atualizado com sucesso!');
+                toast.error('✅ Status da compra atualizado com sucesso!');
                 handleCloseModal();
                 return;
             }
@@ -329,11 +330,11 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             const data = await comprasService.getCompras();
             setPurchaseOrders(data);
 
-            alert('✅ Compra registrada com sucesso!');
+            toast.error('✅ Compra registrada com sucesso!');
             handleCloseModal();
         } catch (error) {
             console.error('❌ Erro:', error);
-            alert('❌ Erro ao processar compra');
+            toast.error('❌ Erro ao processar compra');
         }
     };
 
@@ -344,7 +345,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             setSelectedXMLFile(file);
             setXmlError(null);
         } else {
-            alert('Por favor, selecione um arquivo XML válido');
+            toast.error('Por favor, selecione um arquivo XML válido');
         }
     };
 
@@ -376,16 +377,33 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         setXmlError(null);
         try {
             const xmlContent = await readFileAsText(file);
+            console.log('📤 Enviando XML para processamento...');
+            
             // Faz parsing no backend para garantir compatibilidade de estruturas
             const resp = await comprasService.parseXML(xmlContent);
-            const data = (resp as any) || {};
+            console.log('📥 Resposta COMPLETA do parse XML:', resp);
+            console.log('📥 Tipo da resposta:', typeof resp);
+            console.log('📥 Keys da resposta:', Object.keys(resp || {}));
+            
+            // O axiosApiService retorna { success: true, data: {...} }
+            const data = (resp as any)?.data || (resp as any) || {};
+            console.log('📋 Dados extraídos:', data);
+            console.log('📋 Tipo dos dados:', typeof data);
+            console.log('📋 Keys dos dados:', Object.keys(data || {}));
 
             // Preencher formulário com dados do backend
+            console.log('🏢 Fornecedor do XML:', data.fornecedor);
             setSupplierName(data.fornecedor?.nome || '');
             setSupplierCNPJ(data.fornecedor?.cnpj || '');
             setSupplierAddress(data.fornecedor?.endereco || '');
+            
+            console.log('📄 Número NF:', data.numeroNF);
             setInvoiceNumber(data.numeroNF || '');
+            
+            console.log('📅 Data Emissão:', data.dataEmissao);
             setPurchaseDate(data.dataEmissao ? String(data.dataEmissao).slice(0, 10) : new Date().toISOString().split('T')[0]);
+            
+            console.log('📦 Items do XML:', data.items);
             setPurchaseItems(
                 (data.items || []).map((it: any) => ({
                     productId: it.materialId || '',
@@ -397,6 +415,14 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                     sku: it.sku || ''
                 }))
             );
+
+            console.log('💰 Valores do XML:', {
+                frete: data.valorFrete,
+                outrasDespesas: data.outrasDespesas,
+                ipi: data.valorIPI,
+                totalProdutos: data.valorTotalProdutos,
+                totalNota: data.valorTotalNota
+            });
 
             // Custos e Totais
             setFrete(String(data.valorFrete ?? '0'));
@@ -434,10 +460,29 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             }
 
             // Abrir modal de compra preenchido
+            console.log('✅ XML processado com sucesso! Abrindo modal de compra...');
+            console.log('📝 Estados populados:');
+            console.log('  - Fornecedor:', data.fornecedor?.nome || '❌ VAZIO');
+            console.log('  - CNPJ:', data.fornecedor?.cnpj || '❌ VAZIO');
+            console.log('  - NF:', data.numeroNF || '❌ VAZIO');
+            console.log('  - Items:', (data.items || []).length, 'itens');
+            
             setIsXMLModalOpen(false);
-            setIsModalOpen(true);
+            setTimeout(() => {
+                setIsModalOpen(true);
+                console.log('🎯 Modal de compra aberto!');
+                
+                toast.success('XML importado com sucesso!', {
+                    description: `${(data.items || []).length} itens carregados. Revise e salve a compra.`,
+                    duration: 4000
+                });
+            }, 100);
         } catch (error) {
+            console.error('❌ Erro ao processar XML:', error);
             setXmlError('Erro ao processar arquivo XML: ' + (error as Error).message);
+            toast.error('Erro ao processar XML', {
+                description: error instanceof Error ? error.message : 'Erro desconhecido'
+            });
         } finally {
             setIsProcessingXML(false);
         }
@@ -756,25 +801,23 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Data da Compra *
+                                            Data da Compra
                                         </label>
                                         <input
                                             type="date"
                                             value={purchaseDate}
                                             onChange={(e) => setPurchaseDate(e.target.value)}
-                                            required
                                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
                                         />
                                     </div>
 
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Status *
+                                            Status
                                         </label>
                                         <select
                                             value={status}
                                             onChange={(e) => setStatus(e.target.value as PurchaseStatus)}
-                                            required
                                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
                                         >
                                             <option value={PurchaseStatus.Pendente}>Pendente</option>
@@ -1033,7 +1076,6 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                             value={status}
                                             onChange={(e) => setStatus(e.target.value as PurchaseStatus)}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 font-semibold"
-                                            required
                                         >
                                             <option value={PurchaseStatus.Pendente}>⏳ Pendente</option>
                                             <option value={PurchaseStatus.Recebido}>✅ Recebido (Entrada no Estoque)</option>
@@ -1601,7 +1643,6 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     onChange={(e) => setDataRecebimento(e.target.value)}
                                     max={new Date().toISOString().split('T')[0]}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                    required
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
                                     📅 Data em que a mercadoria foi recebida fisicamente

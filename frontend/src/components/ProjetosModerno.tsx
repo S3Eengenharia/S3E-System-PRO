@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import ModalVizualizacaoProjeto from './ModalVizualizacaoProjeto';
 import TeamManagerModal from './TeamManagerModal';
 import { projetosService, type Projeto, type CreateProjetoData, type UpdateProjetoData } from '../services/projetosService';
 import { clientesService, type Cliente } from '../services/clientesService';
+import { orcamentosService, type Orcamento } from '../services/orcamentosService';
 import { etapasAdminService, type EtapaAdmin } from '../services/etapasAdminService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
@@ -137,6 +139,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     // ==================== ESTADOS ====================
     const [projetos, setProjetos] = useState<Projeto[]>([]);
     const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -224,9 +227,10 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             setLoading(true);
             setError(null);
 
-            const [projetosRes, clientesRes, usuariosRes] = await Promise.all([
+            const [projetosRes, clientesRes, orcamentosRes, usuariosRes] = await Promise.all([
                 projetosService.listar(),
                 clientesService.listar(),
+                orcamentosService.listar({ status: 'Aprovado' }),
                 axiosApiService.get<any[]>('/api/configuracoes/usuarios')
             ]);
 
@@ -244,6 +248,14 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 setClientes(clientesArray);
             } else {
                 setClientes([]);
+            }
+
+            if (orcamentosRes.success && orcamentosRes.data) {
+                // Garantir que sempre seja um array
+                const orcamentosArray = Array.isArray(orcamentosRes.data) ? orcamentosRes.data : [];
+                setOrcamentos(orcamentosArray);
+            } else {
+                setOrcamentos([]);
             }
 
             if (usuariosRes.success && usuariosRes.data) {
@@ -376,7 +388,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             if (response.success) {
                 await loadEtapasAdmin(projetoToView.id);
             } else {
-                alert('Erro ao concluir etapa');
+                toast.error('Erro ao concluir etapa');
             }
         } catch (err) {
             console.error('Erro ao concluir etapa:', err);
@@ -400,7 +412,9 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
         if (!etapaToExtend || !projetoToView) return;
 
         if (extendFormState.motivo.trim().length < 10) {
-            alert('O motivo deve ter pelo menos 10 caracteres');
+            toast.error('Motivo muito curto', {
+                description: 'O motivo deve ter pelo menos 10 caracteres'
+            });
             return;
         }
 
@@ -417,7 +431,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 setExtendPrazoModalOpen(false);
                 setEtapaToExtend(null);
             } else {
-                alert('Erro ao estender prazo');
+                toast.error('Erro ao estender prazo');
             }
         } catch (err) {
             console.error('Erro ao estender prazo:', err);
@@ -454,7 +468,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 }
             }
         } catch (err) {
-            alert('Erro ao salvar projeto');
+            toast.error('Erro ao salvar projeto');
         }
     };
 
@@ -466,7 +480,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             setProjetos(prev => prev.filter(p => p.id !== projetoToDelete.id));
             setProjetoToDelete(null);
         } catch (err) {
-            alert('Erro ao excluir projeto');
+            toast.error('Erro ao excluir projeto');
         }
     };
 
@@ -578,14 +592,19 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     const handleGerarObra = async () => {
         if (!projetoToView) return;
         
-        if (window.confirm(`Gerar obra a partir do projeto "${projetoToView.titulo}"?`)) {
+        toast(`Gerar obra a partir do projeto "${projetoToView.titulo}"?`, {
+            action: {
+                label: 'Gerar Obra',
+                onClick: async () => {
             try {
                 const response = await projetosService.atualizar(projetoToView.id, {
                     status: 'Em Execução'
                 });
                 
                 if (response.success) {
-                    alert('Obra gerada com sucesso! Você pode acessá-la na página de Obras.');
+                    toast.success('Obra gerada com sucesso!', {
+                        description: 'Você pode acessá-la na página de Obras'
+                    });
                     setProjetos(prev => prev.map(p => 
                         p.id === projetoToView.id ? { ...p, status: 'Em Execução' } : p
                     ));
@@ -593,10 +612,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                     onNavigate('Obras');
                 }
             } catch (err) {
-                alert('Erro ao gerar obra');
+                    toast.error('Erro ao gerar obra');
+                }
             }
-        }
-    };
+        },
+    })};
 
     // Gestão de Equipe/Usuários
     const handleOpenTeamModal = () => {
@@ -929,12 +949,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Cliente *
+                                        Cliente
                                     </label>
                                     <select
                                         value={formState.clienteId}
                                         onChange={(e) => setFormState({...formState, clienteId: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="">Selecione o cliente</option>
@@ -946,12 +965,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Responsável Técnico *
+                                        Responsável Técnico
                                     </label>
                                     <select
                                         value={formState.responsavelId}
                                         onChange={(e) => setFormState({...formState, responsavelId: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="">Selecione o responsável</option>
@@ -960,12 +978,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Tipo de Projeto *
+                                        Tipo de Projeto
                                     </label>
                                     <select
                                         value={formState.tipo}
                                         onChange={(e) => setFormState({...formState, tipo: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="Instalacao">Instalação</option>
@@ -975,41 +992,50 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                     </select>
                                 </div>
 
-                                <div>
+                                <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Orçamento Vinculado
+                                        Orçamento *
                                     </label>
-                                    <input
-                                        type="text"
+                                    <select
                                         value={formState.orcamentoId}
                                         onChange={(e) => setFormState({...formState, orcamentoId: e.target.value})}
+                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="ID do orçamento (opcional)"
-                                    />
+                                    >
+                                        <option value="">Selecione um orçamento aprovado</option>
+                                        {orcamentos.map(orcamento => (
+                                            <option key={orcamento.id} value={orcamento.id}>
+                                                {orcamento.titulo} - Cliente: {orcamento.cliente?.nome} - R$ {orcamento.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {orcamentos.length === 0 && (
+                                        <p className="text-xs text-orange-600 mt-1">
+                                            ⚠️ Nenhum orçamento aprovado encontrado. Crie e aprove um orçamento primeiro.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Data de Início *
+                                        Data de Início
                                     </label>
                                     <input
                                         type="date"
                                         value={formState.dataInicio}
                                         onChange={(e) => setFormState({...formState, dataInicio: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Data de Previsão *
+                                        Data de Previsão
                                     </label>
                                     <input
                                         type="date"
                                         value={formState.dataPrevisao}
                                         onChange={(e) => setFormState({...formState, dataPrevisao: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </div>
