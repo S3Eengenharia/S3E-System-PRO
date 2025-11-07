@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/Login';
+// Editor WYSIWYG Jodit
+import 'jodit/es2021/jodit.min.css';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/DashboardModerno';
 import DashboardAPI from './components/DashboardAPI';
@@ -33,6 +35,7 @@ import ObrasKanban from './pages/ObrasKanban';
 // import SettingsModal from './components/SettingsModal'; // DESCONTINUADO - Substituído por página Configuracoes.tsx
 import GestaoObras from './components/GestaoObras';
 import { type Project } from './types';
+import { Toaster } from './components/ui/sonner';
 
 const MainApp: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -156,6 +159,7 @@ const App: React.FC = () => {
               }
             />
           </Routes>
+          <Toaster position="top-right" expand={false} richColors closeButton />
         </AuthProvider>
       </ThemeProvider>
     </Router>

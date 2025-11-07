@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { toast } from 'sonner';
 import { usePDFCustomization } from '../../hooks/usePDFCustomization';
 import { pdfCustomizationService } from '../../services/pdfCustomizationService';
 import { OrcamentoPDFData, CORNER_DESIGNS, COLOR_TEMPLATES } from '../../types/pdfCustomization';
@@ -59,64 +60,86 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
         const file = e.target.files?.[0];
         if (!file) return;
 
-        try {
+        const promise = (async () => {
             const response = await pdfCustomizationService.uploadWatermark(file);
             if (response.success && response.data) {
                 handleWatermarkChange({
                     type: 'logo',
                     content: response.data.url
                 });
-                alert('✅ Marca d\'água carregada com sucesso!');
+                return file.name;
             } else {
-                alert('❌ Erro ao fazer upload da imagem');
+                throw new Error(response.error || 'Erro ao fazer upload da imagem');
             }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('❌ Erro ao fazer upload');
-        }
+        })();
+
+        toast.promise(promise, {
+            loading: 'Fazendo upload da imagem...',
+            success: (fileName) => `Marca d'água carregada: ${fileName}`,
+            error: (err) => err.message || 'Erro ao fazer upload'
+        });
     };
 
     // Gerar PDF personalizado
     const handleGeneratePDF = async () => {
-        try {
-            setGenerating(true);
+        setGenerating(true);
+        
+        const promise = (async () => {
             const result = await pdfCustomizationService.generateCustomPDF(orcamentoData, customization);
             
             if (result.success) {
-                alert(`✅ PDF gerado com sucesso! Arquivo: ${result.fileName}`);
                 if (onGeneratePDF) onGeneratePDF();
-                onClose();
+                setTimeout(() => onClose(), 1000);
+                return result.fileName || 'Orçamento.pdf';
             } else {
-                alert(`❌ ${result.error || 'Erro ao gerar PDF'}`);
+                throw new Error(result.error || 'Erro ao gerar PDF');
             }
-        } catch (error) {
-            console.error('Erro ao gerar PDF:', error);
-            alert('❌ Erro ao gerar PDF personalizado');
-        } finally {
+        })();
+
+        toast.promise(promise, {
+            loading: 'Gerando PDF personalizado...',
+            success: (fileName) => ({
+                title: 'PDF gerado com sucesso!',
+                description: `Arquivo: ${fileName} - Download iniciado automaticamente`
+            }),
+            error: (err) => ({
+                title: 'Erro ao gerar PDF',
+                description: err.message
+            })
+        }).finally(() => {
             setGenerating(false);
-        }
+        });
     };
 
     // Salvar template
     const handleSaveTemplate = async () => {
         if (!templateName.trim()) {
-            alert('❌ Digite um nome para o template');
+            toast.error('Nome obrigatório', {
+                description: 'Digite um nome para o template'
+            });
             return;
         }
 
-        try {
+        const promise = (async () => {
             const response = await pdfCustomizationService.saveTemplate(templateName, customization);
             if (response.success) {
-                alert('✅ Template salvo com sucesso!');
                 setShowSaveTemplate(false);
                 setTemplateName('');
+                return templateName;
             } else {
-                alert(`❌ ${response.error || 'Erro ao salvar template'}`);
+                throw new Error(response.error || 'Erro ao salvar template');
             }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('❌ Erro ao salvar template');
-        }
+        })();
+
+        toast.promise(promise, {
+            loading: 'Salvando template...',
+            success: (name) => ({
+                title: 'Template salvo!',
+                description: `"${name}" está disponível para reutilização`,
+                icon: '💾'
+            }),
+            error: (err) => err.message || 'Erro ao salvar template'
+        });
     };
 
     return (

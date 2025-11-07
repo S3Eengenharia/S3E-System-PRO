@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { fornecedoresService, type Fornecedor, type CreateFornecedorData } from '../services/fornecedoresService';
 
 // Icons (mesmos do ClientesModerno)
@@ -57,7 +58,11 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
         cnpj: '',
         email: '',
         telefone: '',
-        endereco: ''
+        endereco: '',
+        cidade: '',
+        estado: '',
+        cep: '',
+        categoria: ''
     });
 
     useEffect(() => {
@@ -100,7 +105,11 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                 cnpj: fornecedor.cnpj,
                 email: fornecedor.email || '',
                 telefone: fornecedor.telefone || '',
-                endereco: fornecedor.endereco || ''
+                endereco: fornecedor.endereco || '',
+                cidade: fornecedor.cidade || '',
+                estado: fornecedor.estado || '',
+                cep: fornecedor.cep || '',
+                categoria: fornecedor.categoria || ''
             });
         } else {
             setFornecedorToEdit(null);
@@ -109,7 +118,11 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                 cnpj: '',
                 email: '',
                 telefone: '',
-                endereco: ''
+                endereco: '',
+                cidade: '',
+                estado: '',
+                cep: '',
+                categoria: ''
             });
         }
         setIsModalOpen(true);
@@ -133,7 +146,9 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                 }
             }
         } catch (err) {
-            alert('Erro ao salvar fornecedor');
+            toast.error('Erro ao salvar fornecedor', {
+                description: 'Verifique os dados e tente novamente'
+            });
         }
     };
 
@@ -146,25 +161,39 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                 await loadFornecedores();
                 setFornecedorToDelete(null);
             } else {
-                alert(response.message || 'Erro ao desativar fornecedor');
+                toast.error('Erro ao desativar', {
+                    description: response.message || 'Erro ao desativar fornecedor'
+                });
             }
         } catch (err) {
-            alert('Erro ao desativar fornecedor');
+            toast.error('Erro ao desativar fornecedor', {
+                description: 'Verifique sua conexão'
+            });
         }
     };
 
     const handleReativar = async (fornecedor: Fornecedor) => {
-        if (window.confirm(`Deseja reativar o fornecedor "${fornecedor.nome}"?`)) {
-            try {
-                const response = await fornecedoresService.reativar(fornecedor.id);
-                if (response.success) {
-                    await loadFornecedores();
-                    alert('✅ Fornecedor reativado com sucesso!');
+        toast(`Reativar fornecedor "${fornecedor.nome}"?`, {
+            action: {
+                label: 'Reativar',
+                onClick: async () => {
+                    const promise = (async () => {
+                        const response = await fornecedoresService.reativar(fornecedor.id);
+                        if (response.success) {
+                            await loadFornecedores();
+                            return fornecedor.nome;
+                        }
+                        throw new Error('Erro ao reativar fornecedor');
+                    })();
+
+                    toast.promise(promise, {
+                        loading: 'Reativando fornecedor...',
+                        success: (nome) => `${nome} reativado!`,
+                        error: 'Erro ao reativar fornecedor'
+                    });
                 }
-            } catch (err) {
-                alert('Erro ao reativar fornecedor');
             }
-        }
+        });
     };
 
     if (loading) {
@@ -443,8 +472,97 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                                         value={formState.endereco}
                                         onChange={(e) => setFormState({...formState, endereco: e.target.value})}
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
-                                        placeholder="Endereço completo"
+                                        placeholder="Rua, número, complemento"
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Cidade
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formState.cidade}
+                                        onChange={(e) => setFormState({...formState, cidade: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        placeholder="Nome da cidade"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Estado
+                                    </label>
+                                    <select
+                                        value={formState.estado}
+                                        onChange={(e) => setFormState({...formState, estado: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                    >
+                                        <option value="">Selecione o estado</option>
+                                        <option value="AC">Acre</option>
+                                        <option value="AL">Alagoas</option>
+                                        <option value="AP">Amapá</option>
+                                        <option value="AM">Amazonas</option>
+                                        <option value="BA">Bahia</option>
+                                        <option value="CE">Ceará</option>
+                                        <option value="DF">Distrito Federal</option>
+                                        <option value="ES">Espírito Santo</option>
+                                        <option value="GO">Goiás</option>
+                                        <option value="MA">Maranhão</option>
+                                        <option value="MT">Mato Grosso</option>
+                                        <option value="MS">Mato Grosso do Sul</option>
+                                        <option value="MG">Minas Gerais</option>
+                                        <option value="PA">Pará</option>
+                                        <option value="PB">Paraíba</option>
+                                        <option value="PR">Paraná</option>
+                                        <option value="PE">Pernambuco</option>
+                                        <option value="PI">Piauí</option>
+                                        <option value="RJ">Rio de Janeiro</option>
+                                        <option value="RN">Rio Grande do Norte</option>
+                                        <option value="RS">Rio Grande do Sul</option>
+                                        <option value="RO">Rondônia</option>
+                                        <option value="RR">Roraima</option>
+                                        <option value="SC">Santa Catarina</option>
+                                        <option value="SP">São Paulo</option>
+                                        <option value="SE">Sergipe</option>
+                                        <option value="TO">Tocantins</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        CEP
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formState.cep}
+                                        onChange={(e) => setFormState({...formState, cep: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                        placeholder="00000-000"
+                                        maxLength={9}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Categoria
+                                    </label>
+                                    <select
+                                        value={formState.categoria}
+                                        onChange={(e) => setFormState({...formState, categoria: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500"
+                                    >
+                                        <option value="">Selecione a categoria</option>
+                                        <option value="Materiais Elétricos">Materiais Elétricos</option>
+                                        <option value="Ferramentas">Ferramentas</option>
+                                        <option value="Equipamentos">Equipamentos</option>
+                                        <option value="Iluminação">Iluminação</option>
+                                        <option value="Automação">Automação</option>
+                                        <option value="Cabos e Fios">Cabos e Fios</option>
+                                        <option value="Quadros e Painéis">Quadros e Painéis</option>
+                                        <option value="Proteção">Proteção</option>
+                                        <option value="Diversos">Diversos</option>
+                                    </select>
                                 </div>
                             </div>
 

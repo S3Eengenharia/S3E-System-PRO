@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import { type MaterialItem, MaterialCategory } from '../types';
 import { materiaisService, Material } from '../services/materiaisService';
 
@@ -241,17 +242,17 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 // Atualizar material existente
                 const response = await materiaisService.updateMaterial(itemToEdit.id, materialData);
                 if (response.success) {
-                    alert('✅ Material atualizado com sucesso!');
+                    toast.error('✅ Material atualizado com sucesso!');
                 } else {
-                    alert('❌ Erro ao atualizar material');
+                    toast.error('❌ Erro ao atualizar material');
                 }
             } else {
                 // Criar novo material
                 const response = await materiaisService.createMaterial(materialData);
                 if (response.success) {
-                    alert('✅ Material criado com sucesso!');
+                    toast.error('✅ Material criado com sucesso!');
                 } else {
-                    alert('❌ Erro ao criar material');
+                    toast.error('❌ Erro ao criar material');
                 }
             }
             
@@ -259,7 +260,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
             await loadMaterials();
         } catch (error) {
             console.error('❌ Erro ao salvar material:', error);
-            alert('❌ Erro ao salvar material');
+            toast.error('❌ Erro ao salvar material');
         }
     };
 
@@ -269,16 +270,16 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         try {
             const response = await materiaisService.deleteMaterial(itemToDelete.id);
             if (response.success) {
-                alert('✅ Material removido com sucesso!');
+                toast.error('✅ Material removido com sucesso!');
             } else {
-                alert('❌ Erro ao remover material');
+                toast.error('❌ Erro ao remover material');
             }
             
             setItemToDelete(null);
             await loadMaterials();
         } catch (error) {
             console.error('❌ Erro ao remover material:', error);
-            alert('❌ Erro ao remover material');
+            toast.error('❌ Erro ao remover material');
         }
     };
 
@@ -339,7 +340,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 </div>
                 <button
                     onClick={() => handleOpenModal()}
-                    className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
                 >
                     <PlusIcon className="w-5 h-5" />
                     Novo Material
@@ -357,7 +358,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
                             <CubeIcon className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
@@ -369,19 +370,19 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-yellow-100 to-yellow-200 flex items-center justify-center">
-                            <ExclamationTriangleIcon className="w-6 h-6 text-yellow-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
+                            <ExclamationTriangleIcon className="w-6 h-6 text-orange-600" />
                         </div>
                         <div>
                             <p className="text-sm font-medium text-gray-600">Estoque Baixo</p>
-                            <p className="text-2xl font-bold text-yellow-600">{stats.lowStock}</p>
+                            <p className="text-2xl font-bold text-orange-600">{stats.lowStock}</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-red-100 to-red-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center">
                             <XMarkIcon className="w-6 h-6 text-red-600" />
                         </div>
                         <div>
@@ -393,7 +394,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-green-100 to-green-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
                             <span className="text-2xl">💰</span>
                         </div>
                         <div>
@@ -417,7 +418,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                 placeholder="Buscar por nome, SKU ou tipo..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                             />
                         </div>
                     </div>
@@ -426,7 +427,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         <select
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value as MaterialCategory | 'Todos')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                         >
                             <option value="Todos">Todas as Categorias</option>
                             <option value={MaterialCategory.MaterialEletrico}>Material Elétrico</option>
@@ -439,7 +440,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         <select
                             value={stockFilter}
                             onChange={(e) => setStockFilter(e.target.value as 'Todos' | 'Baixo' | 'Zerado')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                         >
                             <option value="Todos">Todos os Estoques</option>
                             <option value="Baixo">Estoque Baixo</option>
@@ -484,7 +485,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                     {!searchTerm && categoryFilter === 'Todos' && stockFilter === 'Todos' && (
                         <button
                             onClick={() => handleOpenModal()}
-                            className="bg-linear-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
+                            className="bg-gradient-to-r from-teal-600 to-teal-500 text-white px-6 py-3 rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
                         >
                             <PlusIcon className="w-5 h-5 inline mr-2" />
                             Adicionar Primeiro Material
@@ -494,13 +495,13 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredMaterials.map((material) => (
-                        <div key={material.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-blue-300 transition-all duration-200">
+                        <div key={material.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-teal-300 transition-all duration-200">
                             {/* Header do Card */}
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1">
                                     <h3 className="font-bold text-lg text-gray-900 mb-1">{material.name}</h3>
                                     <div className="flex items-center gap-2">
-                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-blue-100 text-blue-800 ring-1 ring-blue-200">
+                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-teal-100 text-teal-800 ring-1 ring-teal-200">
                                             {getCategoryIcon(material.category)} {material.category}
                                         </span>
                                     </div>
@@ -559,7 +560,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             <div className="flex gap-2 pt-4 border-t border-gray-100">
                                 <button
                                     onClick={() => handleOpenModal(material)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-colors text-sm font-semibold"
                                 >
                                     <PencilIcon className="w-4 h-4" />
                                     Editar
@@ -582,9 +583,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
                     <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
-                            <div className="relative p-6 border-b border-gray-100 bg-linear-to-r from-blue-50 to-purple-50">
+                            <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-blue-50">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-xl bg-linear-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-medium ring-2 ring-blue-100">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-medium ring-2 ring-teal-100">
                                     {itemToEdit ? <PencilIcon className="w-7 h-7 text-white" /> : <PlusIcon className="w-7 h-7 text-white" />}
                                 </div>
                                 <div className="flex-1">
@@ -616,7 +617,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         value={formState.name}
                                         onChange={(e) => setFormState({...formState, name: e.target.value})}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="Ex: Cabo Flexível 2,5mm"
                                     />
                                 </div>
@@ -630,7 +631,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         value={formState.sku}
                                         onChange={(e) => setFormState({...formState, sku: e.target.value})}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="Ex: CAB-2.5-FLEX"
                                     />
                                 </div>
@@ -643,7 +644,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         type="text"
                                         value={formState.type}
                                         onChange={(e) => setFormState({...formState, type: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="Ex: Cabo, Disjuntor, Tomada"
                                     />
                                 </div>
@@ -656,7 +657,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         value={formState.category}
                                         onChange={(e) => setFormState({...formState, category: e.target.value as MaterialCategory})}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                     >
                                         <option value={MaterialCategory.MaterialEletrico}>Material Elétrico</option>
                                         <option value={MaterialCategory.Ferramentas}>Ferramentas</option>
@@ -672,7 +673,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         value={formState.unitOfMeasure}
                                         onChange={(e) => setFormState({...formState, unitOfMeasure: e.target.value})}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                     >
                                         <option value="un">Unidade</option>
                                         <option value="m">Metro</option>
@@ -691,7 +692,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         value={formState.description}
                                         onChange={(e) => setFormState({...formState, description: e.target.value})}
                                         rows={3}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="Descrição detalhada do material..."
                                     />
                                 </div>
@@ -710,7 +711,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         required
                                         min="0"
                                         step="0.01"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="0"
                                     />
                                 </div>
@@ -726,7 +727,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         required
                                         min="0"
                                         step="0.01"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="5"
                                     />
                                 </div>
@@ -742,15 +743,15 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         required
                                         min="0"
                                         step="0.01"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="0,00"
                                     />
                                 </div>
 
                                 <div className="flex items-end">
-                                    <div className="w-full bg-blue-50 border border-blue-200 p-3 rounded-xl">
-                                        <p className="text-sm font-medium text-blue-800">Valor Total:</p>
-                                        <p className="text-lg font-bold text-blue-900">
+                                    <div className="w-full bg-teal-50 border border-teal-200 p-3 rounded-xl">
+                                        <p className="text-sm font-medium text-teal-800">Valor Total:</p>
+                                        <p className="text-lg font-bold text-teal-900">
                                             R$ {((parseFloat(formState.stock) || 0) * (parseFloat(formState.price) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
@@ -767,7 +768,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         type="text"
                                         value={formState.location}
                                         onChange={(e) => setFormState({...formState, location: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="Ex: Estoque A1, Prateleira 3"
                                     />
                                 </div>
@@ -780,7 +781,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         type="text"
                                         value={formState.supplierName}
                                         onChange={(e) => setFormState({...formState, supplierName: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                         placeholder="Nome do fornecedor"
                                     />
                                 </div>
@@ -796,7 +797,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-3 bg-linear-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
+                                    className="px-8 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
                                 >
                                     {itemToEdit ? 'Atualizar' : 'Adicionar'} Material
                                 </button>

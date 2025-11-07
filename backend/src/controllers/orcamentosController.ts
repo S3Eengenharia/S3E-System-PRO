@@ -87,6 +87,9 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
       // Novos campos
       empresaCNPJ,
       enderecoObra,
+      cidade,
+      bairro,
+      cep,
       responsavelObra,
       previsaoInicio,
       previsaoTermino,
@@ -162,6 +165,9 @@ export const createOrcamento = async (req: Request, res: Response): Promise<void
         // Novos campos
         empresaCNPJ,
         enderecoObra,
+        cidade,
+        bairro,
+        cep,
         responsavelObra,
         previsaoInicio: previsaoInicio ? new Date(previsaoInicio) : null,
         previsaoTermino: previsaoTermino ? new Date(previsaoTermino) : null,
@@ -240,6 +246,289 @@ export const updateOrcamentoStatus = async (req: Request, res: Response): Promis
   } catch (error) {
     console.error('Erro ao atualizar orçamento:', error);
     res.status(500).json({ error: 'Erro ao atualizar orçamento' });
+  }
+};
+
+// Aprovar orçamento
+export const aprovarOrcamento = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const orcamento = await prisma.orcamento.findUnique({
+      where: { id }
+    });
+
+    if (!orcamento) {
+      res.status(404).json({
+        success: false,
+        error: 'Orçamento não encontrado'
+      });
+      return;
+    }
+
+    if (orcamento.status === 'Aprovado') {
+      res.status(400).json({
+        success: false,
+        error: 'Orçamento já está aprovado'
+      });
+      return;
+    }
+
+    const orcamentoAtualizado = await prisma.orcamento.update({
+      where: { id },
+      data: {
+        status: 'Aprovado',
+        aprovedAt: new Date()
+      },
+      include: {
+        cliente: {
+          select: { id: true, nome: true }
+        },
+        items: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: orcamentoAtualizado,
+      message: 'Orçamento aprovado com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao aprovar orçamento:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao aprovar orçamento'
+    });
+  }
+};
+
+// Recusar orçamento
+export const recusarOrcamento = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+
+    const orcamento = await prisma.orcamento.findUnique({
+      where: { id }
+    });
+
+    if (!orcamento) {
+      res.status(404).json({
+        success: false,
+        error: 'Orçamento não encontrado'
+      });
+      return;
+    }
+
+    if (orcamento.status === 'Recusado') {
+      res.status(400).json({
+        success: false,
+        error: 'Orçamento já está recusado'
+      });
+      return;
+    }
+
+    const orcamentoAtualizado = await prisma.orcamento.update({
+      where: { id },
+      data: {
+        status: 'Recusado',
+        recusadoAt: new Date(),
+        motivoRecusa: motivo || null
+      },
+      include: {
+        cliente: {
+          select: { id: true, nome: true }
+        },
+        items: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: orcamentoAtualizado,
+      message: 'Orçamento recusado'
+    });
+  } catch (error) {
+    console.error('Erro ao recusar orçamento:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao recusar orçamento'
+    });
+  }
+};
+
+// Atualizar orçamento completo
+export const updateOrcamento = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const {
+      clienteId,
+      titulo,
+      descricao,
+      descricaoProjeto,
+      validade,
+      bdi,
+      items,
+      observacoes,
+      empresaCNPJ,
+      enderecoObra,
+      cidade,
+      bairro,
+      cep,
+      responsavelObra,
+      previsaoInicio,
+      previsaoTermino,
+      descontoValor,
+      impostoPercentual,
+      condicaoPagamento
+    } = req.body;
+
+    console.log('🔄 Atualizando orçamento:', id);
+    console.log('📦 Dados recebidos:', req.body);
+
+    // Verificar se orçamento existe
+    const orcamentoExistente = await prisma.orcamento.findUnique({
+      where: { id },
+      include: { items: true }
+    });
+
+    if (!orcamentoExistente) {
+      res.status(404).json({
+        success: false,
+        error: 'Orçamento não encontrado'
+      });
+      return;
+    }
+
+    // Recalcular totais se items foram fornecidos
+    let custoTotal = orcamentoExistente.custoTotal;
+    let precoVenda = orcamentoExistente.precoVenda;
+    let itemsData: any[] = [];
+
+    if (items && items.length > 0) {
+      custoTotal = 0;
+
+      for (const item of items) {
+        let custoUnit = item.custoUnit || 0;
+        
+        // Se for kit, calcular custo baseado nos materiais
+        if (item.tipo === 'KIT' && item.kitId) {
+          const kit = await prisma.kit.findUnique({
+            where: { id: item.kitId },
+            include: {
+              items: {
+                include: { material: true }
+              }
+            }
+          });
+          
+          if (kit) {
+            custoUnit = kit.items.reduce((sum, kitItem) => 
+              sum + (kitItem.material.preco || 0) * kitItem.quantidade, 0
+            );
+          }
+        }
+
+        const subtotal = custoUnit * item.quantidade;
+        const precoUnit = custoUnit * (1 + (bdi || orcamentoExistente.bdi || 0) / 100);
+        
+        custoTotal += subtotal;
+
+        itemsData.push({
+          tipo: item.tipo,
+          materialId: item.materialId || null,
+          kitId: item.kitId || null,
+          quadroId: item.quadroId || null,
+          servicoId: item.servicoId || null,
+          servicoNome: item.servicoNome || null,
+          descricao: item.descricao || '',
+          quantidade: item.quantidade,
+          custoUnit,
+          precoUnit,
+          subtotal: precoUnit * item.quantidade
+        });
+      }
+
+      // Recalcular preço de venda
+      const subtotalComBDI = itemsData.reduce((sum, item) => sum + item.subtotal, 0);
+      const valorComDesconto = subtotalComBDI - (descontoValor || orcamentoExistente.descontoValor || 0);
+      precoVenda = valorComDesconto * (1 + (impostoPercentual || orcamentoExistente.impostoPercentual || 0) / 100);
+    }
+
+    // Preparar dados de atualização
+    const updateData: any = {
+      titulo: titulo || orcamentoExistente.titulo,
+      descricao: descricao !== undefined ? descricao : orcamentoExistente.descricao,
+      descricaoProjeto: descricaoProjeto !== undefined ? descricaoProjeto : orcamentoExistente.descricaoProjeto,
+      observacoes: observacoes !== undefined ? observacoes : orcamentoExistente.observacoes,
+      validade: validade ? new Date(validade) : orcamentoExistente.validade,
+      bdi: bdi !== undefined ? bdi : orcamentoExistente.bdi,
+      custoTotal,
+      precoVenda,
+      empresaCNPJ: empresaCNPJ !== undefined ? empresaCNPJ : orcamentoExistente.empresaCNPJ,
+      enderecoObra: enderecoObra !== undefined ? enderecoObra : orcamentoExistente.enderecoObra,
+      cidade: cidade !== undefined ? cidade : orcamentoExistente.cidade,
+      bairro: bairro !== undefined ? bairro : orcamentoExistente.bairro,
+      cep: cep !== undefined ? cep : orcamentoExistente.cep,
+      responsavelObra: responsavelObra !== undefined ? responsavelObra : orcamentoExistente.responsavelObra,
+      descontoValor: descontoValor !== undefined ? descontoValor : orcamentoExistente.descontoValor,
+      impostoPercentual: impostoPercentual !== undefined ? impostoPercentual : orcamentoExistente.impostoPercentual,
+      condicaoPagamento: condicaoPagamento !== undefined ? condicaoPagamento : orcamentoExistente.condicaoPagamento,
+      previsaoInicio: previsaoInicio ? new Date(previsaoInicio) : orcamentoExistente.previsaoInicio,
+      previsaoTermino: previsaoTermino ? new Date(previsaoTermino) : orcamentoExistente.previsaoTermino
+    };
+
+    if (clienteId) {
+      updateData.clienteId = clienteId;
+    }
+
+    // Se items foram fornecidos, deletar os antigos e criar novos
+    if (items && items.length > 0) {
+      await prisma.orcamentoItem.deleteMany({
+        where: { orcamentoId: id }
+      });
+
+      updateData.items = {
+        create: itemsData
+      };
+    }
+
+    // Atualizar orçamento
+    const orcamentoAtualizado = await prisma.orcamento.update({
+      where: { id },
+      data: updateData,
+      include: {
+        cliente: {
+          select: { 
+            id: true, 
+            nome: true, 
+            email: true, 
+            telefone: true 
+          }
+        },
+        items: {
+          include: {
+            material: { select: { id: true, nome: true, sku: true } },
+            kit: { select: { id: true, nome: true } }
+          }
+        },
+        fotos: true
+      }
+    });
+
+    console.log('✅ Orçamento atualizado com sucesso');
+
+    res.json({
+      success: true,
+      data: orcamentoAtualizado,
+      message: 'Orçamento atualizado com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao atualizar orçamento:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao atualizar orçamento'
+    });
   }
 };
 

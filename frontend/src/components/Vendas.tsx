@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useContext } from 'react';
+import { toast } from 'sonner';
 import { AuthContext } from '../contexts/AuthContext';
 import { BudgetStatus } from '../types';
 import { vendasService, type Venda, type DashboardVendas } from '../services/vendasService';
@@ -218,6 +219,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
             const vendaData = {
                 orcamentoId: vendaForm.orcamentoId,
                 clienteId: orcamentoSelecionado.clienteId,
+                valorTotal: orcamentoSelecionado.precoVenda, // ✅ Campo obrigatório
                 formaPagamento: vendaForm.formaPagamento,
                 numeroParcelas: vendaForm.parcelas,
                 valorEntrada: vendaForm.valorEntrada,
@@ -236,7 +238,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
 
             if (response.success) {
                 console.log('✅ Venda realizada com sucesso');
-                alert(response.message || '✅ Venda registrada com sucesso!');
+                toast.error(response.message || '✅ Venda registrada com sucesso!');
                 
                 // Resetar formulário
                 setVendaForm({
@@ -257,13 +259,13 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 const errorMsg = response.error || 'Erro ao registrar venda';
                 console.warn('⚠️ Erro ao realizar venda:', errorMsg);
                 setError(errorMsg);
-                alert(`❌ ${errorMsg}`);
+                toast.error(`❌ ${errorMsg}`);
             }
         } catch (err) {
             console.error('❌ Erro crítico ao realizar venda:', err);
             const errorMsg = 'Erro de conexão ao registrar venda';
             setError(errorMsg);
-            alert(`❌ ${errorMsg}`);
+            toast.error(`❌ ${errorMsg}`);
         } finally {
             setIsSubmitting(false);
         }

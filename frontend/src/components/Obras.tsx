@@ -1,13 +1,46 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { alocacaoObraService, type AlocacaoDTO } from '../services/AlocacaoObraService';
 import GanttChart, { type GanttItem } from './GanttChart';
 import { 
-    type Project, ProjectStatus, ProjectType, 
+    ProjectStatus,
     type User, UserRole,
     type ProjectStage, ProjectStageStatus
 } from '../types';
-import { projetosService, type Projeto } from '../services/projetosService';
+import { projetosService, type Projeto, type CreateProjetoData } from '../services/projetosService';
+import { clientesService, type Cliente } from '../services/clientesService';
+import { axiosApiService } from '../services/axiosApi';
+
+// Tipos locais para obra
+type ProjectType = 'Instalacao' | 'Manutencao' | 'Retrofit' | 'Automacao';
+
+// Interface local para obra (formatação do frontend)
+interface Project {
+    id: string;
+    titulo: string;
+    descricao: string;
+    cliente: {
+        id: string;
+        nome: string;
+        cpfCnpj: string;
+    };
+    tipo: ProjectType;
+    status: ProjectStatus;
+    dataInicio: string;
+    dataFim: string;
+    orcamento: number;
+    progresso: number;
+    responsavel: {
+        id: string;
+        nome: string;
+        role: UserRole;
+    };
+    equipe: User[];
+    endereco: string;
+    observacoes: string;
+    etapas: ProjectStage[];
+}
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -90,11 +123,60 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
     const [isAlocacaoModalOpen, setIsAlocacaoModalOpen] = useState(false);
     const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null);
     const [alocacoesProjeto, setAlocacoesProjeto] = useState<AlocacaoDTO[]>([]);
+    
+    // Estados para o formulário de obra
+    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [usuarios, setUsuarios] = useState<any[]>([]);
+    const [formState, setFormState] = useState<CreateProjetoData>({
+        titulo: '',
+        descricao: '',
+        tipo: 'Instalacao',
+        clienteId: '',
+        responsavelId: '',
+        dataInicio: '',
+        dataPrevisao: '',
+        orcamentoId: ''
+    });
 
     // Carregar projetos do backend
     useEffect(() => {
-        carregarProjetos();
+        carregarDados();
     }, []);
+    
+    const carregarDados = async () => {
+        await Promise.all([
+            carregarProjetos(),
+            carregarClientes(),
+            carregarUsuarios()
+        ]);
+    };
+    
+    const carregarClientes = async () => {
+        try {
+            const response = await clientesService.listar();
+            if (response.success && response.data) {
+                setClientes(Array.isArray(response.data) ? response.data : []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar clientes:', error);
+        }
+    };
+    
+    const carregarUsuarios = async () => {
+        try {
+            const response = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
+            if (response.success && response.data) {
+                const usuariosArray = Array.isArray(response.data) ? response.data : [];
+                // Filtrar apenas roles técnicas
+                const usuariosFiltrados = usuariosArray.filter((u: any) => 
+                    ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
+                );
+                setUsuarios(usuariosFiltrados);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar usuários:', error);
+        }
+    };
 
     const carregarProjetos = async () => {
         try {
@@ -213,12 +295,14 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
     const getTypeIcon = (tipo: ProjectType) => {
         switch (tipo) {
-            case ProjectType.Residencial:
-                return '🏠';
-            case ProjectType.Comercial:
-                return '🏢';
-            case ProjectType.Industrial:
-                return '🏭';
+            case 'Instalacao':
+                return '⚡';
+            case 'Manutencao':
+                return '🔧';
+            case 'Retrofit':
+                return '🔄';
+            case 'Automacao':
+                return '🤖';
             default:
                 return '🏗️';
         }
@@ -231,7 +315,33 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
     };
 
     const handleOpenModal = (project: Project | null = null) => {
-        setProjectToEdit(project);
+        if (project) {
+            // Editando obra existente
+            setProjectToEdit(project);
+            setFormState({
+                titulo: project.titulo,
+                descricao: project.descricao,
+                tipo: project.tipo,
+                clienteId: project.cliente.id,
+                responsavelId: project.responsavel.id,
+                dataInicio: project.dataInicio,
+                dataPrevisao: project.dataFim,
+                orcamentoId: ''
+            });
+        } else {
+            // Nova obra
+            setProjectToEdit(null);
+            setFormState({
+                titulo: '',
+                descricao: '',
+                tipo: 'Instalacao',
+                clienteId: '',
+                responsavelId: '',
+                dataInicio: '',
+                dataPrevisao: '',
+                orcamentoId: ''
+            });
+        }
         setIsModalOpen(true);
     };
     useEffect(() => {
@@ -288,33 +398,59 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         
         try {
             if (projectToEdit) {
-                // Atualizar projeto existente
+                // Atualizar obra existente
                 const response = await projetosService.atualizar(projectToEdit.id, {
-                    titulo: projectToEdit.titulo,
-                    descricao: projectToEdit.descricao,
-                    tipo: projectToEdit.tipo,
-                    clienteId: projectToEdit.cliente.id,
-                    responsavelId: projectToEdit.responsavel.id,
-                    dataInicio: projectToEdit.dataInicio,
-                    dataPrevisao: projectToEdit.dataFim,
-                    status: projectToEdit.status
+                    titulo: formState.titulo,
+                    descricao: formState.descricao,
+                    tipo: formState.tipo,
+                    clienteId: formState.clienteId,
+                    responsavelId: formState.responsavelId,
+                    dataInicio: formState.dataInicio,
+                    dataPrevisao: formState.dataPrevisao,
+                    orcamentoId: formState.orcamentoId || undefined
                 });
                 
                 if (response.success) {
-                    alert('✅ Projeto atualizado com sucesso!');
+                    toast.success('Obra atualizada com sucesso!', {
+                        description: `A obra "${formState.titulo}" foi atualizada.`
+                    });
                     handleCloseModal();
                     await carregarProjetos();
                 } else {
-                    alert(`❌ Erro ao atualizar projeto: ${response.error || 'Erro desconhecido'}`);
+                    toast.error('Erro ao atualizar obra', {
+                        description: response.error || 'Erro desconhecido'
+                    });
                 }
             } else {
-                // Criar novo projeto (requer implementação completa do formulário)
-                alert('✅ Funcionalidade de criação será implementada em breve!');
-                handleCloseModal();
+                // Criar nova obra
+                const response = await projetosService.criar({
+                    titulo: formState.titulo,
+                    descricao: formState.descricao,
+                    tipo: formState.tipo,
+                    clienteId: formState.clienteId,
+                    responsavelId: formState.responsavelId,
+                    dataInicio: formState.dataInicio,
+                    dataPrevisao: formState.dataPrevisao,
+                    orcamentoId: formState.orcamentoId || undefined
+                });
+                
+                if (response.success) {
+                    toast.success('Obra criada com sucesso!', {
+                        description: `A obra "${formState.titulo}" foi cadastrada.`
+                    });
+                    handleCloseModal();
+                    await carregarProjetos();
+                } else {
+                    toast.error('Erro ao criar obra', {
+                        description: response.error || 'Erro desconhecido'
+                    });
+                }
             }
         } catch (error) {
-            console.error('Erro ao salvar projeto:', error);
-            alert('❌ Erro ao salvar projeto. Verifique o console para mais detalhes.');
+            console.error('Erro ao salvar obra:', error);
+            toast.error('Erro ao salvar obra', {
+                description: 'Verifique os dados e tente novamente.'
+            });
         }
     };
 
@@ -579,61 +715,6 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                 </div>
             )}
 
-            {/* MODAL DE CRIAÇÃO/EDIÇÃO (Simplificado) */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
-                        {/* Header */}
-                        <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center shadow-medium ring-2 ring-amber-100">
-                                    {projectToEdit ? <PencilIcon className="w-7 h-7 text-white" /> : <PlusIcon className="w-7 h-7 text-white" />}
-                                </div>
-                                <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">
-                                        {projectToEdit ? 'Editar Obra' : 'Nova Obra'}
-                                    </h2>
-                                    <p className="text-sm text-gray-600 mt-1">
-                                        {projectToEdit ? 'Atualize as informações da obra' : 'Crie um novo projeto de obra'}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={handleCloseModal}
-                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
-                            >
-                                <XMarkIcon className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                <p className="text-blue-800 font-medium">
-                                    🚧 Modal simplificado para demonstração. 
-                                    A implementação completa incluirá formulários detalhados para criação e edição de obras.
-                                </p>
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={handleCloseModal}
-                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-8 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold"
-                                >
-                                    {projectToEdit ? 'Atualizar' : 'Criar'} Obra
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
             {/* MODAL DE VISUALIZAÇÃO */}
             {selectedProject && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -717,11 +798,11 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                         <div key={member.id} className="flex items-center gap-3 bg-white p-3 rounded-lg">
                                             <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
                                                 <span className="text-purple-600 font-bold text-sm">
-                                                    {member.nome.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                                    {member.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                                                 </span>
                                             </div>
                                             <div>
-                                                <p className="font-medium text-gray-900">{member.nome}</p>
+                                                <p className="font-medium text-gray-900">{member.name}</p>
                                                 <p className="text-sm text-gray-600">{member.role}</p>
                                             </div>
                                         </div>
@@ -755,6 +836,214 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE CRIAÇÃO/EDIÇÃO DE OBRA */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                        {/* Header do Modal */}
+                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-amber-600 to-amber-500">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <BuildingOffice2Icon className="w-7 h-7 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-white">
+                                        {projectToEdit ? 'Editar Obra' : 'Nova Obra'}
+                                    </h2>
+                                    <p className="text-sm text-white/80 mt-1">
+                                        {projectToEdit ? 'Atualize as informações da obra' : 'Cadastre uma nova obra de campo'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseModal}
+                                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Formulário */}
+                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Título da Obra */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Título da Obra *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formState.titulo}
+                                        onChange={(e) => setFormState({...formState, titulo: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        placeholder="Ex: Instalação Elétrica Edifício Phoenix"
+                                    />
+                                </div>
+
+                                {/* Cliente */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Cliente *
+                                    </label>
+                                    <select
+                                        value={formState.clienteId}
+                                        onChange={(e) => setFormState({...formState, clienteId: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="">Selecione o cliente</option>
+                                        {clientes.map(cliente => (
+                                            <option key={cliente.id} value={cliente.id}>
+                                                {cliente.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Responsável */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Responsável Técnico *
+                                    </label>
+                                    <select
+                                        value={formState.responsavelId}
+                                        onChange={(e) => setFormState({...formState, responsavelId: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="">Selecione o responsável</option>
+                                        {usuarios.map(usuario => (
+                                            <option key={usuario.id} value={usuario.id}>
+                                                {usuario.nome} - {usuario.role}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Tipo de Obra */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Tipo de Obra *
+                                    </label>
+                                    <select
+                                        value={formState.tipo}
+                                        onChange={(e) => setFormState({...formState, tipo: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="Instalacao">Instalação</option>
+                                        <option value="Manutencao">Manutenção</option>
+                                        <option value="Retrofit">Retrofit</option>
+                                        <option value="Automacao">Automação</option>
+                                    </select>
+                                </div>
+
+                                {/* Orçamento Vinculado */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        ID do Orçamento (Opcional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formState.orcamentoId}
+                                        onChange={(e) => setFormState({...formState, orcamentoId: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        placeholder="Digite o ID do orçamento"
+                                    />
+                                </div>
+
+                                {/* Data de Início */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Data de Início *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formState.dataInicio}
+                                        onChange={(e) => setFormState({...formState, dataInicio: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    />
+                                </div>
+
+                                {/* Data Prevista de Conclusão */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Data Prevista de Conclusão *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formState.dataPrevisao}
+                                        onChange={(e) => setFormState({...formState, dataPrevisao: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    />
+                                </div>
+
+                                {/* Descrição */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Descrição da Obra
+                                    </label>
+                                    <textarea
+                                        value={formState.descricao}
+                                        onChange={(e) => setFormState({...formState, descricao: e.target.value})}
+                                        rows={4}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        placeholder="Descreva os detalhes da obra, escopo, observações importantes..."
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Informação Adicional */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-semibold text-blue-900 mb-1">💡 Dica Importante</h4>
+                                        <p className="text-sm text-blue-800">
+                                            Após criar a obra, você poderá alocar equipes de eletricistas, gerenciar materiais e acompanhar o progresso através do quadro Kanban.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Botões de Ação */}
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseModal}
+                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold"
+                                >
+                                    {projectToEdit ? (
+                                        <>
+                                            <PencilIcon className="w-5 h-5" />
+                                            Atualizar Obra
+                                        </>
+                                    ) : (
+                                        <>
+                                            <PlusIcon className="w-5 h-5" />
+                                            Criar Obra
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import { orcamentosService, type Orcamento as ApiOrcamento, type CreateOrcamentoData } from '../services/orcamentosService';
 import { clientesService, type Cliente } from '../services/clientesService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
-import EditorDescricaoAvancada from './EditorDescricaoAvancada';
+import JoditEditorComponent from './JoditEditor';
 import { generateOrcamentoPDF, type OrcamentoPDFData as OrcamentoPDFDataOld } from '../utils/pdfGenerator';
 import NovoOrcamentoPage from '../pages/NovoOrcamentoPage';
 import PDFCustomizationModal from './PDFCustomization/PDFCustomizationModal';
@@ -52,16 +53,7 @@ const DocumentArrowDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-// Types
-interface Cliente {
-    id: string;
-    nome: string;
-    cpfCnpj: string;
-    email?: string;
-    telefone?: string;
-    endereco?: string;
-    ativo: boolean;
-}
+// Types (usar tipo Cliente do service importado)
 
 interface Material {
     id: string;
@@ -83,6 +75,8 @@ interface OrcamentoItem {
     tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA';
     materialId?: string;
     kitId?: string;
+    quadroId?: string;
+    servicoId?: string;
     servicoNome?: string;
     descricao?: string;
     nome: string;
@@ -91,6 +85,7 @@ interface OrcamentoItem {
     custoUnit: number;
     precoUnit: number;
     subtotal: number;
+    orcamentoId?: string;
 }
 
 interface Foto {
@@ -101,25 +96,8 @@ interface Foto {
     preview?: string;
 }
 
-interface Orcamento {
-    id: string;
-    clienteId: string;
-    titulo: string;
-    descricao?: string;
-    validade: string;
-    bdi: number;
-    custoTotal: number;
-    precoVenda: number;
-    observacoes?: string;
-    status: 'Pendente' | 'Aprovado' | 'Recusado';
-    createdAt: string;
-    cliente?: {
-        id: string;
-        nome: string;
-        cpfCnpj: string;
-    };
-    items: OrcamentoItem[];
-}
+// Usar o tipo do service
+type Orcamento = ApiOrcamento;
 
 interface OrcamentosProps {
     toggleSidebar: () => void;
@@ -139,6 +117,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [shouldLoadEditor, setShouldLoadEditor] = useState(false);
     const [orcamentoToEdit, setOrcamentoToEdit] = useState<Orcamento | null>(null);
     const [orcamentoToView, setOrcamentoToView] = useState<Orcamento | null>(null);
     
@@ -170,9 +149,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     });
 
     const [items, setItems] = useState<OrcamentoItem[]>([]);
-    const [fotos, setFotos] = useState<Foto[]>([]);
     const [showItemModal, setShowItemModal] = useState(false);
-    const [showEditorAvancado, setShowEditorAvancado] = useState(false);
     const [itemSearchTerm, setItemSearchTerm] = useState('');
 
     // Carregar dados iniciais usando os serviços adequados
@@ -281,31 +258,51 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
     // Abrir modal
     const handleOpenModal = (orcamento: Orcamento | null = null) => {
+        // Reset editor loading state
+        setShouldLoadEditor(false);
+        
+        // Processar dados imediatamente (não bloqueia)
         if (orcamento) {
             setOrcamentoToEdit(orcamento);
             setFormState({
                 clienteId: orcamento.clienteId,
                 titulo: orcamento.titulo,
                 descricao: orcamento.descricao || '',
-                descricaoProjeto: (orcamento as any).descricaoProjeto || '',
+                descricaoProjeto: orcamento.descricaoProjeto || '',
                 validade: orcamento.validade.split('T')[0],
                 bdi: orcamento.bdi,
                 observacoes: orcamento.observacoes || '',
                 // Novos campos
-                empresaCNPJ: (orcamento as any).empresaCNPJ || '',
-                enderecoObra: (orcamento as any).enderecoObra || '',
-                cidade: (orcamento as any).cidade || '',
-                bairro: (orcamento as any).bairro || '',
-                cep: (orcamento as any).cep || '',
-                responsavelObra: (orcamento as any).responsavelObra || '',
-                previsaoInicio: (orcamento as any).previsaoInicio ? new Date((orcamento as any).previsaoInicio).toISOString().split('T')[0] : '',
-                previsaoTermino: (orcamento as any).previsaoTermino ? new Date((orcamento as any).previsaoTermino).toISOString().split('T')[0] : '',
-                descontoValor: (orcamento as any).descontoValor || 0,
-                impostoPercentual: (orcamento as any).impostoPercentual || 0,
-                condicaoPagamento: (orcamento as any).condicaoPagamento || 'À Vista'
+                empresaCNPJ: orcamento.empresaCNPJ || '',
+                enderecoObra: orcamento.enderecoObra || '',
+                cidade: orcamento.cidade || '',
+                bairro: orcamento.bairro || '',
+                cep: orcamento.cep || '',
+                responsavelObra: orcamento.responsavelObra || '',
+                previsaoInicio: orcamento.previsaoInicio ? new Date(orcamento.previsaoInicio).toISOString().split('T')[0] : '',
+                previsaoTermino: orcamento.previsaoTermino ? new Date(orcamento.previsaoTermino).toISOString().split('T')[0] : '',
+                descontoValor: orcamento.descontoValor || 0,
+                impostoPercentual: orcamento.impostoPercentual || 0,
+                condicaoPagamento: orcamento.condicaoPagamento || 'À Vista'
             });
-            setItems(orcamento.items);
-            setFotos((orcamento as any).fotos || []);
+            // Mapear ItemOrcamento para OrcamentoItem
+            const mappedItems = (orcamento.items || []).map((item: any) => ({
+                id: item.id,
+                tipo: item.tipo,
+                materialId: item.materialId,
+                kitId: item.kitId,
+                quadroId: item.quadroId,
+                servicoId: item.servicoId,
+                nome: item.nome || item.descricao || 'Item',
+                descricao: item.descricao || '',
+                unidadeMedida: item.unidadeMedida || 'UN',
+                quantidade: item.quantidade,
+                custoUnit: item.custoUnitario || 0,
+                precoUnit: item.precoUnitario || item.precoUnit || 0,
+                subtotal: item.subtotal,
+                orcamentoId: item.orcamentoId
+            }));
+            setItems(mappedItems as OrcamentoItem[]);
         } else {
             setOrcamentoToEdit(null);
             setFormState({
@@ -318,6 +315,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 observacoes: '',
                 empresaCNPJ: '',
                 enderecoObra: '',
+                cidade: '',
+                bairro: '',
+                cep: '',
                 responsavelObra: '',
                 previsaoInicio: '',
                 previsaoTermino: '',
@@ -326,16 +326,22 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 condicaoPagamento: 'À Vista'
             });
             setItems([]);
-            setFotos([]);
         }
+        
+        // Abrir modal IMEDIATAMENTE (sem esperar)
         setIsModalOpen(true);
+        
+        // Carregar editor Jodit DEPOIS de 300ms (dar tempo pro modal renderizar)
+        setTimeout(() => {
+            setShouldLoadEditor(true);
+        }, 300);
     };
 
     // Fechar modal
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setShowItemModal(false);
-        setShowEditorAvancado(false);
+        setShouldLoadEditor(false);
         setOrcamentoToEdit(null);
         setFormState({
             clienteId: '',
@@ -358,7 +364,6 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             condicaoPagamento: 'À Vista'
         });
         setItems([]);
-        setFotos([]);
     };
 
     // Adicionar item ao orçamento
@@ -419,8 +424,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         e.preventDefault();
         setError(null);
 
-        if (items.length === 0) {
+        // Validar items apenas ao CRIAR novo orçamento
+        // Ao EDITAR, permite salvar sem items (mantém os existentes no backend)
+        if (!orcamentoToEdit && items.length === 0) {
             setError('Adicione pelo menos um item ao orçamento');
+            toast.error('Orçamento sem itens', {
+                description: 'Adicione pelo menos um item antes de criar o orçamento'
+            });
             return;
         }
 
@@ -438,47 +448,64 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 // Novos campos
                 empresaCNPJ: formState.empresaCNPJ,
                 enderecoObra: formState.enderecoObra,
+                cidade: formState.cidade,
+                bairro: formState.bairro,
+                cep: formState.cep,
                 responsavelObra: formState.responsavelObra,
                 previsaoInicio: formState.previsaoInicio || null,
                 previsaoTermino: formState.previsaoTermino || null,
                 descontoValor: formState.descontoValor,
                 impostoPercentual: formState.impostoPercentual,
-                condicaoPagamento: formState.condicaoPagamento,
-                items: items.map(item => ({
+                condicaoPagamento: formState.condicaoPagamento
+            };
+
+            // Incluir items apenas se houver items para enviar
+            // Ao editar sem modificar items, o backend manterá os items existentes
+            if (items.length > 0) {
+                orcamentoData.items = items.map(item => ({
                     tipo: item.tipo,
                     materialId: item.materialId,
                     kitId: item.kitId,
+                    quadroId: item.quadroId,
+                    servicoId: item.servicoId,
                     servicoNome: item.servicoNome,
                     descricao: item.descricao || item.nome,
                     quantidade: item.quantidade,
                     custoUnit: item.custoUnit,
                     precoUnitario: item.precoUnit,
                     subtotal: item.subtotal
-                }))
-            };
+                }));
+            }
 
             console.log('📤 Enviando dados do orçamento:', orcamentoData);
 
             let response;
             if (orcamentoToEdit) {
+                console.log('🔄 Modo: EDIÇÃO - Atualizando orçamento existente');
                 response = await orcamentosService.atualizar(orcamentoToEdit.id, orcamentoData);
             } else {
+                console.log('✨ Modo: CRIAÇÃO - Criando novo orçamento');
                 response = await orcamentosService.criar(orcamentoData);
             }
 
             console.log('📥 Resposta do servidor:', response);
 
-            if (response.success || response.statusCode === 201) {
+            if (response.success) {
                 console.log('✅ Orçamento salvo com sucesso');
                 handleCloseModal();
                 await loadData();
 
                 // Mostrar mensagem de sucesso
-                alert(`Orçamento ${orcamentoToEdit ? 'atualizado' : 'criado'} com sucesso!`);
+                toast.success(`Orçamento ${orcamentoToEdit ? 'atualizado' : 'criado'}!`, {
+                    description: orcamentoToEdit ? 'As alterações foram salvas' : 'Novo orçamento criado com sucesso'
+                });
             } else {
                 const errorMsg = response.error || 'Erro ao salvar orçamento';
                 console.warn('⚠️ Erro ao salvar:', errorMsg);
                 setError(errorMsg);
+                toast.error('Erro ao salvar orçamento', {
+                    description: errorMsg
+                });
             }
         } catch (err) {
             console.error('❌ Erro crítico ao salvar orçamento:', err);
@@ -487,26 +514,70 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         }
     };
 
-    // Alterar status do orçamento
-    const handleChangeStatus = async (orcamentoId: string, novoStatus: 'Rascunho' | 'Enviado' | 'Aprovado' | 'Rejeitado') => {
-        try {
-            console.log(`🔄 Alterando status do orçamento ${orcamentoId} para ${novoStatus}...`);
+    // Aprovar orçamento
+    const handleAprovarOrcamento = async (orcamentoId: string) => {
+        toast(`Aprovar orçamento #${orcamentos.find(o => o.id === orcamentoId)?.numeroSequencial}?`, {
+            description: 'Esta ação permitirá criar projetos/obras a partir deste orçamento.',
+            action: {
+                label: 'Confirmar Aprovação',
+                onClick: async () => {
+                    const response = await orcamentosService.aprovar(orcamentoId);
+                    
+                    if (response.success) {
+                        toast.success('Orçamento aprovado!', {
+                            description: 'O orçamento foi aprovado e está disponível para criar projetos.'
+                        });
+                        await loadData();
+                    } else {
+                        toast.error('Erro ao aprovar', {
+                            description: response.error
+                        });
+                    }
+                }
+            }
+        });
+    };
 
+    // Recusar orçamento
+    const handleRecusarOrcamento = async (orcamentoId: string) => {
+        const motivo = prompt('Digite o motivo da recusa (opcional):');
+        
+        const response = await orcamentosService.recusar(orcamentoId, motivo || undefined);
+        
+        if (response.success) {
+            toast.success('Orçamento recusado', {
+                description: motivo || 'Orçamento foi marcado como recusado'
+            });
+            await loadData();
+        } else {
+            toast.error('Erro ao recusar', {
+                description: response.error
+            });
+        }
+    };
+
+    // Alterar status do orçamento (mantido para compatibilidade)
+    const handleChangeStatus = async (orcamentoId: string, novoStatus: 'Pendente' | 'Aprovado' | 'Recusado') => {
+        const promise = (async () => {
+            console.log(`🔄 Alterando status do orçamento ${orcamentoId} para ${novoStatus}...`);
             const response = await orcamentosService.atualizarStatus(orcamentoId, novoStatus);
 
             if (response.success) {
                 console.log('✅ Status alterado com sucesso');
                 await loadData();
-                alert(response.message || `Status alterado para ${novoStatus}`);
+                return response.message || `Status alterado para ${novoStatus}`;
             } else {
                 const errorMsg = response.error || 'Erro ao alterar status';
                 console.warn('⚠️ Erro ao alterar status:', errorMsg);
-                alert(errorMsg);
+                throw new Error(errorMsg);
             }
-        } catch (err) {
-            console.error('❌ Erro crítico ao alterar status:', err);
-            alert('Erro de conexão ao alterar status');
-        }
+        })();
+
+        toast.promise(promise, {
+            loading: `Alterando status para ${novoStatus}...`,
+            success: (message) => message,
+            error: (err) => err.message || 'Erro ao alterar status'
+        });
     };
 
     // Preparar dados do orçamento para PDF customizado
@@ -520,7 +591,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             validade: new Date(orcamento.validade).toLocaleDateString('pt-BR'),
             cliente: {
                 nome: orcamento.cliente?.nome || clienteCompleto?.nome || 'Cliente não informado',
-                cpfCnpj: orcamento.cliente?.cpfCnpj || clienteCompleto?.cpfCnpj || '',
+                cpfCnpj: (orcamento.cliente as any)?.cpfCnpj || clienteCompleto?.cpfCnpj || '',
                 endereco: clienteCompleto?.endereco,
                 telefone: clienteCompleto?.telefone,
                 email: clienteCompleto?.email
@@ -537,13 +608,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 previsaoInicio: (orcamento as any).previsaoInicio ? new Date((orcamento as any).previsaoInicio).toLocaleDateString('pt-BR') : undefined,
                 previsaoTermino: (orcamento as any).previsaoTermino ? new Date((orcamento as any).previsaoTermino).toLocaleDateString('pt-BR') : undefined
             },
-            items: orcamento.items.map(item => ({
+            items: (orcamento.items || []).map((item: any) => ({
                 codigo: item.materialId || item.kitId,
-                nome: item.nome,
+                nome: item.nome || item.descricao || 'Item',
                 descricao: item.descricao,
-                unidade: item.unidadeMedida,
+                unidade: item.unidadeMedida || 'UN',
                 quantidade: item.quantidade,
-                valorUnitario: item.precoUnit,
+                valorUnitario: item.precoUnit || item.precoUnitario,
                 valorTotal: item.subtotal
             })),
             financeiro: {
@@ -557,7 +628,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             },
             observacoes: orcamento.observacoes,
             descricaoTecnica: (orcamento as any).descricaoProjeto,
-            fotos: (orcamento as any).fotos || [],
+            fotos: [], // Fotos agora estão inline no HTML do Jodit
             empresa: {
                 nome: 'S3E Engenharia',
                 cnpj: '00.000.000/0000-00',
@@ -584,17 +655,17 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 titulo: orcamento.titulo,
                 cliente: {
                     nome: orcamento.cliente?.nome || 'Cliente não informado',
-                    cpfCnpj: orcamento.cliente?.cpfCnpj || '',
-                    endereco: orcamento.cliente?.endereco,
+                    cpfCnpj: (orcamento.cliente as any)?.cpfCnpj || '',
+                    endereco: (orcamento.cliente as any)?.endereco,
                     telefone: orcamento.cliente?.telefone
                 },
                 data: new Date(orcamento.createdAt).toLocaleDateString('pt-BR'),
                 validade: new Date(orcamento.validade).toLocaleDateString('pt-BR'),
                 descricao: orcamento.descricao,
-                items: orcamento.items.map(item => ({
-                    nome: item.nome,
+                items: (orcamento.items || []).map((item: any) => ({
+                    nome: item.nome || item.descricao || 'Item',
                     quantidade: item.quantidade,
-                    valorUnit: item.precoUnit,
+                    valorUnit: item.precoUnit || item.precoUnitario,
                     valorTotal: item.subtotal
                 })),
                 subtotal: orcamento.custoTotal,
@@ -604,10 +675,14 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             };
 
             generateOrcamentoPDF(pdfData);
-            alert('✅ PDF gerado com sucesso!');
+            toast.success('PDF gerado com sucesso!', {
+                description: 'O download foi iniciado automaticamente'
+            });
         } catch (error) {
             console.error('❌ Erro ao gerar PDF:', error);
-            alert('❌ Erro ao gerar PDF. Verifique o console.');
+            toast.error('Erro ao gerar PDF', {
+                description: 'Verifique o console para mais detalhes'
+            });
         }
     };
 
@@ -779,7 +854,12 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             {/* Header do Card */}
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-lg text-gray-900 mb-1">{orcamento.titulo}</h3>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="px-2 py-0.5 text-xs font-mono font-bold bg-gray-100 text-gray-700 rounded">
+                                            #{orcamento.numeroSequencial || '---'}
+                                        </span>
+                                        <h3 className="font-bold text-lg text-gray-900">{orcamento.titulo}</h3>
+                                    </div>
                                     <div className="flex items-center gap-2">
                                         <span className="px-3 py-1 text-xs font-bold rounded-lg bg-purple-100 text-purple-800 ring-1 ring-purple-200">
                                             📋 Orçamento
@@ -817,39 +897,56 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             </div>
 
                             {/* Botões de Ação */}
-                            <div className="flex gap-2 pt-4 border-t border-gray-100">
-                                <button
-                                    onClick={() => setOrcamentoToView(orcamento)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
-                                >
-                                    <EyeIcon className="w-4 h-4" />
-                                    Ver
-                                </button>
-                                <button
-                                    onClick={() => handlePersonalizarPDF(orcamento)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 rounded-lg hover:from-purple-200 hover:to-indigo-200 transition-all text-sm font-semibold shadow-sm"
-                                    title="Personalizar e gerar PDF"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                                    </svg>
-                                    PDF
-                                </button>
-                                <button
-                                    onClick={() => handleOpenModal(orcamento)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-semibold"
-                                >
-                                    <PencilIcon className="w-4 h-4" />
-                                    Editar
-                                </button>
-                                {orcamento.status === 'Pendente' && (
+                            <div className="flex flex-col gap-2 pt-4 border-t border-gray-100">
+                                <div className="flex gap-2">
                                     <button
-                                        onClick={() => handleChangeStatus(orcamento.id, 'Aprovado')}
-                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-semibold"
-                                        title="Aprovar orçamento"
+                                        onClick={() => setOrcamentoToView(orcamento)}
+                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
                                     >
-                                        ✅
+                                        <EyeIcon className="w-4 h-4" />
+                                        Ver
                                     </button>
+                                    <button
+                                        onClick={() => handlePersonalizarPDF(orcamento)}
+                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 rounded-lg hover:from-purple-200 hover:to-indigo-200 transition-all text-sm font-semibold shadow-sm"
+                                        title="Personalizar e gerar PDF"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                        </svg>
+                                        PDF
+                                    </button>
+                                    <button
+                                        onClick={() => handleOpenModal(orcamento)}
+                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-semibold"
+                                    >
+                                        <PencilIcon className="w-4 h-4" />
+                                        Editar
+                                    </button>
+                                </div>
+                                
+                                {/* Botões de Aprovação/Recusa - Apenas para Pendentes */}
+                                {orcamento.status === 'Pendente' && (
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleAprovarOrcamento(orcamento.id)}
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2.5 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600 transition-all font-semibold shadow-md"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            Aprovar
+                                        </button>
+                                        <button
+                                            onClick={() => handleRecusarOrcamento(orcamento.id)}
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-lg hover:from-red-700 hover:to-red-600 transition-all font-semibold shadow-md"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            Recusar
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -1261,53 +1358,54 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     </div>
                                 </div>
 
-                                {/* SEÇÃO 5: Descrição Técnica e Fotos */}
+                                {/* SEÇÃO 5: Descrição Técnica com Editor Jodit WYSIWYG */}
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-600">📝</span>
-                                        Descrição Técnica e Documentação
+                                        <span className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">📝</span>
+                                        Descrição Técnica do Projeto
                                     </h3>
-                                    <div className="space-y-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowEditorAvancado(true)}
-                                            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-medium font-semibold flex items-center justify-center gap-3"
-                                        >
-                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                            📝 ABRIR EDITOR AVANÇADO DE DESCRIÇÃO E FOTOS
-                                        </button>
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        💡 Use o editor abaixo para criar ou editar a descrição técnica. Formate texto, insira imagens e crie tabelas.
+                                    </p>
 
-                                        {formState.descricaoProjeto && (
-                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                                                <p className="text-sm text-green-800 font-medium">
-                                                    ✅ Descrição técnica adicionada ({formState.descricaoProjeto.length} caracteres)
+                                    {/* Editor Jodit WYSIWYG Inline - Lazy Load */}
+                                    <div className="mb-4">
+                                        {!shouldLoadEditor ? (
+                                            <div className="w-full bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-dashed border-purple-300 rounded-xl p-12 flex flex-col items-center justify-center" style={{ minHeight: '400px' }}>
+                                                <div className="relative mb-6">
+                                                    <div className="w-20 h-20 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <span className="text-3xl animate-bounce">📝</span>
+                                                    </div>
+                                                </div>
+                                                <h4 className="text-xl font-bold text-purple-800 mb-2 animate-pulse">
+                                                    Carregando Editor WYSIWYG
+                                                </h4>
+                                                <p className="text-purple-600 text-center max-w-md">
+                                                    Preparando o editor de texto rico com suporte a formatação, imagens e tabelas...
                                                 </p>
+                                                <div className="mt-4 flex gap-2">
+                                                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                                </div>
                                             </div>
-                                        )}
-
-                                        {fotos.length > 0 && (
-                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                                                <p className="text-sm text-blue-800 font-medium">
-                                                    📷 {fotos.length} foto(s) anexada(s) ao projeto
-                                                </p>
-                                            </div>
+                                        ) : (
+                                            <JoditEditorComponent
+                                                value={formState.descricaoProjeto}
+                                                onChange={(content) => setFormState(prev => ({ ...prev, descricaoProjeto: content }))}
+                                                placeholder="Digite a descrição técnica completa do projeto... Você pode formatar o texto, inserir imagens, criar tabelas e listas."
+                                                height={400}
+                                            />
                                         )}
                                     </div>
-                                </div>
 
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Observações Gerais
-                                    </label>
-                                    <textarea
-                                        value={formState.observacoes}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, observacoes: e.target.value }))}
-                                        rows={2}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                                        placeholder="Informações adicionais sobre o orçamento..."
-                                    />
+                                    {/* Dica de Uso */}
+                                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                                        <p className="text-xs text-blue-800">
+                                            💡 <strong>Dica:</strong> Use o ícone 🖼️ para inserir imagens inline e o ícone 📊 para criar tabelas de especificações.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
@@ -1329,22 +1427,6 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         </form>
                     </div>
                 </div>
-            )}
-
-            {/* EDITOR AVANÇADO (Tela Cheia) */}
-            {showEditorAvancado && (
-                <EditorDescricaoAvancada
-                    orcamentoTitulo={formState.titulo || 'Novo Orçamento'}
-                    orcamentoCliente={clientes.find(c => c.id === formState.clienteId)?.nome || 'Cliente'}
-                    descricaoInicial={formState.descricaoProjeto}
-                    fotosIniciais={fotos}
-                    onSalvar={(desc, fts) => {
-                        setFormState(prev => ({ ...prev, descricaoProjeto: desc }));
-                        setFotos(fts);
-                        setShowEditorAvancado(false);
-                    }}
-                    onVoltar={() => setShowEditorAvancado(false)}
-                />
             )}
 
             {/* MODAL DE SELEÇÃO DE ITENS */}
@@ -1489,9 +1571,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                             <div key={index} className="bg-gray-50 border border-gray-200 p-4 rounded-xl">
                                                 <div className="flex justify-between items-start">
                                                     <div className="flex-1">
-                                                        <p className="font-semibold text-gray-900">{item.nome}</p>
+                                                        <p className="font-semibold text-gray-900">{(item as any).nome || (item as any).descricao || 'Item'}</p>
                                                         <p className="text-sm text-gray-600 mt-1">
-                                                            {item.quantidade} {item.unidadeMedida} × R$ {item.precoUnit?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                                                            {item.quantidade} {(item as any).unidadeMedida || 'UN'} × R$ {((item as any).precoUnit || (item as any).precoUnitario)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
@@ -1530,16 +1612,22 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                 {orcamentoToView.status === 'Pendente' && (
                                     <>
                                         <button
-                                            onClick={() => handleChangeStatus(orcamentoToView.id, 'Aprovado')}
+                                            onClick={() => {
+                                                handleAprovarOrcamento(orcamentoToView.id);
+                                                setOrcamentoToView(null);
+                                            }}
                                             className="flex-1 bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-2.5 rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
                                         >
                                             ✅ Aprovar Orçamento
                                         </button>
                                         <button
-                                            onClick={() => handleChangeStatus(orcamentoToView.id, 'Rejeitado')}
+                                            onClick={() => {
+                                                handleRecusarOrcamento(orcamentoToView.id);
+                                                setOrcamentoToView(null);
+                                            }}
                                             className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2.5 rounded-xl hover:from-red-700 hover:to-red-600 transition-all shadow-medium font-semibold"
                                         >
-                                            ❌ Rejeitar
+                                            ❌ Recusar
                                         </button>
                                     </>
                                 )}
@@ -1566,6 +1654,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     }}
                 />
             )}
+
         </div>
     );
 };

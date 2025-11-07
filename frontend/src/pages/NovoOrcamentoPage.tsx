@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import { orcamentosService, type CreateOrcamentoData } from '../services/orcamentosService';
 import { clientesService } from '../services/clientesService';
+import { servicosService, type Servico } from '../services/servicosService';
+import { quadrosService } from '../services/quadrosService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
-import EditorDescricaoAvancada from '../components/EditorDescricaoAvancada';
+import JoditEditorComponent from '../components/JoditEditor';
 
 // ==================== ICONS ====================
 const ArrowLeftIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -52,6 +55,26 @@ interface Material {
     ativo: boolean;
 }
 
+interface Quadro {
+    id: string;
+    nome: string;
+    descricao: string;
+    configuracao: any;
+    custoTotal: number;
+    precoSugerido: number;
+    ativo: boolean;
+}
+
+interface Kit {
+    id: string;
+    nome: string;
+    descricao: string;
+    items: { materialId: string; quantidade: number }[];
+    custoTotal: number;
+    precoSugerido: number;
+    ativo: boolean;
+}
+
 interface OrcamentoItem {
     id?: string;
     tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA';
@@ -83,6 +106,9 @@ interface NovoOrcamentoPageProps {
 const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOrcamentoCriado }) => {
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [materiais, setMateriais] = useState<Material[]>([]);
+    const [servicos, setServicos] = useState<Servico[]>([]);
+    const [quadros, setQuadros] = useState<Quadro[]>([]);
+    const [kits, setKits] = useState<Kit[]>([]);
     const [loading, setLoading] = useState(true);
     const [salvando, setSalvando] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -110,13 +136,11 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     });
 
     const [items, setItems] = useState<OrcamentoItem[]>([]);
-    const [fotos, setFotos] = useState<Foto[]>([]);
     const [showItemModal, setShowItemModal] = useState(false);
-    const [showEditorAvancado, setShowEditorAvancado] = useState(false);
     const [itemSearchTerm, setItemSearchTerm] = useState('');
     
-    // Estado para item manual
-    const [modoAdicao, setModoAdicao] = useState<'estoque' | 'manual'>('estoque');
+    // Estado para modo de adição (com novas opções)
+    const [modoAdicao, setModoAdicao] = useState<'materiais' | 'servicos' | 'kits' | 'quadros' | 'manual'>('materiais');
     const [novoItemManual, setNovoItemManual] = useState({
         nome: '',
         descricao: '',
@@ -134,9 +158,11 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const loadInitialData = async () => {
         try {
             setLoading(true);
-            const [clientesRes, materiaisRes] = await Promise.all([
+            const [clientesRes, materiaisRes, servicosRes, quadrosRes] = await Promise.all([
                 clientesService.listar(),
-                axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS)
+                axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS),
+                servicosService.listar({ ativo: true }),
+                quadrosService.listar()
             ]);
 
             if (clientesRes.success && clientesRes.data) {
@@ -146,6 +172,17 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
             if (materiaisRes.success && materiaisRes.data) {
                 setMateriais(Array.isArray(materiaisRes.data) ? materiaisRes.data : []);
             }
+
+            if (servicosRes.success && servicosRes.data) {
+                setServicos(Array.isArray(servicosRes.data) ? servicosRes.data : []);
+            }
+
+            if (quadrosRes.success && quadrosRes.data) {
+                setQuadros(Array.isArray(quadrosRes.data) ? quadrosRes.data : []);
+            }
+
+            // TODO: Carregar kits quando endpoint estiver disponível
+            setKits([]);
         } catch (err) {
             console.error('Erro ao carregar dados:', err);
             setError('Erro ao carregar dados iniciais');
@@ -164,6 +201,34 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
             );
     }, [materiais, itemSearchTerm]);
 
+    // Filtrar serviços para seleção
+    const filteredServicos = useMemo(() => {
+        return servicos
+            .filter(servico => servico.ativo)
+            .filter(servico =>
+                servico.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                servico.codigo.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [servicos, itemSearchTerm]);
+
+    // Filtrar quadros para seleção
+    const filteredQuadros = useMemo(() => {
+        return quadros
+            .filter(quadro => quadro.ativo)
+            .filter(quadro =>
+                quadro.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [quadros, itemSearchTerm]);
+
+    // Filtrar kits para seleção
+    const filteredKits = useMemo(() => {
+        return kits
+            .filter(kit => kit.ativo)
+            .filter(kit =>
+                kit.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [kits, itemSearchTerm]);
+
     // Calcular totais do orçamento
     const calculosOrcamento = useMemo(() => {
         const subtotalItens = items.reduce((sum, item) => sum + item.subtotal, 0);
@@ -173,7 +238,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         return { subtotalItens, valorComDesconto, valorTotalFinal };
     }, [items, formState.descontoValor, formState.impostoPercentual]);
 
-    // Adicionar item do estoque ao orçamento
+    // Adicionar material do estoque ao orçamento
     const handleAddItem = (material: Material) => {
         const newItem: OrcamentoItem = {
             tipo: 'MATERIAL',
@@ -189,21 +254,95 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         setItems(prev => [...prev, newItem]);
         setShowItemModal(false);
         setItemSearchTerm('');
+        toast.success('Material adicionado', {
+            description: `${material.nome} adicionado ao orçamento`
+        });
+    };
+
+    // Adicionar serviço ao orçamento
+    const handleAddServico = (servico: Servico) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'SERVICO',
+            servicoNome: servico.nome,
+            nome: servico.nome,
+            descricao: servico.descricao,
+            unidadeMedida: servico.unidade || 'UN',
+            quantidade: 1,
+            custoUnit: servico.preco,
+            precoUnit: servico.preco * (1 + formState.bdi / 100),
+            subtotal: servico.preco * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Serviço adicionado', {
+            description: `${servico.nome} adicionado ao orçamento`
+        });
+    };
+
+    // Adicionar quadro ao orçamento
+    const handleAddQuadro = (quadro: Quadro) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'QUADRO_PRONTO',
+            nome: quadro.nome,
+            descricao: quadro.descricao,
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: quadro.custoTotal,
+            precoUnit: quadro.precoSugerido || quadro.custoTotal * (1 + formState.bdi / 100),
+            subtotal: quadro.precoSugerido || quadro.custoTotal * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Quadro adicionado', {
+            description: `${quadro.nome} adicionado ao orçamento`
+        });
+    };
+
+    // Adicionar kit ao orçamento
+    const handleAddKit = (kit: Kit) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'KIT',
+            kitId: kit.id,
+            nome: kit.nome,
+            descricao: kit.descricao,
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: kit.custoTotal,
+            precoUnit: kit.precoSugerido || kit.custoTotal * (1 + formState.bdi / 100),
+            subtotal: kit.precoSugerido || kit.custoTotal * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Kit adicionado', {
+            description: `${kit.nome} adicionado ao orçamento`
+        });
     };
 
     // Adicionar item manual (sem estoque)
     const handleAddItemManual = () => {
         // Validação
         if (!novoItemManual.nome.trim()) {
-            alert('⚠️ Digite o nome do item');
+            toast.error('Nome do item obrigatório', {
+                description: 'Digite o nome ou descrição do item'
+            });
             return;
         }
         if (novoItemManual.custoUnit <= 0) {
-            alert('⚠️ Digite um custo unitário válido');
+            toast.error('Custo unitário inválido', {
+                description: 'Digite um custo unitário maior que zero'
+            });
             return;
         }
         if (novoItemManual.quantidade <= 0) {
-            alert('⚠️ Digite uma quantidade válida');
+            toast.error('Quantidade inválida', {
+                description: 'Digite uma quantidade maior que zero'
+            });
             return;
         }
 
@@ -232,7 +371,10 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         });
         
         setShowItemModal(false);
-        alert('✅ Item adicionado com sucesso!');
+        toast.success('Item adicionado!', {
+            description: `${novoItemManual.nome} - ${novoItemManual.quantidade} ${novoItemManual.unidadeMedida}`,
+            icon: '✏️'
+        });
     };
 
     // Remover item
@@ -275,8 +417,18 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         e.preventDefault();
         setError(null);
 
+        // Validações
         if (items.length === 0) {
-            setError('Adicione pelo menos um item ao orçamento');
+            toast.error('Nenhum item adicionado', {
+                description: 'Adicione pelo menos um item ao orçamento'
+            });
+            return;
+        }
+
+        if (!formState.clienteId) {
+            toast.error('Cliente obrigatório', {
+                description: 'Selecione um cliente para continuar'
+            });
             return;
         }
 
@@ -315,15 +467,23 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 }))
             };
 
-            const response = await orcamentosService.criar(orcamentoData);
+            const promise = orcamentosService.criar(orcamentoData);
 
-            if (response.success || response.statusCode === 201) {
-                alert('✅ Orçamento criado com sucesso!');
-                if (onOrcamentoCriado) onOrcamentoCriado();
-                setAbaAtiva('listagem');
-            } else {
-                setError(response.error || 'Erro ao criar orçamento');
-            }
+            toast.promise(promise, {
+                loading: 'Criando orçamento...',
+                success: (response) => {
+                    if (response.success || response.statusCode === 201) {
+                        if (onOrcamentoCriado) onOrcamentoCriado();
+                        setTimeout(() => setAbaAtiva('listagem'), 500);
+                        return 'Orçamento criado com sucesso!';
+                    }
+                    throw new Error(response.error || 'Erro ao criar orçamento');
+                },
+                error: (err: any) => {
+                    setError(err.message || err.response?.data?.message || 'Erro ao criar orçamento');
+                    return 'Erro ao criar orçamento';
+                }
+            });
         } catch (err: any) {
             console.error('Erro ao criar orçamento:', err);
             setError(err.response?.data?.message || 'Erro ao criar orçamento');
@@ -335,9 +495,18 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     // Cancelar e voltar
     const handleCancelar = () => {
         if (items.length > 0 || formState.titulo) {
-            if (confirm('Tem certeza? Todos os dados não salvos serão perdidos.')) {
-                setAbaAtiva('listagem');
-            }
+            toast('Descartar alterações?', {
+                description: 'Todos os dados não salvos serão perdidos.',
+                duration: 8000,
+                action: {
+                    label: 'Descartar',
+                    onClick: () => setAbaAtiva('listagem')
+                },
+                cancel: {
+                    label: 'Continuar editando',
+                    onClick: () => {}
+                }
+            });
         } else {
             setAbaAtiva('listagem');
         }
@@ -735,34 +904,44 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                     </div>
                 </div>
 
-                {/* SEÇÃO 5: Descrição Técnica */}
+                {/* SEÇÃO 5: Descrição Técnica com Editor WYSIWYG */}
                 <div className="card-primary">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-text mb-6 flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">📝</span>
-                        Descrição Técnica e Documentação
-                    </h3>
-                    <button
-                        type="button"
-                        onClick={() => setShowEditorAvancado(true)}
-                        className="btn-primary w-full flex items-center justify-center gap-2"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        ABRIR EDITOR AVANÇADO DE DESCRIÇÃO E FOTOS
-                    </button>
+                    <div className="mb-6">
+                        <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-text mb-2 flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">📝</span>
+                            Descrição Técnica do Projeto
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                            💡 Use o editor abaixo para criar uma descrição técnica profissional. Você pode formatar o texto, inserir imagens, criar tabelas e muito mais.
+                        </p>
+                    </div>
 
-                    <div className="mt-6">
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                            Observações Gerais
-                        </label>
-                        <textarea
-                            value={formState.observacoes}
-                            onChange={(e) => setFormState(prev => ({ ...prev, observacoes: e.target.value }))}
-                            rows={4}
-                            className="textarea-field"
-                            placeholder="Informações adicionais sobre o orçamento..."
+                    {/* Editor Jodit WYSIWYG */}
+                    <div className="mb-6">
+                        <JoditEditorComponent
+                            value={formState.descricaoProjeto}
+                            onChange={(content) => setFormState(prev => ({ ...prev, descricaoProjeto: content }))}
+                            placeholder="Digite a descrição técnica completa do projeto... Você pode formatar o texto, inserir imagens, criar tabelas e listas."
+                            height={500}
                         />
+                    </div>
+
+                    {/* Dica de Uso */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                        <div className="flex items-start gap-3">
+                            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">💡 Dicas do Editor</h4>
+                                <ul className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                                    <li>• <strong>Imagens:</strong> Clique no ícone de imagem para inserir fotos inline</li>
+                                    <li>• <strong>Tabelas:</strong> Use para listar materiais e especificações</li>
+                                    <li>• <strong>Formatação:</strong> Destaque informações importantes com negrito/cores</li>
+                                    <li>• <strong>Preview:</strong> Use o botão de visualização para ver o resultado final</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -814,7 +993,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                     onClick={() => {
                                         setShowItemModal(false);
                                         setItemSearchTerm('');
-                                        setModoAdicao('estoque');
+                                        setModoAdicao('materiais');
                                     }}
                                     className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
                                 >
@@ -825,17 +1004,50 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                             </div>
 
                             {/* Abas */}
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 flex-wrap">
                                 <button
                                     type="button"
-                                    onClick={() => setModoAdicao('estoque')}
+                                    onClick={() => setModoAdicao('materiais')}
                                     className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                                        modoAdicao === 'estoque'
+                                        modoAdicao === 'materiais'
                                             ? 'bg-white text-indigo-700'
                                             : 'bg-white/20 text-white hover:bg-white/30'
                                     }`}
                                 >
-                                    📦 Do Estoque
+                                    📦 Materiais
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('servicos')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'servicos'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    🔧 Serviços
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('kits')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'kits'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    📦 Kits
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('quadros')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'quadros'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    ⚡ Quadros
                                 </button>
                                 <button
                                     type="button"
@@ -846,15 +1058,15 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                             : 'bg-white/20 text-white hover:bg-white/30'
                                     }`}
                                 >
-                                    ✏️ Criar Manualmente
+                                    ✏️ Manual
                                 </button>
                             </div>
                         </div>
 
                         {/* Conteúdo do Modal */}
                         <div className="flex-1 overflow-y-auto p-6">
-                            {/* Modo: Importar do Estoque */}
-                            {modoAdicao === 'estoque' && (
+                            {/* Modo: Materiais */}
+                            {modoAdicao === 'materiais' && (
                                 <div>
                                     <div className="mb-4">
                                         <input
@@ -887,6 +1099,142 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                     <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
                                                         SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida} • Custo: R$ {material.preco.toFixed(2)}
                                                     </p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Serviços */}
+                            {modoAdicao === 'servicos' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar serviço por nome ou código..."
+                                        />
+                                    </div>
+
+                                    {filteredServicos.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">🔧</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum serviço encontrado</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">Cadastre serviços na página de Serviços</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredServicos.map(servico => (
+                                                <button
+                                                    key={servico.id}
+                                                    type="button"
+                                                    onClick={() => handleAddServico(servico)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700 transition-all"
+                                                >
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{servico.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        Código: {servico.codigo} • Tipo: {servico.tipo} • Preço: R$ {servico.preco.toFixed(2)}/{servico.unidade}
+                                                    </p>
+                                                    {servico.descricao && (
+                                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{servico.descricao}</p>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Kits */}
+                            {modoAdicao === 'kits' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar kit por nome..."
+                                        />
+                                    </div>
+
+                                    {filteredKits.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">📦</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum kit disponível</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">
+                                                A funcionalidade de kits será implementada em breve
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredKits.map(kit => (
+                                                <button
+                                                    key={kit.id}
+                                                    type="button"
+                                                    onClick={() => handleAddKit(kit)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 hover:border-green-300 dark:hover:border-green-700 transition-all"
+                                                >
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{kit.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        {kit.items.length} itens • Custo Total: R$ {kit.custoTotal.toFixed(2)} • Preço: R$ {(kit.precoSugerido || kit.custoTotal).toFixed(2)}
+                                                    </p>
+                                                    {kit.descricao && (
+                                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{kit.descricao}</p>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Quadros */}
+                            {modoAdicao === 'quadros' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar quadro por nome..."
+                                        />
+                                    </div>
+
+                                    {filteredQuadros.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">⚡</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum quadro encontrado</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">
+                                                Monte quadros no módulo de Catálogo
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredQuadros.map(quadro => (
+                                                <button
+                                                    key={quadro.id}
+                                                    type="button"
+                                                    onClick={() => handleAddQuadro(quadro)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700 transition-all"
+                                                >
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{quadro.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        Custo: R$ {quadro.custoTotal.toFixed(2)} • Preço: R$ {(quadro.precoSugerido || quadro.custoTotal).toFixed(2)}
+                                                    </p>
+                                                    {quadro.descricao && (
+                                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{quadro.descricao}</p>
+                                                    )}
                                                 </button>
                                             ))}
                                         </div>
@@ -1069,20 +1417,6 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 </div>
             )}
 
-            {/* Editor Avançado de Descrição */}
-            {showEditorAvancado && (
-                <EditorDescricaoAvancada
-                    isOpen={showEditorAvancado}
-                    onClose={() => setShowEditorAvancado(false)}
-                    descricaoProjeto={formState.descricaoProjeto}
-                    fotos={fotos}
-                    onSave={(descricao, fotosAtualizadas) => {
-                        setFormState(prev => ({ ...prev, descricaoProjeto: descricao }));
-                        setFotos(fotosAtualizadas);
-                        setShowEditorAvancado(false);
-                    }}
-                />
-            )}
         </div>
     );
 };

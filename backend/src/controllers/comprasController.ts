@@ -166,19 +166,28 @@ export const parseXML = async (req: Request, res: Response): Promise<void> => {
       }));
     }
 
+    // Log dos dados parseados
+    console.log('✅ XML parseado com sucesso!');
+    console.log('🏢 Fornecedor:', fornecedor.nome);
+    console.log('📄 NF:', numeroNF);
+    console.log('📦 Items:', items.length);
+    
     res.json({
-      fornecedor,
-      destinatarioCNPJ,
-      destinatarioRazaoSocial,
-      numeroNF,
-      dataEmissao,
-      items,
-      valorFrete,
-      outrasDespesas,
-      valorIPI,
-      valorTotalProdutos,
-      valorTotalNota,
-      parcelas
+      success: true,
+      data: {
+        fornecedor,
+        destinatarioCNPJ,
+        destinatarioRazaoSocial,
+        numeroNF,
+        dataEmissao,
+        items,
+        valorFrete,
+        outrasDespesas,
+        valorIPI,
+        valorTotalProdutos,
+        valorTotalNota,
+        parcelas
+      }
     });
   } catch (error) {
     console.error('Erro ao fazer parse do XML:', error);

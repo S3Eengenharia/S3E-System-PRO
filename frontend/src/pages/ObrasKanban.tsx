@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import ObraKanban from '../components/ObraKanban';
 import { obrasService } from '../services/obrasService';
+import { projetosService, type CreateProjetoData } from '../services/projetosService';
+import { clientesService, type Cliente } from '../services/clientesService';
+import { orcamentosService, type Orcamento } from '../services/orcamentosService';
+import { axiosApiService } from '../services/axiosApi';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -59,9 +64,149 @@ interface ObrasKanbanProps {
 const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar }) => {
     const [isModalNovaObraOpen, setIsModalNovaObraOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    
+    // Estados para o formulário
+    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [usuarios, setUsuarios] = useState<any[]>([]);
+    const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+    const [formState, setFormState] = useState<CreateProjetoData>({
+        titulo: '',
+        descricao: '',
+        tipo: 'Instalacao',
+        clienteId: '',
+        responsavelId: '',
+        dataInicio: '',
+        dataPrevisao: '',
+        orcamentoId: ''
+    });
+
+    // Carregar dados ao montar o componente
+    useEffect(() => {
+        carregarDados();
+    }, []);
+
+    const carregarDados = async () => {
+        await Promise.all([
+            carregarClientes(),
+            carregarUsuarios(),
+            carregarOrcamentos()
+        ]);
+    };
+
+    const carregarClientes = async () => {
+        try {
+            const response = await clientesService.listar();
+            if (response.success && response.data) {
+                setClientes(Array.isArray(response.data) ? response.data : []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar clientes:', error);
+        }
+    };
+
+    const carregarUsuarios = async () => {
+        try {
+            const response = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
+            if (response.success && response.data) {
+                const usuariosArray = Array.isArray(response.data) ? response.data : [];
+                const usuariosFiltrados = usuariosArray.filter((u: any) => 
+                    ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
+                );
+                setUsuarios(usuariosFiltrados);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar usuários:', error);
+        }
+    };
+
+    const carregarOrcamentos = async () => {
+        try {
+            const response = await orcamentosService.listar({ status: 'Aprovado' });
+            if (response.success && response.data) {
+                setOrcamentos(Array.isArray(response.data) ? response.data : []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar orçamentos:', error);
+        }
+    };
 
     const handleRefresh = () => {
         setRefreshKey(prev => prev + 1);
+    };
+
+    const handleOpenModal = () => {
+        setFormState({
+            titulo: '',
+            descricao: '',
+            tipo: 'Instalacao',
+            clienteId: '',
+            responsavelId: '',
+            dataInicio: '',
+            dataPrevisao: '',
+            orcamentoId: ''
+        });
+        setIsModalNovaObraOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalNovaObraOpen(false);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Validar se orçamento foi selecionado
+        if (!formState.orcamentoId) {
+            toast.error('Orçamento obrigatório', {
+                description: 'Selecione um orçamento aprovado para criar a obra.'
+            });
+            return;
+        }
+        
+        try {
+            // Preparar dados para envio
+            const dadosProjeto: any = {
+                orcamentoId: formState.orcamentoId,
+                titulo: formState.titulo,
+                descricao: formState.descricao,
+                tipo: formState.tipo,
+                clienteId: formState.clienteId,
+                responsavelId: formState.responsavelId,
+                dataInicio: formState.dataInicio,
+                dataPrevisao: formState.dataPrevisao
+            };
+
+            console.log('🏗️ Dados da obra a serem enviados:', dadosProjeto);
+            console.log('📋 Validação:');
+            console.log('  - Orçamento ID:', formState.orcamentoId || '❌ VAZIO');
+            console.log('  - Título:', formState.titulo || '❌ VAZIO');
+            console.log('  - Cliente ID:', formState.clienteId || '⚠️ Opcional');
+            console.log('  - Responsável ID:', formState.responsavelId || '⚠️ Opcional');
+
+            const response = await projetosService.criar(dadosProjeto);
+            
+            console.log('📥 Resposta do servidor:', response);
+            
+            if (response.success) {
+                toast.success('Obra criada com sucesso!', {
+                    description: `A obra "${formState.titulo}" foi cadastrada.`
+                });
+                handleCloseModal();
+                handleRefresh();
+            } else {
+                const errorMessage = response.error || 'Erro desconhecido';
+                console.error('❌ Erro ao criar obra:', errorMessage);
+                toast.error('Erro ao criar obra', {
+                    description: errorMessage,
+                    duration: 5000
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao salvar obra:', error);
+            toast.error('Erro ao salvar obra', {
+                description: 'Verifique os dados e tente novamente.'
+            });
+        }
     };
 
     return (
@@ -78,8 +223,8 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar }) => {
                     </div>
                 </div>
                 <button
-                    onClick={() => setIsModalNovaObraOpen(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-lg font-semibold"
+                    onClick={handleOpenModal}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-lg font-semibold"
                 >
                     <PlusIcon className="w-5 h-5" />
                     Nova Obra
@@ -170,59 +315,203 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar }) => {
                 <ObraKanban key={refreshKey} onRefresh={handleRefresh} />
             </div>
 
-            {/* Modal Nova Obra (Simplificado) */}
+            {/* MODAL DE CRIAÇÃO DE OBRA - COMPLETO */}
             {isModalNovaObraOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
-                        <div className="relative p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-amber-50">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                        {/* Header do Modal */}
+                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-amber-600 to-amber-500">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-600 to-orange-700 flex items-center justify-center shadow-lg">
-                                    <PlusIcon className="w-7 h-7 text-white" />
+                                <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <BuildingOffice2Icon className="w-7 h-7 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-bold text-gray-900">Nova Obra</h2>
-                                    <p className="text-sm text-gray-600 mt-1">Crie um novo projeto de obra</p>
+                                    <h2 className="text-2xl font-bold text-white">Nova Obra</h2>
+                                    <p className="text-sm text-white/80 mt-1">Cadastre uma nova obra de campo</p>
                                 </div>
                             </div>
                             <button
-                                onClick={() => setIsModalNovaObraOpen(false)}
-                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                onClick={handleCloseModal}
+                                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <div className="p-6">
-                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                        {/* Formulário */}
+                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Orçamento Vinculado */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Orçamento *
+                                    </label>
+                                    <select
+                                        value={formState.orcamentoId}
+                                        onChange={(e) => setFormState({...formState, orcamentoId: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="">Selecione um orçamento aprovado</option>
+                                        {orcamentos.map(orcamento => (
+                                            <option key={orcamento.id} value={orcamento.id}>
+                                                {orcamento.titulo} - Cliente: {orcamento.cliente?.nome} - R$ {orcamento.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {orcamentos.length === 0 && (
+                                        <p className="text-xs text-orange-600 mt-1">
+                                            ⚠️ Nenhum orçamento aprovado encontrado. Crie e aprove um orçamento primeiro.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Título da Obra */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Título da Obra *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formState.titulo}
+                                        onChange={(e) => setFormState({...formState, titulo: e.target.value})}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        placeholder="Ex: Instalação Elétrica Edifício Phoenix"
+                                    />
+                                </div>
+
+                                {/* Cliente */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Cliente
+                                    </label>
+                                    <select
+                                        value={formState.clienteId}
+                                        onChange={(e) => setFormState({...formState, clienteId: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="">Selecione o cliente</option>
+                                        {clientes.map(cliente => (
+                                            <option key={cliente.id} value={cliente.id}>
+                                                {cliente.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Responsável */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Responsável Técnico
+                                    </label>
+                                    <select
+                                        value={formState.responsavelId}
+                                        onChange={(e) => setFormState({...formState, responsavelId: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="">Selecione o responsável</option>
+                                        {usuarios.map(usuario => (
+                                            <option key={usuario.id} value={usuario.id}>
+                                                {usuario.nome} - {usuario.role}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Tipo de Obra */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Tipo de Obra
+                                    </label>
+                                    <select
+                                        value={formState.tipo}
+                                        onChange={(e) => setFormState({...formState, tipo: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    >
+                                        <option value="Instalacao">Instalação</option>
+                                        <option value="Manutencao">Manutenção</option>
+                                        <option value="Retrofit">Retrofit</option>
+                                        <option value="Automacao">Automação</option>
+                                    </select>
+                                </div>
+
+                                {/* Data de Início */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Data de Início
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formState.dataInicio}
+                                        onChange={(e) => setFormState({...formState, dataInicio: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    />
+                                </div>
+
+                                {/* Data Prevista de Conclusão */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Data Prevista de Conclusão
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formState.dataPrevisao}
+                                        onChange={(e) => setFormState({...formState, dataPrevisao: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                    />
+                                </div>
+
+                                {/* Descrição */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Descrição da Obra
+                                    </label>
+                                    <textarea
+                                        value={formState.descricao}
+                                        onChange={(e) => setFormState({...formState, descricao: e.target.value})}
+                                        rows={4}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        placeholder="Descreva os detalhes da obra, escopo, observações importantes..."
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Informação Adicional */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                                 <div className="flex items-start gap-3">
-                                    <span className="text-2xl">💡</span>
-                                    <div>
-                                        <p className="text-sm text-blue-900 font-medium">Modal simplificado para demonstração</p>
-                                        <p className="text-xs text-blue-700 mt-1">
-                                            A implementação completa incluirá formulários detalhados para criação e edição de obras.
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-semibold text-blue-900 mb-1">💡 Dica Importante</h4>
+                                        <p className="text-sm text-blue-800">
+                                            Após criar a obra, você poderá alocar equipes de eletricistas, gerenciar materiais e acompanhar o progresso através do quadro Kanban.
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-3">
+                            {/* Botões de Ação */}
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
                                 <button
-                                    onClick={() => setIsModalNovaObraOpen(false)}
-                                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold"
+                                    type="button"
+                                    onClick={handleCloseModal}
+                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
                                 >
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        alert('⚙️ Funcionalidade em desenvolvimento');
-                                        setIsModalNovaObraOpen(false);
-                                    }}
-                                    className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 font-semibold"
+                                    type="submit"
+                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold"
                                 >
+                                    <PlusIcon className="w-5 h-5" />
                                     Criar Obra
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
             )}
