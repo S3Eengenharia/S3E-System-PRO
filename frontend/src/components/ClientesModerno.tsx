@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { clientesService, type Cliente, type CreateClienteData } from '../services/clientesService';
 
 // ==================== ICONS ====================
@@ -159,15 +160,17 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                 setIsModalOpen(false);
                 
                 // Mostrar mensagem de sucesso
-                alert(response.message || `Cliente ${clienteToEdit ? 'atualizado' : 'criado'} com sucesso!`);
+                toast.success(`Cliente ${clienteToEdit ? 'atualizado' : 'criado'}!`, {
+                    description: clienteToEdit ? 'Alterações salvas' : 'Novo cliente cadastrado'
+                });
             } else {
                 const errorMsg = response.error || 'Erro ao salvar cliente';
                 console.warn('⚠️ Erro ao salvar:', errorMsg);
-                alert(errorMsg);
+                toast.error('Erro ao salvar cliente', { description: errorMsg });
             }
         } catch (err) {
             console.error('❌ Erro crítico ao salvar:', err);
-            alert('Erro de conexão ao salvar cliente');
+            toast.error('Erro de conexão', { description: 'Não foi possível salvar o cliente' });
         }
     };
 
@@ -183,39 +186,46 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                 console.log('✅ Cliente desativado com sucesso');
                 await loadClientes();
                 setClienteToDelete(null);
-                alert(response.message || 'Cliente desativado com sucesso!');
+                toast.success('Cliente desativado!', { description: 'O cliente foi desativado com sucesso' });
             } else {
                 const errorMsg = response.error || 'Erro ao desativar cliente';
                 console.warn('⚠️ Erro ao desativar:', errorMsg);
-                alert(errorMsg);
+                toast.error('Erro ao desativar', { description: errorMsg });
             }
         } catch (err) {
             console.error('❌ Erro crítico ao desativar:', err);
-            alert('Erro de conexão ao desativar cliente');
+            toast.error('Erro de conexão', { description: 'Não foi possível desativar o cliente' });
         }
     };
 
     const handleReativar = async (cliente: Cliente) => {
-        if (window.confirm(`Deseja reativar o cliente "${cliente.nome}"?`)) {
-            try {
-                console.log(`🔄 Reativando cliente ${cliente.id}...`);
-                
-                const response = await clientesService.reativar(cliente.id);
-                
-                if (response.success) {
-                    console.log('✅ Cliente reativado com sucesso');
-                    await loadClientes();
-                    alert(response.message || 'Cliente reativado com sucesso!');
-                } else {
-                    const errorMsg = response.error || 'Erro ao reativar cliente';
-                    console.warn('⚠️ Erro ao reativar:', errorMsg);
-                    alert(errorMsg);
+        toast(`Reativar cliente "${cliente.nome}"?`, {
+            action: {
+                label: 'Reativar',
+                onClick: async () => {
+                    const promise = (async () => {
+                        console.log(`🔄 Reativando cliente ${cliente.id}...`);
+                        const response = await clientesService.reativar(cliente.id);
+                        
+                        if (response.success) {
+                            console.log('✅ Cliente reativado com sucesso');
+                            await loadClientes();
+                            return cliente.nome;
+                        } else {
+                            const errorMsg = response.error || 'Erro ao reativar cliente';
+                            console.warn('⚠️ Erro ao reativar:', errorMsg);
+                            throw new Error(errorMsg);
+                        }
+                    })();
+
+                    toast.promise(promise, {
+                        loading: 'Reativando cliente...',
+                        success: (nome) => `${nome} reativado!`,
+                        error: (err) => err.message || 'Erro ao reativar'
+                    });
                 }
-            } catch (err) {
-                console.error('❌ Erro crítico ao reativar:', err);
-                alert('Erro de conexão ao reativar cliente');
             }
-        }
+        });
     };
 
     if (loading) {
@@ -538,13 +548,12 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Email *
+                                        Email
                                     </label>
                                     <input
                                         type="email"
                                         value={formState.email}
                                         onChange={(e) => setFormState({...formState, email: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
                                         placeholder="email@exemplo.com"
                                     />
@@ -552,13 +561,12 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Telefone *
+                                        Telefone
                                     </label>
                                     <input
                                         type="text"
                                         value={formState.telefone}
                                         onChange={(e) => setFormState({...formState, telefone: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
                                         placeholder="(00) 00000-0000"
                                     />
@@ -566,13 +574,12 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Endereço *
+                                        Endereço
                                     </label>
                                     <input
                                         type="text"
                                         value={formState.endereco}
                                         onChange={(e) => setFormState({...formState, endereco: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
                                         placeholder="Rua, número, bairro"
                                     />
@@ -580,13 +587,12 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Cidade *
+                                        Cidade
                                     </label>
                                     <input
                                         type="text"
                                         value={formState.cidade}
                                         onChange={(e) => setFormState({...formState, cidade: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
                                         placeholder="Nome da cidade"
                                     />
@@ -594,12 +600,11 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Estado *
+                                        Estado
                                     </label>
                                     <select
                                         value={formState.estado}
                                         onChange={(e) => setFormState({...formState, estado: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
                                     >
                                         <option value="">Selecione</option>
@@ -614,13 +619,12 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
 
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        CEP *
+                                        CEP
                                     </label>
                                     <input
                                         type="text"
                                         value={formState.cep}
                                         onChange={(e) => setFormState({...formState, cep: e.target.value})}
-                                        required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500"
                                         placeholder="00000-000"
                                     />

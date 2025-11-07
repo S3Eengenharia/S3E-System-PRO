@@ -14,18 +14,35 @@ export interface ItemOrcamento {
 
 export interface Orcamento {
   id: string;
+  numeroSequencial?: number;
   clienteId: string;
   titulo: string;
   descricao?: string;
+  descricaoProjeto?: string;
   validade: string;
-  status: 'Rascunho' | 'Enviado' | 'Aprovado' | 'Rejeitado';
+  status: 'Pendente' | 'Aprovado' | 'Recusado';
   bdi: number;
   custoTotal: number;
   precoVenda: number;
   observacoes?: string;
+  // Campos de endereço e obra
+  empresaCNPJ?: string;
+  enderecoObra?: string;
+  cidade?: string;
+  bairro?: string;
+  cep?: string;
+  responsavelObra?: string;
+  previsaoInicio?: string;
+  previsaoTermino?: string;
+  descontoValor?: number;
+  impostoPercentual?: number;
+  condicaoPagamento?: string;
+  // Datas
   createdAt: string;
   updatedAt: string;
   aprovedAt?: string;
+  recusadoAt?: string;
+  motivoRecusa?: string;
   cliente?: {
     id: string;
     nome: string;
@@ -200,7 +217,7 @@ class OrcamentosServiceClass {
   /**
    * Atualizar status do orçamento
    */
-  async atualizarStatus(id: string, status: 'Rascunho' | 'Enviado' | 'Aprovado' | 'Rejeitado') {
+  async atualizarStatus(id: string, status: 'Pendente' | 'Aprovado' | 'Recusado') {
     try {
       console.log(`🔄 Atualizando status do orçamento ${id} para ${status}...`);
       
@@ -278,6 +295,68 @@ class OrcamentosServiceClass {
    * ✅ Upload de logos
    * ✅ Controle de conteúdo
    */
+
+  /**
+   * Aprovar orçamento
+   */
+  async aprovar(id: string) {
+    try {
+      console.log(`✅ Aprovando orçamento ${id}...`);
+      
+      const response = await axiosApiService.post<Orcamento>(`/api/orcamentos/${id}/aprovar`, {});
+      
+      if (response.success && response.data) {
+        console.log('✅ Orçamento aprovado com sucesso');
+        return {
+          success: true,
+          data: response.data,
+          message: 'Orçamento aprovado com sucesso'
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || 'Erro ao aprovar orçamento'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao aprovar orçamento:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao aprovar orçamento'
+      };
+    }
+  }
+
+  /**
+   * Recusar orçamento
+   */
+  async recusar(id: string, motivo?: string) {
+    try {
+      console.log(`❌ Recusando orçamento ${id}...`);
+      
+      const response = await axiosApiService.post<Orcamento>(`/api/orcamentos/${id}/recusar`, { motivo });
+      
+      if (response.success && response.data) {
+        console.log('✅ Orçamento recusado');
+        return {
+          success: true,
+          data: response.data,
+          message: 'Orçamento recusado'
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || 'Erro ao recusar orçamento'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao recusar orçamento:', error);
+      return {
+        success: false,
+        error: 'Erro de conexão ao recusar orçamento'
+      };
+    }
+  }
 
   /**
    * Enviar orçamento por email (se implementado no backend)

@@ -133,14 +133,36 @@ export const getProjetoById = async (req: Request, res: Response): Promise<void>
 // Criar projeto
 export const createProjeto = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { orcamentoId, clienteId, titulo, descricao, valorTotal, dataInicio, dataPrevisao } = req.body;
+    const { orcamentoId, clienteId, titulo, descricao, tipo, responsavelId, dataInicio, dataPrevisao } = req.body;
+
+    console.log('🏗️ Criando projeto/obra com dados:', {
+      orcamentoId,
+      clienteId,
+      titulo,
+      tipo,
+      responsavelId,
+      dataInicio,
+      dataPrevisao
+    });
+
+    // Verificar se orçamento foi fornecido (obrigatório)
+    if (!orcamentoId) {
+      console.error('❌ Orçamento não fornecido');
+      res.status(400).json({
+        success: false,
+        error: 'Orçamento é obrigatório para criar projeto/obra'
+      });
+      return;
+    }
 
     // Verificar se orçamento existe e está aprovado
+    console.log('🔍 Buscando orçamento:', orcamentoId);
     const orcamento = await prisma.orcamento.findUnique({
       where: { id: orcamentoId }
     });
 
     if (!orcamento) {
+      console.error('❌ Orçamento não encontrado:', orcamentoId);
       res.status(404).json({
         success: false,
         error: 'Orçamento não encontrado'
@@ -148,53 +170,87 @@ export const createProjeto = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (orcamento.status !== 'Aprovado') {
-      res.status(400).json({
-        success: false,
-        error: 'Orçamento deve estar aprovado para criar projeto'
-      });
-      return;
-    }
-
-    // Verificar se cliente existe
-    const cliente = await prisma.cliente.findUnique({
-      where: { id: clienteId }
+    console.log('✅ Orçamento encontrado:', {
+      id: orcamento.id,
+      titulo: orcamento.titulo,
+      status: orcamento.status
     });
 
-    if (!cliente) {
-      res.status(404).json({
+    if (orcamento.status !== 'Aprovado') {
+      console.error('❌ Orçamento não aprovado. Status atual:', orcamento.status);
+      res.status(400).json({
         success: false,
-        error: 'Cliente não encontrado'
+        error: `Orçamento deve estar aprovado para criar projeto. Status atual: ${orcamento.status}`
       });
       return;
     }
 
     // Verificar se já existe projeto para este orçamento
+    console.log('🔍 Verificando se já existe projeto para este orçamento...');
     const projetoExistente = await prisma.projeto.findUnique({
       where: { orcamentoId }
     });
 
     if (projetoExistente) {
+      console.error('❌ Já existe projeto para este orçamento:', projetoExistente.id);
       res.status(400).json({
         success: false,
-        error: 'Já existe um projeto para este orçamento'
+        error: `Já existe um projeto/obra vinculado a este orçamento: "${projetoExistente.titulo}"`
       });
       return;
     }
 
+    // Usar o clienteId do orçamento (já validado acima)
+    const clienteIdFinal = clienteId || orcamento.clienteId;
+
+    // Verificar se responsável existe (se fornecido)
+    if (responsavelId) {
+      const responsavel = await prisma.user.findUnique({
+        where: { id: responsavelId }
+      });
+
+      if (!responsavel) {
+        res.status(404).json({
+          success: false,
+          error: 'Responsável não encontrado'
+        });
+        return;
+      }
+    }
+
+    // Criar projeto
     const projeto = await prisma.projeto.create({
       data: {
         orcamentoId,
-        clienteId,
+        clienteId: clienteIdFinal,
+        responsavelId: responsavelId || null,
         titulo,
-        descricao,
-        valorTotal,
+        descricao: descricao || '',
+        tipo: tipo || 'Instalacao',
+        status: 'PROPOSTA',
         dataInicio: dataInicio ? new Date(dataInicio) : new Date(),
-        dataPrevisao: dataPrevisao ? new Date(dataPrevisao) : null
+        dataPrevisao: dataPrevisao ? new Date(dataPrevisao) : new Date()
       },
       include: {
-        cliente: { select: { nome: true, cpfCnpj: true } },
-        orcamento: { select: { precoVenda: true, status: true } }
+        cliente: {
+          select: {
+            id: true,
+            nome: true
+          }
+        },
+        responsavel: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        orcamento: {
+          select: {
+            id: true,
+            titulo: true,
+            precoVenda: true
+          }
+        }
       }
     });
 

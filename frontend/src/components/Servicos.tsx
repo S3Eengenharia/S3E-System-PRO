@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { type Service, ServiceType } from '../types';
 import { servicosService, type Servico } from '../services/servicosService';
 
@@ -154,7 +155,7 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
         e.preventDefault();
         const priceValue = parseFloat(formState.price);
         if (isNaN(priceValue) || priceValue < 0) {
-            alert("O preço deve ser um número válido.");
+            toast.error("O preço deve ser um número válido.");
             return;
         }
 
@@ -173,11 +174,11 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                 const response = await servicosService.atualizar(serviceToEdit.id, servicoData);
                 
                 if (response.success) {
-                    alert('✅ Serviço atualizado com sucesso!');
+                    toast.error('✅ Serviço atualizado com sucesso!');
                     handleCloseModal();
                     await loadServices();
                 } else {
-                    alert(`❌ Erro ao atualizar serviço: ${response.error || 'Erro desconhecido'}`);
+                    toast.error(`❌ Erro ao atualizar serviço: ${response.error || 'Erro desconhecido'}`);
                 }
             } else {
                 // Criar novo serviço
@@ -193,16 +194,16 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
                 const response = await servicosService.criar(servicoData);
                 
                 if (response.success) {
-                    alert('✅ Serviço criado com sucesso!');
+                    toast.error('✅ Serviço criado com sucesso!');
                     handleCloseModal();
                     await loadServices();
                 } else {
-                    alert(`❌ Erro ao criar serviço: ${response.error || 'Erro desconhecido'}`);
+                    toast.error(`❌ Erro ao criar serviço: ${response.error || 'Erro desconhecido'}`);
                 }
             }
         } catch (error) {
             console.error('Erro ao salvar serviço:', error);
-            alert('❌ Erro ao salvar serviço. Verifique o console para mais detalhes.');
+            toast.error('❌ Erro ao salvar serviço. Verifique o console para mais detalhes.');
         }
     };
 
@@ -215,15 +216,15 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
             const response = await servicosService.desativar(serviceToDelete.id);
             
             if (response.success) {
-                alert('✅ Serviço removido com sucesso!');
+                toast.error('✅ Serviço removido com sucesso!');
                 handleCloseDeleteModal();
                 await loadServices();
             } else {
-                alert(`❌ Erro ao remover serviço: ${response.error || 'Erro desconhecido'}`);
+                toast.error(`❌ Erro ao remover serviço: ${response.error || 'Erro desconhecido'}`);
             }
         } catch (error) {
             console.error('Erro ao remover serviço:', error);
-            alert('❌ Erro ao remover serviço. Verifique o console para mais detalhes.');
+            toast.error('❌ Erro ao remover serviço. Verifique o console para mais detalhes.');
         }
     };
 
@@ -518,13 +519,12 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                        Tipo de Serviço *
+                                        Tipo de Serviço
                                     </label>
                                     <select
                                         name="type"
                                         value={formState.type}
                                         onChange={handleInputChange}
-                                        required
                                         className="select-field"
                                     >
                                         {Object.values(ServiceType).map(t => <option key={t} value={t}>{t}</option>)}
@@ -533,13 +533,12 @@ const Servicos: React.FC<ServicosProps> = ({ toggleSidebar }) => {
 
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                        Descrição *
+                                        Descrição
                                     </label>
                                     <textarea
                                         name="description"
                                         value={formState.description}
                                         onChange={handleInputChange}
-                                        required
                                         rows={3}
                                         className="textarea-field"
                                         placeholder="Descreva detalhadamente o serviço oferecido..."
