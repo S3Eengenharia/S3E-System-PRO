@@ -114,6 +114,17 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const [showItemModal, setShowItemModal] = useState(false);
     const [showEditorAvancado, setShowEditorAvancado] = useState(false);
     const [itemSearchTerm, setItemSearchTerm] = useState('');
+    
+    // Estado para item manual
+    const [modoAdicao, setModoAdicao] = useState<'estoque' | 'manual'>('estoque');
+    const [novoItemManual, setNovoItemManual] = useState({
+        nome: '',
+        descricao: '',
+        unidadeMedida: 'UN',
+        quantidade: 1,
+        custoUnit: 0,
+        tipo: 'MATERIAL' as const
+    });
 
     // Carregar dados iniciais
     useEffect(() => {
@@ -162,7 +173,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         return { subtotalItens, valorComDesconto, valorTotalFinal };
     }, [items, formState.descontoValor, formState.impostoPercentual]);
 
-    // Adicionar item ao orçamento
+    // Adicionar item do estoque ao orçamento
     const handleAddItem = (material: Material) => {
         const newItem: OrcamentoItem = {
             tipo: 'MATERIAL',
@@ -178,6 +189,50 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         setItems(prev => [...prev, newItem]);
         setShowItemModal(false);
         setItemSearchTerm('');
+    };
+
+    // Adicionar item manual (sem estoque)
+    const handleAddItemManual = () => {
+        // Validação
+        if (!novoItemManual.nome.trim()) {
+            alert('⚠️ Digite o nome do item');
+            return;
+        }
+        if (novoItemManual.custoUnit <= 0) {
+            alert('⚠️ Digite um custo unitário válido');
+            return;
+        }
+        if (novoItemManual.quantidade <= 0) {
+            alert('⚠️ Digite uma quantidade válida');
+            return;
+        }
+
+        const precoUnit = novoItemManual.custoUnit * (1 + formState.bdi / 100);
+        const newItem: OrcamentoItem = {
+            tipo: novoItemManual.tipo,
+            nome: novoItemManual.nome,
+            descricao: novoItemManual.descricao,
+            unidadeMedida: novoItemManual.unidadeMedida,
+            quantidade: novoItemManual.quantidade,
+            custoUnit: novoItemManual.custoUnit,
+            precoUnit: precoUnit,
+            subtotal: precoUnit * novoItemManual.quantidade
+        };
+
+        setItems(prev => [...prev, newItem]);
+        
+        // Resetar formulário
+        setNovoItemManual({
+            nome: '',
+            descricao: '',
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: 0,
+            tipo: 'MATERIAL'
+        });
+        
+        setShowItemModal(false);
+        alert('✅ Item adicionado com sucesso!');
     };
 
     // Remover item
@@ -351,12 +406,11 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                Cliente *
+                                Cliente
                             </label>
                             <select
                                 value={formState.clienteId}
                                 onChange={(e) => setFormState(prev => ({ ...prev, clienteId: e.target.value }))}
-                                required
                                 className="select-field"
                             >
                                 <option value="">Selecione um cliente</option>
@@ -370,13 +424,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                Título do Projeto *
+                                Título do Projeto
                             </label>
                             <input
                                 type="text"
                                 value={formState.titulo}
                                 onChange={(e) => setFormState(prev => ({ ...prev, titulo: e.target.value }))}
-                                required
                                 className="input-field"
                                 placeholder="Ex: Instalação Elétrica - Edifício Comercial"
                             />
@@ -384,26 +437,24 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                Validade do Orçamento *
+                                Validade do Orçamento
                             </label>
                             <input
                                 type="date"
                                 value={formState.validade}
                                 onChange={(e) => setFormState(prev => ({ ...prev, validade: e.target.value }))}
-                                required
                                 className="input-field"
                             />
                         </div>
 
                         <div className="md:col-span-2">
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                Endereço da Obra (Rua e Número) *
+                                Endereço da Obra (Rua e Número)
                             </label>
                             <input
                                 type="text"
                                 value={formState.enderecoObra}
                                 onChange={(e) => setFormState(prev => ({ ...prev, enderecoObra: e.target.value }))}
-                                required
                                 className="input-field"
                                 placeholder="Ex: Rua das Flores, 123"
                             />
@@ -411,13 +462,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                Bairro *
+                                Bairro
                             </label>
                             <input
                                 type="text"
                                 value={formState.bairro}
                                 onChange={(e) => setFormState(prev => ({ ...prev, bairro: e.target.value }))}
-                                required
                                 className="input-field"
                                 placeholder="Ex: Centro"
                             />
@@ -425,13 +475,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                Cidade *
+                                Cidade
                             </label>
                             <input
                                 type="text"
                                 value={formState.cidade}
                                 onChange={(e) => setFormState(prev => ({ ...prev, cidade: e.target.value }))}
-                                required
                                 className="input-field"
                                 placeholder="Ex: Florianópolis"
                             />
@@ -439,13 +488,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                CEP *
+                                CEP
                             </label>
                             <input
                                 type="text"
                                 value={formState.cep}
                                 onChange={(e) => setFormState(prev => ({ ...prev, cep: e.target.value }))}
-                                required
                                 className="input-field"
                                 placeholder="00000-000"
                                 maxLength={9}
@@ -467,7 +515,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                BDI - Margem (%) *
+                                BDI - Margem (%)
                             </label>
                             <input
                                 type="number"
@@ -475,7 +523,6 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                 onChange={(e) => handleBdiChange(Number(e.target.value))}
                                 min="0"
                                 max="100"
-                                required
                                 className="input-field"
                                 placeholder="20"
                             />
@@ -751,52 +798,272 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 </div>
             </form>
 
-            {/* Modal de Adicionar Item */}
+            {/* Modal de Adicionar Item - Com Abas */}
             {showItemModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="modal-content max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="modal-header">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">Adicionar Material</h3>
-                            <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Selecione os materiais para o orçamento</p>
-                        </div>
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        {/* Header com Abas */}
+                        <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-indigo-600 to-purple-600">
+                            <div className="flex justify-between items-center mb-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Adicionar Item ao Orçamento</h3>
+                                    <p className="text-sm text-white/80 mt-1">Escolha como deseja adicionar o item</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowItemModal(false);
+                                        setItemSearchTerm('');
+                                        setModoAdicao('estoque');
+                                    }}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
 
-                        <div className="modal-body flex-1 overflow-y-auto">
-                            <input
-                                type="text"
-                                value={itemSearchTerm}
-                                onChange={(e) => setItemSearchTerm(e.target.value)}
-                                className="input-field mb-4"
-                                placeholder="Buscar material por nome ou SKU..."
-                            />
-
-                            <div className="space-y-2 max-h-96 overflow-y-auto">
-                                {filteredMaterials.map(material => (
-                                    <button
-                                        key={material.id}
-                                        type="button"
-                                        onClick={() => handleAddItem(material)}
-                                        className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
-                                    >
-                                        <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
-                                        <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
-                                            {material.sku} • Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toFixed(2)}
-                                        </p>
-                                    </button>
-                                ))}
+                            {/* Abas */}
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('estoque')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'estoque'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    📦 Do Estoque
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('manual')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'manual'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    ✏️ Criar Manualmente
+                                </button>
                             </div>
                         </div>
 
-                        <div className="modal-footer">
+                        {/* Conteúdo do Modal */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {/* Modo: Importar do Estoque */}
+                            {modoAdicao === 'estoque' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar material por nome ou SKU..."
+                                        />
+                                    </div>
+
+                                    {filteredMaterials.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">📦</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum material encontrado</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">Tente ajustar a busca ou criar manualmente</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredMaterials.map(material => (
+                                                <button
+                                                    key={material.id}
+                                                    type="button"
+                                                    onClick={() => handleAddItem(material)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
+                                                >
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida} • Custo: R$ {material.preco.toFixed(2)}
+                                                    </p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Criar Manualmente */}
+                            {modoAdicao === 'manual' && (
+                                <div className="space-y-6">
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg mb-6">
+                                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                                            💡 <strong>Dica:</strong> Use esta opção para adicionar materiais/serviços que ainda não foram comprados.
+                                            Ideal para orçamentos baseados em cotações de fornecedores.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Tipo de Item
+                                            </label>
+                                            <select
+                                                value={novoItemManual.tipo}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, tipo: e.target.value as any }))}
+                                                className="select-field"
+                                            >
+                                                <option value="MATERIAL">Material</option>
+                                                <option value="SERVICO">Serviço</option>
+                                                <option value="KIT">Kit</option>
+                                                <option value="CUSTO_EXTRA">Custo Extra</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Nome/Descrição do Item
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={novoItemManual.nome}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, nome: e.target.value }))}
+                                                className="input-field"
+                                                placeholder="Ex: Disjuntor 32A Tripolar, Instalação de Quadro, etc."
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Descrição Técnica (Opcional)
+                                            </label>
+                                            <textarea
+                                                value={novoItemManual.descricao}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, descricao: e.target.value }))}
+                                                rows={2}
+                                                className="textarea-field"
+                                                placeholder="Detalhes técnicos, especificações, normas..."
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Unidade de Medida
+                                            </label>
+                                            <select
+                                                value={novoItemManual.unidadeMedida}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, unidadeMedida: e.target.value }))}
+                                                className="select-field"
+                                            >
+                                                <option value="UN">Unidade (UN)</option>
+                                                <option value="M">Metro (M)</option>
+                                                <option value="M²">Metro Quadrado (M²)</option>
+                                                <option value="M³">Metro Cúbico (M³)</option>
+                                                <option value="KG">Quilograma (KG)</option>
+                                                <option value="L">Litro (L)</option>
+                                                <option value="CX">Caixa (CX)</option>
+                                                <option value="PC">Peça (PC)</option>
+                                                <option value="SERV">Serviço (SERV)</option>
+                                                <option value="HR">Hora (HR)</option>
+                                                <option value="VERBA">Verba (VERBA)</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Quantidade
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={novoItemManual.quantidade}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
+                                                min="0.01"
+                                                step="0.01"
+                                                className="input-field"
+                                                placeholder="0"
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Custo Unitário (R$)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={novoItemManual.custoUnit}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, custoUnit: parseFloat(e.target.value) || 0 }))}
+                                                min="0"
+                                                step="0.01"
+                                                className="input-field"
+                                                placeholder="0,00"
+                                            />
+                                            <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-2">
+                                                💡 Digite o custo real do material/serviço (sem BDI). O preço de venda será calculado automaticamente com a margem de {formState.bdi}%.
+                                            </p>
+                                        </div>
+
+                                        {/* Preview do Cálculo */}
+                                        {novoItemManual.custoUnit > 0 && novoItemManual.quantidade > 0 && (
+                                            <div className="md:col-span-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+                                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                                    <div>
+                                                        <p className="text-gray-600 dark:text-dark-text-secondary mb-1">Custo Total</p>
+                                                        <p className="text-lg font-bold text-gray-900 dark:text-dark-text">
+                                                            R$ {(novoItemManual.custoUnit * novoItemManual.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-600 dark:text-dark-text-secondary mb-1">Preço Unit. (com BDI)</p>
+                                                        <p className="text-lg font-bold text-indigo-700 dark:text-indigo-300">
+                                                            R$ {(novoItemManual.custoUnit * (1 + formState.bdi / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-600 dark:text-dark-text-secondary mb-1">Preço Total</p>
+                                                        <p className="text-lg font-bold text-green-700 dark:text-green-300">
+                                                            R$ {(novoItemManual.custoUnit * (1 + formState.bdi / 100) * novoItemManual.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-dark-border flex justify-end gap-3">
                             <button
                                 type="button"
                                 onClick={() => {
                                     setShowItemModal(false);
                                     setItemSearchTerm('');
+                                    setModoAdicao('estoque');
+                                    setNovoItemManual({
+                                        nome: '',
+                                        descricao: '',
+                                        unidadeMedida: 'UN',
+                                        quantidade: 1,
+                                        custoUnit: 0,
+                                        tipo: 'MATERIAL'
+                                    });
                                 }}
                                 className="btn-secondary"
                             >
-                                Fechar
+                                Cancelar
                             </button>
+                            {modoAdicao === 'manual' && (
+                                <button
+                                    type="button"
+                                    onClick={handleAddItemManual}
+                                    className="btn-primary flex items-center gap-2"
+                                >
+                                    <PlusIcon className="w-5 h-5" />
+                                    Adicionar Item
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
