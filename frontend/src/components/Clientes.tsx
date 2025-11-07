@@ -434,7 +434,7 @@ const Clientes: React.FC<ClientesProps> = ({ toggleSidebar }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-brand-gray-700 mb-1">Nome / Razão Social</label>
-                                <input type="text" name="name" value={formState.name} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" required />
+                                <input type="text" name="name" value={formState.name} onChange={handleInputChange} className="w-full px-3 py-2 border border-brand-gray-300 rounded-lg" />
                             </div>
                              <div>
                                 <label className="block text-sm font-medium text-brand-gray-700 mb-1">Pessoa de Contato</label>

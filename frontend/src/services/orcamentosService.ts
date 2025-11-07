@@ -261,79 +261,23 @@ class OrcamentosServiceClass {
   }
 
   /**
-   * Gerar PDF do orçamento para download
+   * NOTA: Funções de PDF removidas
+   * ====================================
+   * As funções gerarPDF(), baixarPDF(), visualizarPDF(), gerarPDFURL() 
+   * e verificarOrcamento() foram removidas.
+   * 
+   * Use o novo sistema de customização de PDF:
+   * - Componente: PDFCustomizationModal
+   * - Serviço: pdfCustomizationService
+   * - Localização: frontend/src/components/PDFCustomization/PDFCustomizationModal.tsx
+   * 
+   * O novo sistema oferece:
+   * ✅ Customização total (marca d'água, cores, layout)
+   * ✅ Preview em tempo real
+   * ✅ Sistema de templates
+   * ✅ Upload de logos
+   * ✅ Controle de conteúdo
    */
-  async gerarPDF(id: string): Promise<Blob> {
-    const token = localStorage.getItem('token');
-    
-    const response = await fetch(`${API_CONFIG.BASE_URL}/api/pdf/orcamento/${id}/download`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Erro ao gerar PDF');
-    }
-
-    return await response.blob();
-  }
-
-  /**
-   * Gerar PDF e obter URL para visualização
-   */
-  async gerarPDFURL(id: string) {
-    return axiosApiService.get<{ url: string; dataUrl: string }>(`/api/pdf/orcamento/${id}/url`);
-  }
-
-  /**
-   * Verificar se orçamento existe antes de gerar PDF
-   */
-  async verificarOrcamento(id: string) {
-    return axiosApiService.get<{ exists: boolean; orcamento?: any }>(`/api/pdf/orcamento/${id}/check`);
-  }
-
-  /**
-   * Baixar PDF do orçamento
-   */
-  async baixarPDF(id: string, nomeCliente: string) {
-    try {
-      const blob = await this.gerarPDF(id);
-      
-      // Criar URL temporária para download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Orcamento_${nomeCliente}_${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Erro ao baixar PDF:', error);
-      return { success: false, error: 'Erro ao baixar PDF' };
-    }
-  }
-
-  /**
-   * Visualizar PDF em nova aba
-   */
-  async visualizarPDF(id: string) {
-    try {
-      const token = localStorage.getItem('token');
-      const url = `${API_CONFIG.BASE_URL}/api/pdf/orcamento/${id}/view`;
-      
-      window.open(`${url}?token=${token}`, '_blank');
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Erro ao visualizar PDF:', error);
-      return { success: false, error: 'Erro ao visualizar PDF' };
-    }
-  }
 
   /**
    * Enviar orçamento por email (se implementado no backend)

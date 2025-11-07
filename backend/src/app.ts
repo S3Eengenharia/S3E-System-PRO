@@ -20,7 +20,6 @@ import protectedRoutes from './routes/protected.routes.js';
 import alocacaoRoutes from './routes/alocacao.routes.js';
 import comparacaoPrecosRoutes from './routes/comparacaoPrecos.routes.js';
 import equipesRoutes from './routes/equipes.routes.js';
-import pdfRoutes from './routes/pdf.routes.js';
 import etapasAdminRoutes from './routes/etapasAdmin.routes.js';
 import clientesRoutes from './routes/clientes.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
@@ -35,6 +34,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import quadrosRoutes from './routes/quadros.routes.js';
 import configuracaoRoutes from './routes/configuracao.routes.js';
 import obraRoutes from './routes/obra.routes.js';
+import pdfCustomizationRoutes from './routes/pdfCustomization.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -105,7 +105,7 @@ app.get('/api', (_req, res) => {
       obras: '/api/obras',
       comparacaoPrecos: '/api/comparacao-precos',
       equipes: '/api/equipes',
-      pdf: '/api/pdf',
+      pdfCustomization: '/api/pdf-customization',
       clientes: '/api/clientes',
       fornecedores: '/api/fornecedores',
       projetos: '/api/projetos',
@@ -116,8 +116,7 @@ app.get('/api', (_req, res) => {
       empresas: '/api/empresas',
       dashboard: '/api/dashboard',
       quadros: '/api/quadros',
-      configuracoes: '/api/configuracoes',
-      obras: '/api/obras'
+      configuracoes: '/api/configuracoes'
     }
   });
 });
@@ -135,7 +134,6 @@ app.use('/api/configuracoes-fiscais', configFiscalRoutes);
 app.use('/api/obras', alocacaoRoutes);
 app.use('/api/comparacao-precos', comparacaoPrecosRoutes);
 app.use('/api/equipes', equipesRoutes);
-app.use('/api/pdf', pdfRoutes);
 app.use('/api/projetos/etapas-admin', etapasAdminRoutes);
 app.use('/api/pessoas', pessoasRoutes);
 app.use('/api/clientes', clientesRoutes);
@@ -150,6 +148,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/quadros', quadrosRoutes);
 app.use('/api/configuracoes', configuracaoRoutes);
 app.use('/api/obras', obraRoutes);
+app.use('/api/pdf-customization', pdfCustomizationRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -4,8 +4,10 @@ import { clientesService, type Cliente } from '../services/clientesService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import EditorDescricaoAvancada from './EditorDescricaoAvancada';
-import { generateOrcamentoPDF, type OrcamentoPDFData } from '../utils/pdfGenerator';
+import { generateOrcamentoPDF, type OrcamentoPDFData as OrcamentoPDFDataOld } from '../utils/pdfGenerator';
 import NovoOrcamentoPage from '../pages/NovoOrcamentoPage';
+import PDFCustomizationModal from './PDFCustomization/PDFCustomizationModal';
+import { OrcamentoPDFData } from '../types/pdfCustomization';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -139,6 +141,10 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [orcamentoToEdit, setOrcamentoToEdit] = useState<Orcamento | null>(null);
     const [orcamentoToView, setOrcamentoToView] = useState<Orcamento | null>(null);
+    
+    // Estado para PDF Customization
+    const [showPDFCustomization, setShowPDFCustomization] = useState(false);
+    const [orcamentoForPDF, setOrcamentoForPDF] = useState<Orcamento | null>(null);
 
     // Form state
     const [formState, setFormState] = useState({
@@ -503,12 +509,77 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         }
     };
 
-    // Gerar PDF do orçamento
+    // Preparar dados do orçamento para PDF customizado
+    const prepararDadosParaPDF = (orcamento: Orcamento): OrcamentoPDFData => {
+        // Buscar dados completos do cliente
+        const clienteCompleto = clientes.find(c => c.id === orcamento.clienteId);
+
+        return {
+            numero: orcamento.id.substring(0, 8).toUpperCase(),
+            data: new Date(orcamento.createdAt).toLocaleDateString('pt-BR'),
+            validade: new Date(orcamento.validade).toLocaleDateString('pt-BR'),
+            cliente: {
+                nome: orcamento.cliente?.nome || clienteCompleto?.nome || 'Cliente não informado',
+                cpfCnpj: orcamento.cliente?.cpfCnpj || clienteCompleto?.cpfCnpj || '',
+                endereco: clienteCompleto?.endereco,
+                telefone: clienteCompleto?.telefone,
+                email: clienteCompleto?.email
+            },
+            projeto: {
+                titulo: orcamento.titulo,
+                descricao: orcamento.descricao,
+                enderecoObra: (orcamento as any).enderecoObra,
+                cidade: (orcamento as any).cidade,
+                bairro: (orcamento as any).bairro,
+                cep: (orcamento as any).cep
+            },
+            prazos: {
+                previsaoInicio: (orcamento as any).previsaoInicio ? new Date((orcamento as any).previsaoInicio).toLocaleDateString('pt-BR') : undefined,
+                previsaoTermino: (orcamento as any).previsaoTermino ? new Date((orcamento as any).previsaoTermino).toLocaleDateString('pt-BR') : undefined
+            },
+            items: orcamento.items.map(item => ({
+                codigo: item.materialId || item.kitId,
+                nome: item.nome,
+                descricao: item.descricao,
+                unidade: item.unidadeMedida,
+                quantidade: item.quantidade,
+                valorUnitario: item.precoUnit,
+                valorTotal: item.subtotal
+            })),
+            financeiro: {
+                subtotal: orcamento.custoTotal,
+                bdi: orcamento.bdi,
+                valorComBDI: orcamento.custoTotal * (1 + orcamento.bdi / 100),
+                desconto: (orcamento as any).descontoValor || 0,
+                impostos: (orcamento as any).impostoPercentual || 0,
+                valorTotal: orcamento.precoVenda,
+                condicaoPagamento: (orcamento as any).condicaoPagamento || 'À Vista'
+            },
+            observacoes: orcamento.observacoes,
+            descricaoTecnica: (orcamento as any).descricaoProjeto,
+            fotos: (orcamento as any).fotos || [],
+            empresa: {
+                nome: 'S3E Engenharia',
+                cnpj: '00.000.000/0000-00',
+                endereco: 'Endereço da empresa',
+                telefone: '(48) 0000-0000',
+                email: 'contato@s3e.com.br'
+            }
+        };
+    };
+
+    // Abrir modal de customização de PDF
+    const handlePersonalizarPDF = (orcamento: Orcamento) => {
+        setOrcamentoForPDF(orcamento);
+        setShowPDFCustomization(true);
+    };
+
+    // Gerar PDF do orçamento (função antiga mantida para compatibilidade)
     const handleGerarPDF = (orcamento: Orcamento) => {
         try {
             console.log('📄 Gerando PDF do orçamento:', orcamento.id);
 
-            const pdfData: OrcamentoPDFData = {
+            const pdfData: OrcamentoPDFDataOld = {
                 id: orcamento.id.substring(0, 8).toUpperCase(),
                 titulo: orcamento.titulo,
                 cliente: {
@@ -540,25 +611,6 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         }
     };
 
-    // Baixar PDF do orçamento
-    const handleDownloadPDF = async (orcamentoId: string, nomeCliente: string) => {
-        try {
-            console.log(`📄 Gerando PDF do orçamento ${orcamentoId}...`);
-
-            const result = await orcamentosService.baixarPDF(orcamentoId, nomeCliente);
-
-            if (result.success) {
-                console.log('✅ PDF baixado com sucesso');
-            } else {
-                const errorMsg = result.error || 'Erro ao baixar PDF';
-                console.warn('⚠️ Erro ao baixar PDF:', errorMsg);
-                alert(errorMsg);
-            }
-        } catch (err) {
-            console.error('❌ Erro crítico ao baixar PDF:', err);
-            alert('Erro ao gerar PDF do orçamento');
-        }
-    };
 
     // Status styling
     const getStatusClass = (status: string) => {
@@ -774,11 +826,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     Ver
                                 </button>
                                 <button
-                                    onClick={() => handleGerarPDF(orcamento)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold"
-                                    title="Gerar PDF"
+                                    onClick={() => handlePersonalizarPDF(orcamento)}
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 rounded-lg hover:from-purple-200 hover:to-indigo-200 transition-all text-sm font-semibold shadow-sm"
+                                    title="Personalizar e gerar PDF"
                                 >
-                                    <DocumentArrowDownIcon className="w-4 h-4" />
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                    </svg>
                                     PDF
                                 </button>
                                 <button
@@ -1462,11 +1516,16 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             {/* Ações do Orçamento */}
                             <div className="flex gap-3 pt-6 border-t border-gray-100">
                                 <button
-                                    onClick={() => handleGerarPDF(orcamentoToView)}
-                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl hover:from-red-700 hover:to-red-600 transition-all shadow-medium font-semibold"
+                                    onClick={() => {
+                                        setOrcamentoToView(null);
+                                        handlePersonalizarPDF(orcamentoToView);
+                                    }}
+                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-medium font-semibold"
                                 >
-                                    <DocumentArrowDownIcon className="w-5 h-5" />
-                                    Gerar PDF
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                    </svg>
+                                    🎨 Personalizar PDF
                                 </button>
                                 {orcamentoToView.status === 'Pendente' && (
                                     <>
@@ -1484,16 +1543,28 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                         </button>
                                     </>
                                 )}
-                                <button
-                                    onClick={() => handleDownloadPDF(orcamentoToView.id, orcamentoToView.cliente?.nome || 'Cliente')}
-                                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold"
-                                >
-                                    📄 Baixar PDF
-                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Modal de Customização de PDF */}
+            {showPDFCustomization && orcamentoForPDF && (
+                <PDFCustomizationModal
+                    isOpen={showPDFCustomization}
+                    onClose={() => {
+                        setShowPDFCustomization(false);
+                        setOrcamentoForPDF(null);
+                    }}
+                    orcamentoData={prepararDadosParaPDF(orcamentoForPDF)}
+                    onGeneratePDF={() => {
+                        console.log('✅ PDF gerado com sucesso!');
+                        // Fechar modal após gerar (opcional)
+                        setShowPDFCustomization(false);
+                        setOrcamentoForPDF(null);
+                    }}
+                />
             )}
         </div>
     );
