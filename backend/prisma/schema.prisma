@@ -24,7 +24,31 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relacionamentos
+  pdfTemplates PDFTemplate[]
+
   @@map("users")
+}
+
+// Templates de Customização de PDF
+model PDFTemplate {
+  id          String   @id @default(uuid())
+  userId      String
+  templateName String
+  description String?
+  
+  // Configurações de Customização (JSON)
+  customization Json // Armazena toda a configuração PDFCustomization
+  
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamento
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("pdf_templates")
 }
 
 model ConfiguracaoSistema {

@@ -10,11 +10,14 @@
     "start": "dotenv -e .env.production -- node dist/app.js",
     "lint": "eslint . --ext .ts",
     "test": "jest",
-    "seed": "npx tsx src/seed.ts",
+    "seed": "npx tsx prisma/seed.ts",
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:deploy:prod": "dotenv -e .env.production -- npx prisma migrate deploy",
     "prisma:studio": "npx prisma studio",
     "prisma:generate": "npx prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "keywords": [
     "api",
