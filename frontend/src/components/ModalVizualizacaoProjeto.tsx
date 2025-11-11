@@ -100,7 +100,15 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   async function carregarUsuarios() {
     try {
       const response = await axiosApiService.get('/api/configuracoes/usuarios');
-      setUsuariosDisponiveis(response.data || response || []);
+      const todosUsuarios = response.data || response || [];
+      // Filtrar apenas roles técnicas: admin, gerente, engenheiro, orcamentista
+      const usuariosFiltrados = Array.isArray(todosUsuarios) 
+        ? todosUsuarios.filter((u: any) => 
+            ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
+          )
+        : [];
+      setUsuariosDisponiveis(usuariosFiltrados);
+      console.log('👥 Usuários técnicos carregados:', usuariosFiltrados.length);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }
@@ -150,15 +158,53 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   async function handleAprovarProjeto() {
     setAlertConfig({
       title: '🎉 Aprovar Projeto',
-      description: 'Deseja aprovar este projeto? Isso permitirá gerar a venda e iniciar a obra.',
+      description: 'Deseja aprovar este projeto? Isso reservará os materiais do estoque e permitirá iniciar a obra.',
       onConfirm: async () => {
         try {
           setLoadingAcao(true);
-          await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'APROVADO' });
-          toast.success('🎉 Projeto aprovado com sucesso!');
-          if (onRefresh) onRefresh();
-        } catch (error) {
-          toast.error('❌ Erro ao aprovar projeto');
+          const response = await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'APROVADO' });
+          
+          if (response.success) {
+            toast.success('🎉 Projeto aprovado com sucesso!', {
+              description: 'Materiais reservados do estoque. O projeto está pronto para iniciar a obra.'
+            });
+            if (onRefresh) onRefresh();
+          } else {
+            // Erro pode conter informação de items frios
+            const mensagemErro = response.error || 'Erro ao aprovar projeto';
+            
+            // Verificar se é erro de items frios
+            if (mensagemErro.includes('BLOQUEADA') || mensagemErro.includes('sem estoque')) {
+              toast.error('⚠️ Aprovação Bloqueada!', {
+                description: mensagemErro,
+                duration: 10000
+              });
+            } else {
+              toast.error('❌ Erro ao aprovar projeto', {
+                description: mensagemErro
+              });
+            }
+          }
+        } catch (error: any) {
+          const mensagemErro = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erro desconhecido';
+          
+          // Verificar se é erro de items frios
+          if (mensagemErro.includes('BLOQUEADA') || mensagemErro.includes('sem estoque')) {
+            toast.error('⚠️ Aprovação Bloqueada!', {
+              description: mensagemErro,
+              duration: 10000,
+              action: {
+                label: 'Ver Detalhes',
+                onClick: () => {
+                  alert(mensagemErro);
+                }
+              }
+            });
+          } else {
+            toast.error('❌ Erro ao aprovar projeto', {
+              description: mensagemErro
+            });
+          }
         } finally {
           setLoadingAcao(false);
         }
