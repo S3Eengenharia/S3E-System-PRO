@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { axiosApiService } from '../services/axiosApi';
@@ -62,6 +62,24 @@ interface Alocacao {
     projeto?: any;
 }
 
+interface Obra {
+    id: string;
+    nomeObra: string;
+    status: 'BACKLOG' | 'A_FAZER' | 'ANDAMENTO' | 'CONCLUIDO';
+    dataPrevistaInicio?: string;
+    dataPrevistaFim?: string;
+    dataInicioReal?: string;
+    projeto?: {
+        titulo: string;
+        cliente?: {
+            nome: string;
+        };
+    };
+    cliente?: {
+        nome: string;
+    };
+}
+
 interface GestaoObrasProps {
     toggleSidebar: () => void;
 }
@@ -72,8 +90,17 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const [activeTab, setActiveTab] = useState<TabType>('equipes');
     const [equipes, setEquipes] = useState<Equipe[]>([]);
     const [alocacoes, setAlocacoes] = useState<Alocacao[]>([]);
+    const [obras, setObras] = useState<Obra[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    
+    // Estados para filtros de data na Timeline
+    const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
+    const [filtroDataFim, setFiltroDataFim] = useState<string>('');
+    
+    // Estados para calendário
+    const [mesCalendario, setMesCalendario] = useState(new Date().getMonth());
+    const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
     
     // Estados para modal de equipe
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -134,15 +161,69 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         }
     };
 
+    // Carregar obras em andamento do backend
+    const loadObras = async () => {
+        try {
+            console.log('🔍 Carregando obras do backend...');
+            const response = await axiosApiService.get<any>('/api/obras/kanban');
+            
+            if (response.success && response.data) {
+                // Extrair todas as obras e filtrar apenas as em andamento
+                const todasObras: Obra[] = [];
+                if (response.data.ANDAMENTO) {
+                    todasObras.push(...response.data.ANDAMENTO);
+                }
+                console.log('✅ Obras em andamento carregadas:', todasObras);
+                setObras(todasObras);
+            } else {
+                console.warn('⚠️ Resposta sem obras:', response);
+                setObras([]);
+            }
+        } catch (err) {
+            console.error('❌ Erro ao carregar obras:', err);
+            setObras([]);
+        }
+    };
+
     // Carregar dados ao montar o componente
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
-            await Promise.all([loadEquipes(), loadAlocacoes()]);
+            await Promise.all([loadEquipes(), loadAlocacoes(), loadObras()]);
             setLoading(false);
         };
         loadData();
     }, []);
+
+    // Recarregar obras quando mudar de aba para calendário
+    useEffect(() => {
+        if (activeTab === 'calendario') {
+            loadObras();
+        }
+    }, [activeTab]);
+
+    // Filtrar alocações por data para Timeline (sempre executado, não condicional)
+    const alocacoesFiltradas = useMemo(() => {
+        let filtradas = alocacoes;
+        
+        if (filtroDataInicio) {
+            const dataInicio = new Date(filtroDataInicio);
+            filtradas = filtradas.filter(a => {
+                const alocacaoInicio = new Date(a.dataInicio);
+                return alocacaoInicio >= dataInicio;
+            });
+        }
+        
+        if (filtroDataFim) {
+            const dataFim = new Date(filtroDataFim);
+            filtradas = filtradas.filter(a => {
+                const alocacaoFim = new Date(a.dataFim);
+                return alocacaoFim <= dataFim;
+            });
+        }
+        
+        return filtradas;
+    }, [alocacoes, filtroDataInicio, filtroDataFim]);
 
     // Carregar eletricistas do backend
     const loadEletricistas = async () => {
@@ -280,7 +361,39 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         if (alertaValidacao) setAlertaValidacao(null);
     };
 
+    // Verificar se um eletricista já está em outra equipe
+    const isEletricistaEmOutraEquipe = (eletricistaId: string): { emOutraEquipe: boolean; nomeEquipe?: string } => {
+        // Se estiver editando uma equipe, ignorar os membros dessa equipe atual
+        const equipeAtualId = equipeToEdit?.id;
+        
+        for (const equipe of equipes) {
+            // Ignorar a equipe atual se estiver editando
+            if (equipeAtualId && equipe.id === equipeAtualId) {
+                continue;
+            }
+            
+            // Verificar se o eletricista está nesta equipe
+            const estaNaEquipe = equipe.membros?.some(membro => membro.id === eletricistaId);
+            if (estaNaEquipe && equipe.ativa) {
+                return { emOutraEquipe: true, nomeEquipe: equipe.nome };
+            }
+        }
+        
+        return { emOutraEquipe: false };
+    };
+
     const handleAddEletricista = (eletricistaId: string) => {
+        // Verificar se o eletricista já está em outra equipe
+        const { emOutraEquipe, nomeEquipe } = isEletricistaEmOutraEquipe(eletricistaId);
+        
+        if (emOutraEquipe) {
+            setAlertaValidacao({ 
+                tipo: 'erro', 
+                mensagem: `Este eletricista já faz parte da equipe "${nomeEquipe}". Um eletricista não pode estar em múltiplas equipes simultaneamente.` 
+            });
+            return;
+        }
+        
         if (!formState.membrosIds.includes(eletricistaId)) {
             setFormState(prev => ({ 
                 ...prev, 
@@ -296,6 +409,71 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             ...prev, 
             membrosIds: prev.membrosIds.filter(id => id !== membroId) 
         }));
+    };
+
+    // Funções auxiliares para o calendário
+    const irParaMesAnterior = () => {
+        if (mesCalendario === 0) {
+            setMesCalendario(11);
+            setAnoCalendario(anoCalendario - 1);
+        } else {
+            setMesCalendario(mesCalendario - 1);
+        }
+    };
+
+    const irParaHoje = () => {
+        const agora = new Date();
+        setMesCalendario(agora.getMonth());
+        setAnoCalendario(agora.getFullYear());
+    };
+
+    const irParaProximoMes = () => {
+        if (mesCalendario === 11) {
+            setMesCalendario(0);
+            setAnoCalendario(anoCalendario + 1);
+        } else {
+            setMesCalendario(mesCalendario + 1);
+        }
+    };
+
+    // Verificar se há alocações ou obras em um dia específico
+    const getEventosDoDia = (dia: number) => {
+        const hoje = new Date();
+        const dataAtual = new Date(anoCalendario, mesCalendario, dia);
+        const eventos: Array<{ tipo: 'alocacao' | 'obra'; cor: string; titulo: string }> = [];
+
+        // Verificar alocações
+        alocacoes.forEach(alocacao => {
+            const inicio = new Date(alocacao.dataInicio);
+            const fim = new Date(alocacao.dataFim);
+            if (dataAtual >= inicio && dataAtual <= fim) {
+                const cor = alocacao.status === 'EmAndamento' ? 'bg-green-500' :
+                           alocacao.status === 'Planejada' ? 'bg-blue-500' :
+                           alocacao.status === 'Concluida' ? 'bg-orange-500' : 'bg-red-500';
+                eventos.push({
+                    tipo: 'alocacao',
+                    cor,
+                    titulo: alocacao.equipe?.nome || 'Alocação'
+                });
+            }
+        });
+
+        // Verificar obras em andamento
+        obras.forEach(obra => {
+            if (obra.dataPrevistaInicio || obra.dataInicioReal) {
+                const inicio = new Date(obra.dataInicioReal || obra.dataPrevistaInicio!);
+                const fim = obra.dataPrevistaFim ? new Date(obra.dataPrevistaFim) : null;
+                if (dataAtual >= inicio && (!fim || dataAtual <= fim)) {
+                    eventos.push({
+                        tipo: 'obra',
+                        cor: 'bg-purple-500',
+                        titulo: obra.nomeObra
+                    });
+                }
+            }
+        });
+
+        return eventos;
     };
 
     if (loading) {
@@ -396,7 +574,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 </div>
             </div>
 
-            {/* Conteúdo das Tabs */}
+           {/* Conteúdo das Tabs */}
             {activeTab === 'equipes' && (
                 <div className="space-y-6">
                     {/* Estatísticas rápidas */}
@@ -531,37 +709,40 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 </div>
             )}
 
-            {activeTab === 'calendario' && (
-                <div className="space-y-6">
+            {activeTab === 'calendario' && (() => {
+                const hoje = new Date();
+                const primeiroDiaMes = new Date(anoCalendario, mesCalendario, 1);
+                const ultimoDiaMes = new Date(anoCalendario, mesCalendario + 1, 0);
+                const primeiroDiaSemana = primeiroDiaMes.getDay();
+                const diasNoMes = ultimoDiaMes.getDate();
+                const nomeMes = primeiroDiaMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+                return (
+                <div className="space-y-6" key="calendario">
                     {/* Header com Controles */}
                     <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900">Calendário de Alocações</h2>
-                                <p className="text-sm text-gray-500 mt-1">
-                                    {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                <p className="text-sm text-gray-500 mt-1 capitalize">
+                                    {nomeMes}
                                 </p>
                             </div>
                             <div className="flex gap-2">
                                 <button 
-                                    onClick={() => {
-                                        // Navegar para mês anterior
-                                        const now = new Date();
-                                        now.setMonth(now.getMonth() - 1);
-                                    }}
+                                    onClick={irParaMesAnterior}
                                     className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
                                 >
                                     ← Anterior
                                 </button>
-                                <button className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold">
+                                <button 
+                                    onClick={irParaHoje}
+                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                                >
                                     Hoje
                                 </button>
                                 <button 
-                                    onClick={() => {
-                                        // Navegar para próximo mês
-                                        const now = new Date();
-                                        now.setMonth(now.getMonth() + 1);
-                                    }}
+                                    onClick={irParaProximoMes}
                                     className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
                                 >
                                     Próximo →
@@ -585,23 +766,15 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                 
                                 {/* Dias do Mês */}
                                 <div className="grid grid-cols-7 gap-2">
-                                    {Array.from({ length: 35 }, (_, i) => {
-                                        const now = new Date();
-                                        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-                                        const startingDayOfWeek = firstDay.getDay();
-                                        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                                    {Array.from({ length: 42 }, (_, i) => {
+                                        const day = i - primeiroDiaSemana + 1;
+                                        const isCurrentMonth = day > 0 && day <= diasNoMes;
+                                        const isToday = isCurrentMonth && 
+                                                      day === hoje.getDate() && 
+                                                      mesCalendario === hoje.getMonth() && 
+                                                      anoCalendario === hoje.getFullYear();
                                         
-                                        const day = i - startingDayOfWeek + 1;
-                                        const isCurrentMonth = day > 0 && day <= daysInMonth;
-                                        const isToday = isCurrentMonth && day === now.getDate();
-                                        
-                                        // Verificar se há alocações neste dia
-                                        const hasAlocation = isCurrentMonth && alocacoes.some(a => {
-                                            const startDate = new Date(a.dataInicio);
-                                            const endDate = new Date(a.dataFim);
-                                            const currentDate = new Date(now.getFullYear(), now.getMonth(), day);
-                                            return currentDate >= startDate && currentDate <= endDate;
-                                        });
+                                        const eventos = isCurrentMonth ? getEventosDoDia(day) : [];
                                         
                                         return (
                                             <div
@@ -619,10 +792,20 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                                 }`}>
                                                     {isCurrentMonth ? day : ''}
                                                 </div>
-                                                {hasAlocation && (
-                                                    <div className="space-y-1">
-                                                        <div className="h-1.5 bg-blue-500 rounded-full"></div>
-                                                        <div className="h-1.5 bg-green-500 rounded-full"></div>
+                                                {eventos.length > 0 && (
+                                                    <div className="space-y-1 mt-1">
+                                                        {eventos.slice(0, 3).map((evento, idx) => (
+                                                            <div 
+                                                                key={idx}
+                                                                className={`h-1.5 ${evento.cor} rounded-full`}
+                                                                title={evento.titulo}
+                                                            ></div>
+                                                        ))}
+                                                        {eventos.length > 3 && (
+                                                            <div className="text-xs text-gray-500 font-semibold">
+                                                                +{eventos.length - 3}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -640,19 +823,23 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Planejada</span>
+                                        <span className="text-xs text-gray-600">Alocação Planejada</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Em Andamento</span>
+                                        <span className="text-xs text-gray-600">Alocação Em Andamento</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Concluída</span>
+                                        <span className="text-xs text-gray-600">Alocação Concluída</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Cancelada</span>
+                                        <span className="text-xs text-gray-600">Alocação Cancelada</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+                                        <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                        <span className="text-xs text-gray-600 font-semibold">Obra em Andamento</span>
                                     </div>
                                 </div>
                             </div>
@@ -706,10 +893,36 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Obras em Andamento */}
+                            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-soft">
+                                <h3 className="font-bold text-gray-900 mb-3 text-sm">Obras em Andamento</h3>
+                                <div className="space-y-2">
+                                    {obras.slice(0, 5).map((obra) => (
+                                        <div key={obra.id} className="p-2 rounded-lg bg-purple-50 border border-purple-200">
+                                            <p className="text-xs font-semibold text-purple-800">
+                                                {obra.nomeObra}
+                                            </p>
+                                            <p className="text-xs text-purple-600">
+                                                {obra.projeto?.titulo || obra.cliente?.nome || 'Sem projeto'}
+                                            </p>
+                                            {obra.dataPrevistaInicio && (
+                                                <p className="text-xs text-purple-500 mt-1">
+                                                    Início: {new Date(obra.dataPrevistaInicio).toLocaleDateString('pt-BR')}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {obras.length === 0 && (
+                                        <p className="text-xs text-gray-500 text-center py-4">Nenhuma obra em andamento</p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {activeTab === 'gantt' && (
                 <div className="space-y-6">
@@ -721,11 +934,67 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                 <p className="text-sm text-gray-500 mt-1">Visualização de alocações das equipes ao longo do tempo</p>
                             </div>
                             <div className="flex gap-2">
-                                <button className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold">
+                                <button 
+                                    onClick={() => {
+                                        loadAlocacoes();
+                                        toast.success('Timeline atualizada!');
+                                    }}
+                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                                >
                                     ↻ Atualizar
                                 </button>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Filtros de Data */}
+                    <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Filtros de Período</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data Início
+                                </label>
+                                <input
+                                    type="date"
+                                    value={filtroDataInicio}
+                                    onChange={(e) => setFiltroDataInicio(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data Fim
+                                </label>
+                                <input
+                                    type="date"
+                                    value={filtroDataFim}
+                                    onChange={(e) => setFiltroDataFim(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <button
+                                    onClick={() => {
+                                        setFiltroDataInicio('');
+                                        setFiltroDataFim('');
+                                        toast.info('Filtros removidos');
+                                    }}
+                                    className="w-full px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
+                                >
+                                    Limpar Filtros
+                                </button>
+                            </div>
+                        </div>
+                        {(filtroDataInicio || filtroDataFim) && (
+                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                                <p className="text-sm text-blue-800">
+                                    <strong>Mostrando:</strong> {alocacoesFiltradas.length} de {alocacoes.length} alocações
+                                    {filtroDataInicio && ` a partir de ${new Date(filtroDataInicio).toLocaleDateString('pt-BR')}`}
+                                    {filtroDataFim && ` até ${new Date(filtroDataFim).toLocaleDateString('pt-BR')}`}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Estatísticas */}
@@ -819,7 +1088,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
 
                                 {/* Linhas das Equipes */}
                                 {equipes.map((equipe) => {
-                                    const equipeAlocacoes = alocacoes.filter(a => a.equipeId === equipe.id);
+                                    const equipeAlocacoes = alocacoesFiltradas.filter(a => a.equipeId === equipe.id);
                                     
                                     return (
                                         <div key={equipe.id} className="flex items-center gap-4 group">
@@ -1012,34 +1281,58 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
                                         {eletricistas.map((eletricista) => {
                                             const isSelected = formState.membrosIds.includes(eletricista.id);
+                                            const { emOutraEquipe, nomeEquipe } = isEletricistaEmOutraEquipe(eletricista.id);
+                                            const isDisabled = emOutraEquipe && !isSelected;
+                                            
                                             return (
                                                 <button
                                                     key={eletricista.id}
                                                     type="button"
                                                     onClick={() => isSelected ? handleRemoveMembroId(eletricista.id) : handleAddEletricista(eletricista.id)}
+                                                    disabled={isDisabled}
                                                     className={`p-3 rounded-xl border-2 transition-all text-left ${
                                                         isSelected 
                                                             ? 'border-blue-500 bg-blue-50' 
+                                                            : isDisabled
+                                                            ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60'
                                                             : 'border-gray-200 bg-white hover:border-blue-300'
                                                     }`}
+                                                    title={isDisabled ? `Este eletricista já faz parte da equipe "${nomeEquipe}"` : ''}
                                                 >
                                                     <div className="flex items-start gap-2">
                                                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                                            isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                                                            isSelected ? 'bg-blue-600 border-blue-600' : isDisabled ? 'border-gray-300 bg-gray-200' : 'border-gray-300'
                                                         }`}>
                                                             {isSelected && (
                                                                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                                                 </svg>
                                                             )}
+                                                            {isDisabled && (
+                                                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                </svg>
+                                                            )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm font-semibold ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                                                                {eletricista.name}
-                                                            </p>
-                                                            <p className={`text-xs ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className={`text-sm font-semibold ${isSelected ? 'text-blue-900' : isDisabled ? 'text-gray-500' : 'text-gray-900'}`}>
+                                                                    {eletricista.name}
+                                                                </p>
+                                                                {isDisabled && (
+                                                                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+                                                                        Em outra equipe
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className={`text-xs ${isSelected ? 'text-blue-700' : isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>
                                                                 {eletricista.email}
                                                             </p>
+                                                            {isDisabled && nomeEquipe && (
+                                                                <p className="text-xs text-orange-600 mt-1 font-medium">
+                                                                    Equipe: {nomeEquipe}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </button>

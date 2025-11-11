@@ -980,7 +980,17 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="">Selecione o responsável</option>
+                                        {usuarios.map(usuario => (
+                                            <option key={usuario.id} value={usuario.id}>
+                                                {usuario.nome} - {usuario.role}
+                                            </option>
+                                        ))}
                                     </select>
+                                    {usuarios.length === 0 && (
+                                        <p className="text-xs text-orange-600 mt-1">
+                                            ⚠️ Nenhum usuário técnico encontrado.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>

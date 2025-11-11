@@ -1,8 +1,6 @@
 import { PrismaClient, ProjetoStatus } from '@prisma/client';
-import { AlocacaoService } from './alocacao.service.js';
 
 const prisma = new PrismaClient();
-const alocacaoService = new AlocacaoService();
 
 export class ProjetosService {
   /**
@@ -79,12 +77,114 @@ export class ProjetosService {
 
   /** Atualiza status do projeto; ao mudar para EXECUCAO, cria Obra/Alocação e gera alerta lógico */
   async atualizarStatus(projetoId: string, novoStatus: ProjetoStatus) {
-    const projeto = await prisma.projeto.findUnique({ where: { id: projetoId } });
+    const projeto = await prisma.projeto.findUnique({ 
+      where: { id: projetoId },
+      include: {
+        orcamento: {
+          include: {
+            items: {
+              include: {
+                material: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
     if (!projeto) throw new Error('Projeto não encontrado');
 
     const updateData: any = { status: novoStatus };
     if (novoStatus === 'CONCLUIDO') {
       updateData.dataFim = new Date();
+    }
+
+    // 🔍 SE MUDAR PARA APROVADO, VERIFICAR ESTOQUE E DAR BAIXA
+    if (novoStatus === 'APROVADO' && projeto.status !== 'APROVADO') {
+      console.log('🔍 Validando aprovação do projeto - Verificando estoque...');
+      
+      if (!projeto.orcamento) {
+        throw new Error('Projeto sem orçamento vinculado');
+      }
+
+      const itemsFrios: any[] = [];
+      const itemsReservados: any[] = [];
+
+      // Verificar estoque de todos os items
+      for (const item of projeto.orcamento.items) {
+        if (item.tipo === 'MATERIAL' && item.materialId) {
+          const material = await prisma.material.findUnique({
+            where: { id: item.materialId }
+          });
+
+          if (!material) {
+          itemsFrios.push({
+            nome: (item as any).nome || 'Material não identificado',
+            quantidade: item.quantidade,
+            motivo: 'Material não encontrado no catálogo'
+          });
+          } else if (material.estoque < item.quantidade) {
+            itemsFrios.push({
+              materialId: material.id,
+              nome: material.nome,
+              sku: material.sku,
+              quantidadeNecessaria: item.quantidade,
+              quantidadeDisponivel: material.estoque,
+              quantidadeFaltante: item.quantidade - material.estoque
+            });
+          } else {
+            itemsReservados.push({
+              materialId: material.id,
+              nome: material.nome,
+              quantidade: item.quantidade,
+              estoqueAtual: material.estoque
+            });
+          }
+        }
+      }
+
+      // ❌ BLOQUEAR APROVAÇÃO SE TIVER ITEMS FRIOS
+      if (itemsFrios.length > 0) {
+        console.log(`❄️ BLOQUEADO: ${itemsFrios.length} item(ns) sem estoque`);
+        const listaItems = itemsFrios.map(i => 
+          `• ${i.nome}${i.sku ? ` (${i.sku})` : ''} - Faltam: ${i.quantidadeFaltante || i.quantidadeNecessaria} unidades`
+        ).join('\n');
+        
+        throw new Error(
+          `⚠️ APROVAÇÃO BLOQUEADA!\n\n` +
+          `${itemsFrios.length} item(ns) sem estoque suficiente:\n${listaItems}\n\n` +
+          `📦 Realize a compra dos materiais antes de aprovar o projeto.`
+        );
+      }
+
+      // ✅ DAR BAIXA NO ESTOQUE (Reservar materiais)
+      console.log(`✅ Todos os ${itemsReservados.length} items disponíveis. Dando baixa no estoque...`);
+      
+      for (const item of itemsReservados) {
+        await prisma.material.update({
+          where: { id: item.materialId },
+          data: {
+            estoque: {
+              decrement: item.quantidade
+            }
+          }
+        });
+
+        // Registrar movimentação de estoque
+        await prisma.movimentacaoEstoque.create({
+          data: {
+            materialId: item.materialId,
+            tipo: 'SAIDA',
+            quantidade: item.quantidade,
+            motivo: `Reserva para projeto: ${projeto.titulo}`,
+            referencia: projeto.id
+          }
+        });
+
+        console.log(`✅ Baixa realizada: ${item.nome} - ${item.quantidade} unidades`);
+      }
+
+      console.log(`✅ Estoque atualizado! ${itemsReservados.length} materiais reservados.`);
     }
 
     const atualizado = await prisma.projeto.update({ where: { id: projetoId }, data: updateData });

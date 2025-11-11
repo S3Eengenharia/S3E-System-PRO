@@ -16,9 +16,6 @@
     "prisma:studio": "npx prisma studio",
     "prisma:generate": "npx prisma generate"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "keywords": [
     "api",
     "express",
