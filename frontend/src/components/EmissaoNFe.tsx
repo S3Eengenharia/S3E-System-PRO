@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { empresaFiscalService, type EmpresaFiscal } from '../services/empresaFiscalService';
 import { nfeFiscalService } from '../services/nfeFiscalService';
+import { axiosApiService } from '../services/axiosApi';
+import { toast } from 'sonner';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -42,11 +54,16 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     
     // Estados para Emissão
     const [step, setStep] = useState(1);
-    const [projetoSelecionado, setProjetoSelecionado] = useState('');
+    const [vendaSelecionada, setVendaSelecionada] = useState('');
+    const [vendas, setVendas] = useState<any[]>([]);
+    const [loadingVendas, setLoadingVendas] = useState(false);
+    const [empresaEmissoraId, setEmpresaEmissoraId] = useState('');
+    const [ambiente, setAmbiente] = useState<'1' | '2'>('2'); // 1 = Produção, 2 = Homologação
     const [tipoNF, setTipoNF] = useState<'PRODUTO' | 'SERVICO'>('PRODUTO');
     const [naturezaOperacao, setNaturezaOperacao] = useState('Venda de produção do estabelecimento');
     const [cfop, setCfop] = useState('5101');
     const [serie, setSerie] = useState('1');
+    const [emitindo, setEmitindo] = useState(false);
     
     // Estados para Configuração de Empresas
     const [empresas, setEmpresas] = useState<EmpresaFiscal[]>([]);
@@ -87,10 +104,18 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     const [empresaCorrecaoId, setEmpresaCorrecaoId] = useState('');
     const [corrigindo, setCorrigindo] = useState(false);
     const [resultadoCorrecao, setResultadoCorrecao] = useState<any>(null);
+    
+    // AlertDialog para exclusão de empresa
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [empresaParaExcluir, setEmpresaParaExcluir] = useState<string | null>(null);
 
     // Carregar empresas ao montar componente ou trocar de seção
     useEffect(() => {
         if (activeSection === 'configurar' || activeSection === 'operacoes') {
+            loadEmpresas();
+        }
+        if (activeSection === 'emitir') {
+            loadVendas();
             loadEmpresas();
         }
     }, [activeSection]);
@@ -101,20 +126,115 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
             const response = await empresaFiscalService.listar();
             if (response.success && response.data) {
                 setEmpresas(response.data);
+                // Selecionar primeira empresa ativa por padrão
+                const empresaAtiva = response.data.find(e => e.ativo);
+                if (empresaAtiva) {
+                    setEmpresaEmissoraId(empresaAtiva.id);
+                }
             }
         } catch (error) {
             console.error('Erro ao carregar empresas:', error);
-            alert('❌ Erro ao carregar empresas fiscais');
+            toast.error('❌ Erro ao carregar empresas fiscais');
         } finally {
             setLoadingEmpresas(false);
         }
     };
     
-    // Mock de projetos aprovados
-    const projetosAprovados = [
-        { id: '1', titulo: 'Subestação 150kVA - Empresa A', cliente: 'Empresa A', valor: 85000 },
-        { id: '2', titulo: 'Quadro de Medição - Empresa B', cliente: 'Empresa B', valor: 12500 }
-    ];
+    const loadVendas = async () => {
+        try {
+            setLoadingVendas(true);
+            console.log('📥 Carregando vendas disponíveis para faturamento...');
+            
+            // Buscar vendas com status Ativa ou Pendente que ainda não têm NF-e
+            const response = await axiosApiService.get<any>('/api/vendas', {
+                status: 'Ativa',
+                limit: 50
+            });
+            
+            if (response.success && response.data) {
+                const vendasDisponiveis = response.data.vendas || response.data || [];
+                setVendas(vendasDisponiveis);
+                console.log(`✅ ${vendasDisponiveis.length} vendas disponíveis para faturamento`);
+            } else {
+                console.warn('⚠️ Erro ao carregar vendas:', response.error);
+                setVendas([]);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar vendas:', error);
+            toast.error('❌ Erro ao carregar vendas para faturamento');
+            setVendas([]);
+        } finally {
+            setLoadingVendas(false);
+        }
+    };
+
+    // Handler para Emissão de NF-e
+    const handleEmitirNFe = async () => {
+        if (!vendaSelecionada || !empresaEmissoraId) {
+            toast.error('❌ Dados incompletos', {
+                description: 'Selecione a venda e a empresa emissora.'
+            });
+            return;
+        }
+
+        try {
+            setEmitindo(true);
+            console.log('📤 Iniciando emissão de NF-e...');
+            console.log('   Venda:', vendaSelecionada);
+            console.log('   Empresa:', empresaEmissoraId);
+            console.log('   Ambiente:', ambiente === '1' ? 'Produção' : 'Homologação');
+
+            const response = await axiosApiService.post<any>('/api/nfe/emitir', {
+                pedidoId: vendaSelecionada, // Backend usa pedidoId
+                empresaId: empresaEmissoraId,
+                ambiente: ambiente,
+                tipo: tipoNF,
+                serie: serie,
+                cfop: cfop,
+                naturezaOperacao: naturezaOperacao
+            });
+
+            if (response.success && response.data) {
+                const resultado = response.data;
+                
+                toast.success('✅ NF-e emitida com sucesso!', {
+                    description: `Chave de Acesso: ${resultado.chaveAcesso?.substring(0, 20)}...`,
+                    duration: 5000
+                });
+
+                console.log('✅ NF-e emitida:', resultado);
+
+                // Mostrar detalhes da emissão
+                if (resultado.chaveAcesso) {
+                    setTimeout(() => {
+                        toast.success('📄 Protocolo SEFAZ', {
+                            description: `Protocolo: ${resultado.protocolo}`,
+                            duration: 5000
+                        });
+                    }, 1000);
+                }
+
+                // Resetar formulário
+                setTimeout(() => {
+                    setStep(1);
+                    setVendaSelecionada('');
+                    loadVendas(); // Recarregar vendas
+                }, 2000);
+
+            } else {
+                toast.error('❌ Erro ao emitir NF-e', {
+                    description: response.error || response.message || 'Erro desconhecido.'
+                });
+            }
+        } catch (error: any) {
+            console.error('❌ Erro ao emitir NF-e:', error);
+            toast.error('❌ Falha na emissão da NF-e', {
+                description: error.response?.data?.message || error.message || 'Erro de conexão com o servidor.'
+            });
+        } finally {
+            setEmitindo(false);
+        }
+    };
 
     // Handlers para Configuração de Empresas
     const handleOpenModalEmpresa = () => {
@@ -179,7 +299,9 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
         try {
             // Validações
             if (!empresaForm.cnpj || !empresaForm.razaoSocial || !empresaForm.inscricaoEstadual) {
-                alert('❌ Preencha todos os campos obrigatórios');
+                toast.error('❌ Campos obrigatórios não preenchidos', {
+                    description: 'Preencha CNPJ, Razão Social e Inscrição Estadual.'
+                });
                 return;
             }
 
@@ -213,45 +335,66 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                 // Atualizar empresa existente
                 const response = await empresaFiscalService.atualizar(editandoEmpresaId, dataToSave);
                 if (response.success) {
-                    alert('✅ Empresa atualizada com sucesso!');
+                    toast.success('✅ Empresa atualizada com sucesso!', {
+                        description: `${empresaForm.nomeFantasia || empresaForm.razaoSocial}`
+                    });
                     await loadEmpresas();
                     handleCloseModalEmpresa();
                 } else {
-                    alert(`❌ ${response.error || 'Erro ao atualizar empresa'}`);
+                    toast.error('❌ Erro ao atualizar empresa', {
+                        description: response.error || 'Tente novamente.'
+                    });
                 }
             } else {
                 // Criar nova empresa
                 const response = await empresaFiscalService.criar(dataToSave);
                 if (response.success) {
-                    alert('✅ Empresa configurada com sucesso!');
+                    toast.success('✅ Empresa configurada com sucesso!', {
+                        description: `${empresaForm.nomeFantasia || empresaForm.razaoSocial} cadastrada.`
+                    });
                     await loadEmpresas();
                     handleCloseModalEmpresa();
                 } else {
-                    alert(`❌ ${response.error || 'Erro ao criar empresa'}`);
+                    toast.error('❌ Erro ao criar empresa', {
+                        description: response.error || 'Tente novamente.'
+                    });
                 }
             }
         } catch (error) {
             console.error('Erro ao salvar empresa:', error);
-            alert('❌ Erro ao salvar empresa fiscal');
+            toast.error('❌ Erro ao salvar empresa fiscal', {
+                description: 'Erro de conexão com o servidor.'
+            });
         } finally {
             setSalvandoEmpresa(false);
         }
     };
 
-    const handleDeleteEmpresa = async (id: string) => {
-        if (confirm('Deseja realmente excluir esta configuração fiscal?')) {
-            try {
-                const response = await empresaFiscalService.deletar(id);
-                if (response.success) {
-                    alert('✅ Empresa excluída com sucesso!');
-                    await loadEmpresas();
-                } else {
-                    alert(`❌ ${response.error || 'Erro ao excluir empresa'}`);
-                }
-            } catch (error) {
-                console.error('Erro ao excluir empresa:', error);
-                alert('❌ Erro ao excluir empresa fiscal');
+    const handleOpenDeleteDialog = (id: string) => {
+        setEmpresaParaExcluir(id);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleDeleteEmpresa = async () => {
+        if (!empresaParaExcluir) return;
+
+        try {
+            const response = await empresaFiscalService.deletar(empresaParaExcluir);
+            if (response.success) {
+                toast.success('✅ Empresa excluída com sucesso!');
+                await loadEmpresas();
+                setIsDeleteDialogOpen(false);
+                setEmpresaParaExcluir(null);
+            } else {
+                toast.error('❌ Erro ao excluir empresa', {
+                    description: response.error || 'Tente novamente.'
+                });
             }
+        } catch (error) {
+            console.error('Erro ao excluir empresa:', error);
+            toast.error('❌ Erro ao excluir empresa fiscal', {
+                description: 'Erro de conexão com o servidor.'
+            });
         }
     };
 
@@ -265,12 +408,16 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     const handleCancelarNFe = async () => {
         try {
             if (!chaveAcessoCancelamento || !justificativaCancelamento || !empresaCancelamentoId) {
-                alert('❌ Preencha todos os campos');
+                toast.error('❌ Campos obrigatórios não preenchidos', {
+                    description: 'Preencha chave de acesso, justificativa e empresa.'
+                });
                 return;
             }
 
             if (justificativaCancelamento.length < 15) {
-                alert('❌ A justificativa deve ter pelo menos 15 caracteres');
+                toast.error('❌ Justificativa muito curta', {
+                    description: 'A justificativa deve ter pelo menos 15 caracteres.'
+                });
                 return;
             }
 
@@ -285,15 +432,21 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
 
             if (response.success) {
                 setResultadoCancelamento(response.data);
-                alert('✅ NF-e cancelada com sucesso!');
+                toast.success('✅ NF-e cancelada com sucesso!', {
+                    description: `Protocolo: ${response.data?.protocolo || 'N/A'}`
+                });
                 setChaveAcessoCancelamento('');
                 setJustificativaCancelamento('');
             } else {
-                alert(`❌ ${response.error || 'Erro ao cancelar NF-e'}`);
+                toast.error('❌ Erro ao cancelar NF-e', {
+                    description: response.error || 'Erro ao processar cancelamento.'
+                });
             }
         } catch (error: any) {
             console.error('Erro ao cancelar NF-e:', error);
-            alert(`❌ Erro: ${error.response?.data?.message || error.message}`);
+            toast.error('❌ Falha no cancelamento da NF-e', {
+                description: error.response?.data?.message || error.message || 'Erro de conexão.'
+            });
         } finally {
             setCancelando(false);
         }
@@ -302,12 +455,16 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
     const handleCorrigirNFe = async () => {
         try {
             if (!chaveAcessoCorrecao || !textoCorrecao || !empresaCorrecaoId) {
-                alert('❌ Preencha todos os campos');
+                toast.error('❌ Campos obrigatórios não preenchidos', {
+                    description: 'Preencha chave de acesso, texto da correção e empresa.'
+                });
                 return;
             }
 
             if (textoCorrecao.length < 15) {
-                alert('❌ O texto da correção deve ter pelo menos 15 caracteres');
+                toast.error('❌ Texto da correção muito curto', {
+                    description: 'O texto deve ter pelo menos 15 caracteres.'
+                });
                 return;
             }
 
@@ -322,15 +479,21 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
 
             if (response.success) {
                 setResultadoCorrecao(response.data);
-                alert('✅ Carta de Correção enviada com sucesso!');
+                toast.success('✅ Carta de Correção enviada com sucesso!', {
+                    description: `Protocolo: ${response.data?.protocolo || 'N/A'}`
+                });
                 setChaveAcessoCorrecao('');
                 setTextoCorrecao('');
             } else {
-                alert(`❌ ${response.error || 'Erro ao enviar CC-e'}`);
+                toast.error('❌ Erro ao enviar Carta de Correção', {
+                    description: response.error || 'Erro ao processar CC-e.'
+                });
             }
         } catch (error: any) {
             console.error('Erro ao enviar CC-e:', error);
-            alert(`❌ Erro: ${error.response?.data?.message || error.message}`);
+            toast.error('❌ Falha no envio da CC-e', {
+                description: error.response?.data?.message || error.message || 'Erro de conexão.'
+            });
         } finally {
             setCorrigindo(false);
         }
@@ -416,49 +579,134 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                             ))}
                         </div>
                         <div className="flex justify-between mt-2">
-                            <span className="text-xs font-medium text-gray-600">Selecionar Projeto</span>
+                            <span className="text-xs font-medium text-gray-600">Selecionar Venda</span>
                             <span className="text-xs font-medium text-gray-600">Dados Fiscais</span>
                             <span className="text-xs font-medium text-gray-600">Revisão</span>
                         </div>
                     </div>
 
                 <div className="p-6">
-                    {/* Step 1: Selecionar Projeto */}
+                    {/* Step 1: Selecionar Venda e Ambiente */}
                     {step === 1 && (
                         <div className="space-y-6">
-                            <h2 className="text-xl font-bold text-gray-800">Selecione o Projeto para Faturamento</h2>
-                            <div className="space-y-3">
-                                {projetosAprovados.map(projeto => (
-                                    <div
-                                        key={projeto.id}
-                                        onClick={() => setProjetoSelecionado(projeto.id)}
-                                        className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                                            projetoSelecionado === projeto.id
-                                                ? 'border-brand-blue bg-blue-50'
-                                                : 'border-gray-200 hover:border-blue-300'
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-bold text-gray-800">Selecione a Venda para Faturamento</h2>
+                                
+                                {/* Toggle Ambiente */}
+                                <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                                    <span className="text-sm font-medium text-gray-700">Ambiente:</span>
+                                    <button
+                                        onClick={() => setAmbiente('2')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                            ambiente === '2'
+                                                ? 'bg-yellow-500 text-white shadow-md'
+                                                : 'bg-white text-gray-600 hover:bg-gray-100'
                                         }`}
                                     >
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <h3 className="font-semibold text-gray-900">{projeto.titulo}</h3>
-                                                <p className="text-sm text-gray-600">Cliente: {projeto.cliente}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-xl font-bold text-green-600">
-                                                    R$ {projeto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                </p>
+                                        🧪 Homologação
+                                    </button>
+                                    <button
+                                        onClick={() => setAmbiente('1')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                            ambiente === '1'
+                                                ? 'bg-green-600 text-white shadow-md'
+                                                : 'bg-white text-gray-600 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        🚀 Produção
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Alerta de Ambiente */}
+                            {ambiente === '1' && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <p className="text-sm font-semibold text-red-800">
+                                            ATENÇÃO: Emissão em PRODUÇÃO. NF-e será enviada à SEFAZ oficial.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            {ambiente === '2' && (
+                                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <p className="text-sm font-semibold text-yellow-800">
+                                            Ambiente de TESTES. NF-e será enviada para homologação da SEFAZ.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {loadingVendas ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                                    <p className="text-gray-600">Carregando vendas disponíveis...</p>
+                                </div>
+                            ) : vendas.length === 0 ? (
+                                <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                                    <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <p className="text-gray-500 font-medium">Nenhuma venda disponível para faturamento</p>
+                                    <p className="text-sm text-gray-400 mt-1">Realize uma venda primeiro</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {vendas.map(venda => (
+                                        <div
+                                            key={venda.id}
+                                            onClick={() => setVendaSelecionada(venda.id)}
+                                            className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                                                vendaSelecionada === venda.id
+                                                    ? 'border-green-500 bg-green-50 shadow-md'
+                                                    : 'border-gray-200 hover:border-green-300 hover:shadow-sm'
+                                            }`}
+                                        >
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded">
+                                                            {venda.numeroVenda}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500">
+                                                            {new Date(venda.dataVenda).toLocaleDateString('pt-BR')}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="font-semibold text-gray-900">
+                                                        {venda.cliente?.nome || 'Cliente não informado'}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-600">
+                                                        {venda.formaPagamento} - {venda.parcelas}x parcelas
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xl font-bold text-green-600">
+                                                        R$ {venda.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </p>
+                                                    <span className="inline-block mt-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">
+                                                        {venda.status}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
+                            
                             <div className="flex justify-end">
                                 <button
                                     onClick={() => setStep(2)}
-                                    disabled={!projetoSelecionado}
-                                    className="px-8 py-3 bg-brand-blue text-white font-semibold rounded-lg hover:bg-brand-blue/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={!vendaSelecionada}
+                                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all"
                                 >
-                                    Próximo
+                                    Próximo →
                                 </button>
                             </div>
                         </div>
@@ -470,12 +718,35 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                             <h2 className="text-xl font-bold text-gray-800">Dados Fiscais da NF-e</h2>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Empresa Emissora *
+                                    </label>
+                                    <select
+                                        value={empresaEmissoraId}
+                                        onChange={(e) => setEmpresaEmissoraId(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white"
+                                    >
+                                        <option value="">Selecione a empresa emissora</option>
+                                        {empresas.filter(e => e.ativo).map(emp => (
+                                            <option key={emp.id} value={emp.id}>
+                                                {emp.nomeFantasia || emp.razaoSocial} - {emp.cnpj}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {!empresaEmissoraId && (
+                                        <p className="text-xs text-red-600 mt-1">
+                                            ⚠️ Selecione a empresa que emitirá a nota fiscal
+                                        </p>
+                                    )}
+                                </div>
+
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de NF-e *</label>
                                     <select
                                         value={tipoNF}
                                         onChange={(e) => setTipoNF(e.target.value as 'PRODUTO' | 'SERVICO')}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue"
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                                     >
                                         <option value="PRODUTO">NF-e de Produto</option>
                                         <option value="SERVICO">NF-e de Serviço</option>
@@ -489,7 +760,7 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         value={serie}
                                         onChange={(e) => setSerie(e.target.value)}
                                         placeholder="1"
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue"
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                                     />
                                 </div>
 
@@ -500,8 +771,11 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         value={cfop}
                                         onChange={(e) => setCfop(e.target.value)}
                                         placeholder="5101"
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue"
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                                     />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        5101 - Venda de produção dentro do estado
+                                    </p>
                                 </div>
 
                                 <div>
@@ -510,16 +784,21 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         type="text"
                                         value={naturezaOperacao}
                                         onChange={(e) => setNaturezaOperacao(e.target.value)}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue"
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                                     />
                                 </div>
                             </div>
 
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <p className="text-sm text-blue-800">
-                                    <strong>Nota:</strong> Certifique-se de que os dados fiscais estão corretos antes de prosseguir.
-                                    A emissão da NF-e será enviada para a SEFAZ após a confirmação.
-                                </p>
+                            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p className="text-sm text-blue-800">
+                                        <strong>Nota:</strong> Certifique-se de que os dados fiscais estão corretos antes de prosseguir.
+                                        A emissão da NF-e será enviada para a SEFAZ após a confirmação.
+                                    </p>
+                                </div>
                             </div>
 
                             <div className="flex justify-between">
@@ -527,13 +806,14 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                     onClick={() => setStep(1)}
                                     className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50"
                                 >
-                                    Voltar
+                                    ← Voltar
                                 </button>
                                 <button
                                     onClick={() => setStep(3)}
-                                    className="px-8 py-3 bg-brand-blue text-white font-semibold rounded-lg hover:bg-brand-blue/90"
+                                    disabled={!empresaEmissoraId}
+                                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all"
                                 >
-                                    Próximo
+                                    Próximo →
                                 </button>
                             </div>
                         </div>
@@ -557,6 +837,24 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
 
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
+                                        <p className="text-gray-600">Venda:</p>
+                                        <p className="font-semibold text-gray-900">
+                                            {vendas.find(v => v.id === vendaSelecionada)?.numeroVenda || '-'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-600">Ambiente:</p>
+                                        <p className={`font-semibold ${ambiente === '1' ? 'text-green-700' : 'text-yellow-700'}`}>
+                                            {ambiente === '1' ? '🚀 Produção' : '🧪 Homologação'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-600">Empresa Emissora:</p>
+                                        <p className="font-semibold text-gray-900">
+                                            {empresas.find(e => e.id === empresaEmissoraId)?.nomeFantasia || '-'}
+                                        </p>
+                                    </div>
+                                    <div>
                                         <p className="text-gray-600">Tipo:</p>
                                         <p className="font-semibold text-gray-900">{tipoNF}</p>
                                     </div>
@@ -564,25 +862,66 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                         <p className="text-gray-600">CFOP:</p>
                                         <p className="font-semibold text-gray-900">{cfop}</p>
                                     </div>
+                                    <div>
+                                        <p className="text-gray-600">Série:</p>
+                                        <p className="font-semibold text-gray-900">{serie}</p>
+                                    </div>
                                     <div className="col-span-2">
                                         <p className="text-gray-600">Natureza da Operação:</p>
                                         <p className="font-semibold text-gray-900">{naturezaOperacao}</p>
                                     </div>
+                                    <div className="col-span-2">
+                                        <p className="text-gray-600">Valor Total:</p>
+                                        <p className="font-bold text-green-700 text-lg">
+                                            R$ {vendas.find(v => v.id === vendaSelecionada)?.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
+
+                            {ambiente === '1' && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <p className="text-sm font-semibold text-red-800">
+                                            ⚠️ ATENÇÃO: Esta NF-e será emitida em PRODUÇÃO e enviada à SEFAZ oficial. A ação não poderá ser desfeita facilmente.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex justify-between">
                                 <button
                                     onClick={() => setStep(2)}
-                                    className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50"
+                                    disabled={emitindo}
+                                    className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50"
                                 >
-                                    Voltar
+                                    ← Voltar
                                 </button>
                                 <button
-                                    onClick={() => alert('Funcionalidade de emissão será integrada com API da SEFAZ/Emissor externo')}
-                                    className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold rounded-lg hover:from-green-700 hover:to-green-800 shadow-lg"
+                                    onClick={handleEmitirNFe}
+                                    disabled={emitindo}
+                                    className={`px-8 py-3 bg-gradient-to-r ${
+                                        ambiente === '1' 
+                                            ? 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' 
+                                            : 'from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700'
+                                    } text-white font-semibold rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2`}
                                 >
-                                    Emitir NF-e
+                                    {emitindo ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                            Emitindo NF-e...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Emitir NF-e
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -888,7 +1227,7 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                                                 Editar
                                             </button>
                                             <button
-                                                onClick={() => handleDeleteEmpresa(empresa.id)}
+                                                onClick={() => handleOpenDeleteDialog(empresa.id)}
                                                 className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
                                             >
                                                 <TrashIcon className="w-4 h-4" />
@@ -1254,6 +1593,33 @@ const EmissaoNFe: React.FC<EmissaoNFeProps> = ({ toggleSidebar }) => {
                     )}
                 </div>
             )}
+
+            {/* AlertDialog para Exclusão de Empresa */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir Configuração Fiscal</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Deseja realmente excluir esta configuração fiscal?
+                            <br />
+                            <span className="text-sm font-semibold text-red-600 mt-2 block">
+                                ⚠️ Esta ação não pode ser desfeita e removerá o certificado digital associado.
+                            </span>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={handleDeleteEmpresa}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            Excluir Empresa
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

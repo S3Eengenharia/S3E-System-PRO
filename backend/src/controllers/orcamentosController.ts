@@ -213,20 +213,36 @@ export const updateOrcamentoStatus = async (req: Request, res: Response): Promis
       return;
     }
 
-    // Se aprovado, criar projeto automaticamente
+    // Se aprovado, criar ou atualizar projeto automaticamente
     let projeto = null;
     if (status === 'Aprovado' && orcamento.status !== 'Aprovado') {
-      projeto = await prisma.projeto.create({
-        data: {
-          orcamentoId: id,
-          clienteId: orcamento.clienteId,
-          titulo: orcamento.titulo,
-          descricao: orcamento.descricao,
-          valorTotal: orcamento.precoVenda,
-          dataInicio: new Date(),
-          status: 'EmAndamento'
-        }
+      // Verificar se já existe um projeto vinculado
+      const projetoExistente = await prisma.projeto.findUnique({
+        where: { orcamentoId: id }
       });
+
+      if (projetoExistente) {
+        // Se já existe, apenas atualizar o status
+        console.log(`📋 Projeto existente encontrado: ${projetoExistente.id}. Atualizando status para APROVADO`);
+        projeto = await prisma.projeto.update({
+          where: { id: projetoExistente.id },
+          data: { status: 'APROVADO' }
+        });
+      } else {
+        // Se não existe, criar novo projeto
+        console.log(`📋 Criando novo projeto para orçamento ${id}`);
+        projeto = await prisma.projeto.create({
+          data: {
+            orcamentoId: id,
+            clienteId: orcamento.clienteId,
+            titulo: orcamento.titulo,
+            descricao: orcamento.descricao,
+            valorTotal: orcamento.precoVenda,
+            dataInicio: new Date(),
+            status: 'APROVADO' // Projeto começa como APROVADO (ainda não em execução)
+          }
+        });
+      }
     }
 
     const orcamentoAtualizado = await prisma.orcamento.update({
@@ -274,6 +290,35 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    // Verificar se já existe um projeto vinculado
+    const projetoExistente = await prisma.projeto.findUnique({
+      where: { orcamentoId: id }
+    });
+
+    let projeto = null;
+    if (projetoExistente) {
+      // Se já existe, atualizar o status para APROVADO
+      console.log(`📋 Atualizando projeto existente ${projetoExistente.id} para APROVADO`);
+      projeto = await prisma.projeto.update({
+        where: { id: projetoExistente.id },
+        data: { status: 'APROVADO' }
+      });
+    } else {
+      // Se não existe, criar novo projeto
+      console.log(`📋 Criando novo projeto para orçamento ${id}`);
+      projeto = await prisma.projeto.create({
+        data: {
+          orcamentoId: id,
+          clienteId: orcamento.clienteId,
+          titulo: orcamento.titulo,
+          descricao: orcamento.descricao,
+          valorTotal: orcamento.precoVenda,
+          dataInicio: new Date(),
+          status: 'APROVADO'
+        }
+      });
+    }
+
     const orcamentoAtualizado = await prisma.orcamento.update({
       where: { id },
       data: {
@@ -284,14 +329,16 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
         cliente: {
           select: { id: true, nome: true }
         },
-        items: true
+        items: true,
+        projeto: true
       }
     });
 
     res.json({
       success: true,
       data: orcamentoAtualizado,
-      message: 'Orçamento aprovado com sucesso'
+      projeto: projeto,
+      message: `Orçamento aprovado com sucesso${projeto ? ' e projeto atualizado' : ''}`
     });
   } catch (error) {
     console.error('Erro ao aprovar orçamento:', error);
@@ -436,12 +483,10 @@ export const updateOrcamento = async (req: Request, res: Response): Promise<void
 
         itemsData.push({
           tipo: item.tipo,
-          materialId: item.materialId || null,
-          kitId: item.kitId || null,
-          quadroId: item.quadroId || null,
-          servicoId: item.servicoId || null,
-          servicoNome: item.servicoNome || null,
-          descricao: item.descricao || '',
+          materialId: item.materialId,
+          kitId: item.kitId,
+          servicoNome: item.servicoNome,
+          descricao: item.descricao,
           quantidade: item.quantidade,
           custoUnit,
           precoUnit,

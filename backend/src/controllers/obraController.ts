@@ -250,6 +250,46 @@ export class ObraController {
       });
     }
   }
+
+  /**
+   * GET /api/obras/projeto/:projetoId
+   * Busca obra associada a um projeto
+   */
+  static async getObraPorProjeto(req: Request, res: Response): Promise<void> {
+    try {
+      const { projetoId } = req.params;
+
+      if (!projetoId) {
+        res.status(400).json({ 
+          success: false, 
+          message: 'ID do projeto é obrigatório' 
+        });
+        return;
+      }
+
+      const obra = await obraService.buscarObraPorProjeto(projetoId);
+
+      if (!obra) {
+        res.status(404).json({ 
+          success: false, 
+          message: 'Obra não encontrada para este projeto' 
+        });
+        return;
+      }
+
+      res.status(200).json({ 
+        success: true, 
+        data: obra 
+      });
+    } catch (error: any) {
+      console.error('Erro ao buscar obra por projeto:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar obra', 
+        error: error.message 
+      });
+    }
+  }
 }
 
 export default new ObraController();

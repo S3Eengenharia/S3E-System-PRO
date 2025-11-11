@@ -58,6 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
     useEffect(() => {
         // Carregar logo do localStorage
         const savedLogo = localStorage.getItem('companyLogo');
+        console.log('🖼️ Logo carregada do localStorage:', savedLogo);
         if (savedLogo) {
             setCompanyLogo(savedLogo);
         }
@@ -65,15 +66,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
         // Ouvir mudanças na logo
         const handleStorageChange = () => {
             const updatedLogo = localStorage.getItem('companyLogo');
+            console.log('🔄 Logo atualizada:', updatedLogo);
             setCompanyLogo(updatedLogo);
         };
+
+        // Criar um intervalo para verificar mudanças (fallback)
+        const checkLogoInterval = setInterval(() => {
+            const currentLogo = localStorage.getItem('companyLogo');
+            if (currentLogo !== companyLogo) {
+                console.log('🔄 Logo detectada por intervalo:', currentLogo);
+                setCompanyLogo(currentLogo);
+            }
+        }, 1000);
 
         window.addEventListener('storage', handleStorageChange);
         
         return () => {
             window.removeEventListener('storage', handleStorageChange);
+            clearInterval(checkLogoInterval);
         };
-    }, []);
+    }, [companyLogo]);
 
     const handleLogout = () => {
         logout();
@@ -190,7 +202,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                         <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider bg-orange-50 dark:bg-orange-900/20 rounded-lg">Suprimentos</span>
                     )}
                     <ul className="space-y-1">
-                        {navLinks.slice(4, 9).map((link) => (
+                        {navLinks.slice(4, 10).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -219,7 +231,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                         <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-purple-600 uppercase tracking-wider bg-purple-50 rounded-lg">Operacional</span>
                     )}
                     <ul className="space-y-1">
-                        {navLinks.slice(9, 12).map((link) => (
+                        {navLinks.slice(10, 14).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -248,7 +260,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                         <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-blue-600 uppercase tracking-wider bg-blue-50 rounded-lg">Financeiro</span>
                     )}
                     <ul className="space-y-1">
-                        {navLinks.slice(12).map((link) => (
+                        {navLinks.slice(14, 17).map((link) => (
+                            <li key={link.name}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onNavigate(link.name);
+                                    }}
+                                    className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
+                                        ${activeView === link.name
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                            : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-bg hover:text-gray-900 dark:hover:text-dark-text'
+                                        }`}
+                                    title={isCollapsed ? link.name : ''}
+                                >
+                                    <link.icon className={`w-5 h-5 ${!isCollapsed && 'mr-3'}`} />
+                                    {!isCollapsed && link.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* GERENCIAMENTO / ADMINISTRATIVO */}
+                <div className="mb-6">
+                    {!isCollapsed && (
+                        <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-indigo-600 uppercase tracking-wider bg-indigo-50 rounded-lg">Gerenciamento</span>
+                    )}
+                    <ul className="space-y-1">
+                        {navLinks.slice(17).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"

@@ -22,6 +22,13 @@ router.post('/gerar', authorize('admin', 'gerente'), ObraController.gerarObra);
 router.get('/kanban', ObraController.getObrasKanban);
 
 /**
+ * @route GET /api/obras/projeto/:projetoId
+ * @desc Busca obra associada a um projeto
+ * @access Authenticated
+ */
+router.get('/projeto/:projetoId', ObraController.getObraPorProjeto);
+
+/**
  * @route PUT /api/obras/:id/status
  * @desc Atualiza status da obra (move no Kanban)
  * @access Admin/Gerente

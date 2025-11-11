@@ -8,11 +8,19 @@ import {
   aprovarOrcamento,
   recusarOrcamento
 } from '../controllers/orcamentosController.js';
+import { PDFOrcamentoController } from '../controllers/pdfOrcamentoController.js';
 import { authenticate } from '../middlewares/auth.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+// Rotas de PDF (devem vir antes de /:id para evitar conflito)
+router.post('/:id/pdf/preview-personalizado', PDFOrcamentoController.uploadMiddleware, PDFOrcamentoController.gerarPreviewPersonalizado);
+router.post('/:id/pdf/download-personalizado', PDFOrcamentoController.uploadMiddleware, PDFOrcamentoController.gerarPDFPersonalizado);
+router.get('/:id/pdf/download', PDFOrcamentoController.gerarPDFDownload);
+router.get('/:id/pdf/html', PDFOrcamentoController.gerarHTML);
+router.get('/:id/pdf/preview', PDFOrcamentoController.gerarPreview);
 
 router.get('/', getOrcamentos);
 router.get('/:id', getOrcamentoById);

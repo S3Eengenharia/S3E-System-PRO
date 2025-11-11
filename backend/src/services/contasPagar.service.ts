@@ -293,5 +293,103 @@ export class ContasPagarService {
             }
         });
     }
+
+    /**
+     * Listar contas por tipo (FORNECEDOR, RH, DESPESA_FIXA)
+     */
+    static async listarPorTipo(tipo: string) {
+        return await prisma.contaPagar.findMany({
+            where: { tipo },
+            orderBy: { dataVencimento: 'asc' },
+            include: {
+                fornecedor: true
+            }
+        });
+    }
+
+    /**
+     * Gerar contas de salários (RH) para o mês
+     */
+    static async gerarContasSalarios(mesReferencia: string) {
+        // Buscar funcionários ativos
+        const funcionarios = await prisma.funcionario.findMany({
+            where: { status: 'Ativo' }
+        });
+
+        const [ano, mes] = mesReferencia.split('-').map(Number);
+        const dataVencimento = new Date(ano, mes - 1, 5); // Vencimento dia 5 do mês
+
+        const contasCriadas = [];
+        for (const func of funcionarios) {
+            // Verificar se já existe conta para este funcionário neste mês
+            const contaExistente = await prisma.contaPagar.findFirst({
+                where: {
+                    tipo: 'RH',
+                    funcionarioId: func.id,
+                    descricao: { contains: mesReferencia }
+                }
+            });
+
+            if (!contaExistente) {
+                const conta = await prisma.contaPagar.create({
+                    data: {
+                        tipo: 'RH',
+                        funcionarioId: func.id,
+                        descricao: `Salário ${func.nome} - ${mesReferencia}`,
+                        valorParcela: Number(func.salario),
+                        dataVencimento,
+                        status: 'Pendente'
+                    }
+                });
+                contasCriadas.push(conta);
+            }
+        }
+
+        return contasCriadas;
+    }
+
+    /**
+     * Gerar contas de despesas fixas para o mês
+     */
+    static async gerarContasDespesasFixas(mesReferencia: string) {
+        // Buscar despesas fixas ativas
+        const despesas = await prisma.despesaFixa.findMany({
+            where: { ativa: true }
+        });
+
+        const [ano, mes] = mesReferencia.split('-').map(Number);
+        
+        const contasCriadas = [];
+        for (const desp of despesas) {
+            // Criar data de vencimento baseada no dia configurado
+            const dataVencimento = new Date(ano, mes - 1, desp.diaVencimento);
+
+            // Verificar se já existe conta para esta despesa neste mês
+            const contaExistente = await prisma.contaPagar.findFirst({
+                where: {
+                    tipo: 'DESPESA_FIXA',
+                    despesaFixaId: desp.id,
+                    descricao: { contains: mesReferencia }
+                }
+            });
+
+            if (!contaExistente) {
+                const conta = await prisma.contaPagar.create({
+                    data: {
+                        tipo: 'DESPESA_FIXA',
+                        despesaFixaId: desp.id,
+                        descricao: `${desp.descricao} - ${mesReferencia}`,
+                        valorParcela: Number(desp.valor),
+                        dataVencimento,
+                        status: 'Pendente',
+                        observacoes: desp.fornecedor ? `Fornecedor: ${desp.fornecedor}` : undefined
+                    }
+                });
+                contasCriadas.push(conta);
+            }
+        }
+
+        return contasCriadas;
+    }
 }
 

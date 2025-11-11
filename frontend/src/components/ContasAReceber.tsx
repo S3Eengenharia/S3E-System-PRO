@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { financeiroService } from '../services/financeiroService';
+import { axiosApiService } from '../services/axiosApi';
+import { toast } from 'sonner';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -59,6 +71,53 @@ interface ContaReceber {
     dataPagamento?: string;
     status: 'Pendente' | 'Recebido' | 'Atrasado';
     observacoes?: string;
+    statusObra?: 'BACKLOG' | 'A_FAZER' | 'ANDAMENTO' | 'CONCLUIDO' | null;
+    projetoId?: string;
+}
+
+interface ItemVenda {
+    id: string;
+    nome: string;
+    quantidade: number;
+    valorUnitario: number;
+    valorTotal: number;
+}
+
+interface VendaDetalhada {
+    id: string;
+    numeroVenda: string;
+    dataVenda: string;
+    valorTotal: number;
+    formaPagamento: string;
+    parcelas: number;
+    cliente: {
+        id: string;
+        nome: string;
+        email?: string;
+        telefone?: string;
+        endereco?: string;
+        cidade?: string;
+        estado?: string;
+        cep?: string;
+    };
+    projeto?: {
+        id: string;
+        titulo: string;
+        descricao?: string;
+        dataInicio?: string;
+        endereco?: string;
+    };
+    obra?: {
+        id: string;
+        nomeObra: string;
+        status: 'BACKLOG' | 'A_FAZER' | 'ANDAMENTO' | 'CONCLUIDO';
+        dataInicioReal?: string;
+        dataPrevistaFim?: string;
+    };
+    orcamento?: {
+        id: string;
+        items: ItemVenda[];
+    };
 }
 
 interface ContasAReceberProps {
@@ -81,6 +140,14 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
     const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().split('T')[0]);
     const [valorRecebido, setValorRecebido] = useState('0');
     const [observacoesBaixa, setObservacoesBaixa] = useState('');
+    
+    // Modal de Visualização de Venda
+    const [isVisualizarModalOpen, setIsVisualizarModalOpen] = useState(false);
+    const [vendaDetalhada, setVendaDetalhada] = useState<VendaDetalhada | null>(null);
+    const [loadingVenda, setLoadingVenda] = useState(false);
+    
+    // AlertDialog de Confirmação
+    const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
     // Carregar dados
     useEffect(() => {
@@ -207,12 +274,12 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
         setObservacoesBaixa('');
     };
 
+    const handleOpenConfirmBaixa = () => {
+        setIsConfirmDialogOpen(true);
+    };
+
     const handleBaixaRecebimento = async () => {
         if (!contaSelecionada) return;
-
-        if (!confirm(`Confirmar o recebimento de R$ ${parseFloat(valorRecebido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) {
-            return;
-        }
 
         try {
             console.log('💰 Registrando recebimento...');
@@ -223,16 +290,313 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
             });
 
             if (response.success) {
-                alert('✅ Recebimento registrado com sucesso!');
+                toast.success('✅ Recebimento registrado com sucesso!', {
+                    description: `Recebido R$ ${parseFloat(valorRecebido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de ${contaSelecionada.clienteNome}.`
+                });
                 handleCloseBaixaModal();
                 // Recarregar lista
                 await loadContasReceber();
             } else {
-                alert(`❌ ${response.error || 'Erro ao registrar recebimento'}`);
+                toast.error('❌ Erro ao registrar recebimento', {
+                    description: response.error || 'Tente novamente.'
+                });
             }
         } catch (error) {
             console.error('❌ Erro ao dar baixa:', error);
-            alert('❌ Erro ao registrar recebimento');
+            toast.error('❌ Erro ao registrar recebimento', {
+                description: 'Erro de conexão com o servidor.'
+            });
+        }
+    };
+
+    const handleVisualizarVenda = async (vendaId: string) => {
+        setLoadingVenda(true);
+        setIsVisualizarModalOpen(true);
+        
+        try {
+            console.log('🔍 Buscando detalhes da venda:', vendaId);
+            
+            // Buscar venda com todos os relacionamentos
+            const response = await axiosApiService.get<any>(`/api/vendas/${vendaId}`);
+            
+            if (response.success && response.data) {
+                const venda = response.data;
+                
+                // Buscar obra se houver projeto associado
+                let obra = null;
+                if (venda.projetoId) {
+                    try {
+                        const obraResponse = await axiosApiService.get<any>(`/api/obras/projeto/${venda.projetoId}`);
+                        if (obraResponse.success && obraResponse.data) {
+                            obra = obraResponse.data;
+                        }
+                    } catch (error) {
+                        console.log('⚠️ Projeto ainda não tem obra associada');
+                    }
+                }
+
+                // Montar estrutura de dados
+                const vendaDetalhes: VendaDetalhada = {
+                    id: venda.id,
+                    numeroVenda: venda.numeroVenda,
+                    dataVenda: venda.dataVenda,
+                    valorTotal: venda.valorTotal,
+                    formaPagamento: venda.formaPagamento,
+                    parcelas: venda.parcelas,
+                    cliente: {
+                        id: venda.cliente?.id || venda.clienteId,
+                        nome: venda.cliente?.nome || 'Cliente não informado',
+                        email: venda.cliente?.email,
+                        telefone: venda.cliente?.telefone,
+                        endereco: venda.cliente?.endereco,
+                        cidade: venda.cliente?.cidade,
+                        estado: venda.cliente?.estado,
+                        cep: venda.cliente?.cep
+                    },
+                    projeto: venda.projeto ? {
+                        id: venda.projeto.id,
+                        titulo: venda.projeto.titulo,
+                        descricao: venda.projeto.descricao,
+                        dataInicio: venda.projeto.dataInicio,
+                        endereco: venda.projeto.endereco
+                    } : undefined,
+                    obra: obra ? {
+                        id: obra.id,
+                        nomeObra: obra.nomeObra,
+                        status: obra.status,
+                        dataInicioReal: obra.dataInicioReal,
+                        dataPrevistaFim: obra.dataPrevistaFim
+                    } : undefined,
+                    orcamento: venda.orcamento ? {
+                        id: venda.orcamento.id,
+                        items: (venda.orcamento.items || []).map((item: any) => ({
+                            id: item.id,
+                            nome: item.material?.nome || item.kit?.nome || 'Item',
+                            quantidade: item.quantidade,
+                            valorUnitario: item.precoUnitario,
+                            valorTotal: item.quantidade * item.precoUnitario
+                        }))
+                    } : undefined
+                };
+
+                setVendaDetalhada(vendaDetalhes);
+                console.log('✅ Detalhes da venda carregados:', vendaDetalhes);
+            } else {
+                toast.error('❌ Erro ao buscar detalhes da venda');
+                setIsVisualizarModalOpen(false);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao buscar venda:', error);
+            toast.error('❌ Erro ao buscar detalhes da venda', {
+                description: 'Verifique sua conexão e tente novamente.'
+            });
+            setIsVisualizarModalOpen(false);
+        } finally {
+            setLoadingVenda(false);
+        }
+    };
+
+    const handleCloseVisualizarModal = () => {
+        setIsVisualizarModalOpen(false);
+        setVendaDetalhada(null);
+    };
+
+    const handleGerarPDFVenda = () => {
+        if (!vendaDetalhada) return;
+
+        try {
+            const statusObra = vendaDetalhada.obra ? getStatusObraDisplay(vendaDetalhada.obra.status) : null;
+            
+            // Criar conteúdo HTML para impressão
+            const conteudoHTML = `
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Venda - ${vendaDetalhada.numeroVenda}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+                        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #16a34a; padding-bottom: 20px; }
+                        .header h1 { margin: 0; color: #15803d; font-size: 28px; }
+                        .header p { margin: 5px 0; color: #64748b; }
+                        .section { margin: 20px 0; padding: 15px; border: 2px solid #e5e7eb; border-radius: 8px; }
+                        .section h2 { margin: 0 0 15px 0; color: #15803d; font-size: 18px; border-bottom: 2px solid #dcfce7; padding-bottom: 8px; }
+                        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+                        .field { margin-bottom: 10px; }
+                        .field label { font-weight: bold; color: #475569; display: block; font-size: 12px; }
+                        .field p { margin: 3px 0 0 0; font-size: 14px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 12px; border: 1px solid #cbd5e1; }
+                        td { padding: 8px; border: 1px solid #e2e8f0; font-size: 13px; }
+                        .resumo { background: #f0fdf4; padding: 15px; border-radius: 8px; margin-top: 20px; }
+                        .resumo-item { display: flex; justify-content: space-between; margin: 8px 0; padding: 5px 0; }
+                        .resumo-total { border-top: 2px solid #16a34a; padding-top: 10px; margin-top: 10px; font-size: 18px; font-weight: bold; color: #15803d; }
+                        .badge { display: inline-block; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+                        .badge-obra { background: #fed7aa; color: #9a3412; }
+                        @media print { 
+                            body { margin: 0; } 
+                            .no-print { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>💰 VENDA - RECIBO</h1>
+                        <p><strong>Venda Nº:</strong> ${vendaDetalhada.numeroVenda}</p>
+                        <p><strong>Data da Venda:</strong> ${new Date(vendaDetalhada.dataVenda).toLocaleDateString('pt-BR')}</p>
+                    </div>
+
+                    <div class="section">
+                        <h2>👤 Dados do Cliente</h2>
+                        <div class="grid">
+                            <div class="field">
+                                <label>Nome:</label>
+                                <p>${vendaDetalhada.cliente.nome}</p>
+                            </div>
+                            ${vendaDetalhada.cliente.telefone ? `
+                                <div class="field">
+                                    <label>Telefone:</label>
+                                    <p>${vendaDetalhada.cliente.telefone}</p>
+                                </div>
+                            ` : ''}
+                            ${vendaDetalhada.cliente.email ? `
+                                <div class="field">
+                                    <label>Email:</label>
+                                    <p>${vendaDetalhada.cliente.email}</p>
+                                </div>
+                            ` : ''}
+                        </div>
+                        ${vendaDetalhada.cliente.endereco ? `
+                            <div class="field">
+                                <label>Endereço:</label>
+                                <p>${vendaDetalhada.cliente.endereco}${vendaDetalhada.cliente.cidade ? ', ' + vendaDetalhada.cliente.cidade : ''}${vendaDetalhada.cliente.estado ? ' - ' + vendaDetalhada.cliente.estado : ''}${vendaDetalhada.cliente.cep ? ' | CEP: ' + vendaDetalhada.cliente.cep : ''}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    ${vendaDetalhada.projeto ? `
+                        <div class="section">
+                            <h2>📋 Informações do Projeto</h2>
+                            <div class="field">
+                                <label>Título:</label>
+                                <p>${vendaDetalhada.projeto.titulo}</p>
+                            </div>
+                            ${vendaDetalhada.projeto.descricao ? `
+                                <div class="field">
+                                    <label>Descrição:</label>
+                                    <p>${vendaDetalhada.projeto.descricao}</p>
+                                </div>
+                            ` : ''}
+                            ${vendaDetalhada.projeto.dataInicio ? `
+                                <div class="field">
+                                    <label>Data de Início:</label>
+                                    <p>${new Date(vendaDetalhada.projeto.dataInicio).toLocaleDateString('pt-BR')}</p>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${vendaDetalhada.obra ? `
+                        <div class="section" style="background: #fff7ed; border-color: #fb923c;">
+                            <h2 style="color: #9a3412;">🏗️ Status da Obra</h2>
+                            <div class="grid">
+                                <div class="field">
+                                    <label>Nome da Obra:</label>
+                                    <p>${vendaDetalhada.obra.nomeObra}</p>
+                                </div>
+                                <div class="field">
+                                    <label>Status:</label>
+                                    <p><span class="badge badge-obra">${statusObra?.icon} ${statusObra?.text}</span></p>
+                                </div>
+                                ${vendaDetalhada.obra.dataInicioReal ? `
+                                    <div class="field">
+                                        <label>Data de Início Real:</label>
+                                        <p>${new Date(vendaDetalhada.obra.dataInicioReal).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                ` : ''}
+                                ${vendaDetalhada.obra.dataPrevistaFim ? `
+                                    <div class="field">
+                                        <label>Previsão de Término:</label>
+                                        <p>${new Date(vendaDetalhada.obra.dataPrevistaFim).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${vendaDetalhada.orcamento && vendaDetalhada.orcamento.items.length > 0 ? `
+                        <div class="section">
+                            <h2>📦 Itens Vendidos</h2>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">Item</th>
+                                        <th style="width: 15%; text-align: center;">Qtd</th>
+                                        <th style="width: 17.5%; text-align: right;">Valor Unit.</th>
+                                        <th style="width: 17.5%; text-align: right;">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${vendaDetalhada.orcamento.items.map(item => `
+                                        <tr>
+                                            <td>${item.nome}</td>
+                                            <td style="text-align: center;">${item.quantidade}</td>
+                                            <td style="text-align: right;">R$ ${item.valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            <td style="text-align: right; font-weight: bold;">R$ ${item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : ''}
+
+                    <div class="resumo">
+                        <h2 style="margin: 0 0 15px 0; color: #15803d;">💰 Resumo da Venda</h2>
+                        <div class="resumo-item">
+                            <span>Forma de Pagamento:</span>
+                            <span style="font-weight: bold;">${vendaDetalhada.formaPagamento}</span>
+                        </div>
+                        <div class="resumo-item">
+                            <span>Parcelas:</span>
+                            <span style="font-weight: bold;">${vendaDetalhada.parcelas}x</span>
+                        </div>
+                        <div class="resumo-item resumo-total">
+                            <span>VALOR TOTAL:</span>
+                            <span>R$ ${vendaDetalhada.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 40px; text-align: center; color: #94a3b8; font-size: 12px;">
+                        <p>Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+                        <p>S3E Engenharia - Sistema de Gestão</p>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            // Abrir nova janela para impressão
+            const janelaImpressao = window.open('', '_blank');
+            if (janelaImpressao) {
+                janelaImpressao.document.write(conteudoHTML);
+                janelaImpressao.document.close();
+                
+                // Aguardar carregamento e abrir dialog de impressão
+                janelaImpressao.onload = () => {
+                    janelaImpressao.focus();
+                    janelaImpressao.print();
+                };
+
+                toast.success('📄 PDF gerado com sucesso!', {
+                    description: 'Abrindo janela de impressão...'
+                });
+            } else {
+                toast.error('❌ Erro ao gerar PDF', {
+                    description: 'Permita pop-ups no navegador.'
+                });
+            }
+        } catch (error) {
+            console.error('❌ Erro ao gerar PDF:', error);
+            toast.error('❌ Erro ao gerar PDF');
         }
     };
 
@@ -246,6 +610,25 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                 return 'bg-red-100 text-red-800 ring-1 ring-red-200';
             default:
                 return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+        }
+    };
+
+    const getStatusObraDisplay = (statusObra?: 'BACKLOG' | 'A_FAZER' | 'ANDAMENTO' | 'CONCLUIDO' | null) => {
+        if (!statusObra) {
+            return { text: 'Sem Obra', class: 'bg-gray-100 text-gray-600', icon: '—' };
+        }
+        
+        switch (statusObra) {
+            case 'BACKLOG':
+                return { text: 'Backlog', class: 'bg-gray-100 text-gray-700', icon: '📋' };
+            case 'A_FAZER':
+                return { text: 'A Fazer', class: 'bg-blue-100 text-blue-700', icon: '📝' };
+            case 'ANDAMENTO':
+                return { text: 'Em Andamento', class: 'bg-orange-100 text-orange-700', icon: '🚧' };
+            case 'CONCLUIDO':
+                return { text: 'Concluída', class: 'bg-green-100 text-green-700', icon: '✅' };
+            default:
+                return { text: 'Sem Obra', class: 'bg-gray-100 text-gray-600', icon: '—' };
         }
     };
 
@@ -428,6 +811,9 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                                     Status
                                 </th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    Status Obra
+                                </th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                     Ações
                                 </th>
                             </tr>
@@ -435,7 +821,7 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                         <tbody className="divide-y divide-gray-200">
                             {contasFiltradas.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center">
+                                    <td colSpan={7} className="px-6 py-12 text-center">
                                         <div className="flex flex-col items-center justify-center">
                                             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                                                 <CurrencyDollarIcon className="w-8 h-8 text-gray-400" />
@@ -491,6 +877,16 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                                                 {conta.status}
                                             </span>
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            {(() => {
+                                                const statusObra = getStatusObraDisplay(conta.statusObra);
+                                                return (
+                                                    <span className={`inline-block px-3 py-1.5 text-xs font-bold rounded-lg ${statusObra.class}`}>
+                                                        {statusObra.icon} {statusObra.text}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-center gap-2">
                                                 {conta.status !== 'Recebido' && (
@@ -503,7 +899,7 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                                                     </button>
                                                 )}
                                                 <button
-                                                    onClick={() => alert(`Visualizar venda ${conta.vendaId}`)}
+                                                    onClick={() => handleVisualizarVenda(conta.vendaId)}
                                                     className="flex items-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
                                                     title="Visualizar Venda"
                                                 >
@@ -518,6 +914,245 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                     </table>
                 </div>
             </div>
+
+            {/* Modal de Visualização de Venda */}
+            {isVisualizarModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="modal-content max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        {loadingVenda ? (
+                            <div className="p-12 text-center">
+                                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                                <p className="text-gray-600">Carregando detalhes da venda...</p>
+                            </div>
+                        ) : vendaDetalhada ? (
+                            <>
+                                {/* Header */}
+                                <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-900">Detalhes da Venda</h2>
+                                        <p className="text-sm text-gray-600 mt-1">Venda {vendaDetalhada.numeroVenda}</p>
+                                    </div>
+                                    <button
+                                        onClick={handleCloseVisualizarModal}
+                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                    >
+                                        <XMarkIcon className="w-6 h-6" />
+                                    </button>
+                                </div>
+
+                                {/* Body */}
+                                <div className="p-6 space-y-6">
+                                    {/* Informações da Venda */}
+                                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                                        <h3 className="font-semibold text-blue-900 mb-3">Informações da Venda</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                            <div>
+                                                <span className="text-blue-700 font-medium">Número:</span>
+                                                <p className="text-blue-900 font-semibold">{vendaDetalhada.numeroVenda}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-blue-700 font-medium">Data:</span>
+                                                <p className="text-blue-900">{new Date(vendaDetalhada.dataVenda).toLocaleDateString('pt-BR')}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-blue-700 font-medium">Forma de Pagamento:</span>
+                                                <p className="text-blue-900">{vendaDetalhada.formaPagamento}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-blue-700 font-medium">Parcelas:</span>
+                                                <p className="text-blue-900">{vendaDetalhada.parcelas}x</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Informações do Cliente */}
+                                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                                        <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                                            👤 Dados do Cliente
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <span className="text-green-700 font-medium">Nome:</span>
+                                                <p className="text-green-900 font-semibold">{vendaDetalhada.cliente.nome}</p>
+                                            </div>
+                                            {vendaDetalhada.cliente.telefone && (
+                                                <div>
+                                                    <span className="text-green-700 font-medium">Telefone:</span>
+                                                    <p className="text-green-900">{vendaDetalhada.cliente.telefone}</p>
+                                                </div>
+                                            )}
+                                            {vendaDetalhada.cliente.email && (
+                                                <div>
+                                                    <span className="text-green-700 font-medium">Email:</span>
+                                                    <p className="text-green-900">{vendaDetalhada.cliente.email}</p>
+                                                </div>
+                                            )}
+                                            {vendaDetalhada.cliente.endereco && (
+                                                <div className="md:col-span-2">
+                                                    <span className="text-green-700 font-medium">Endereço:</span>
+                                                    <p className="text-green-900">
+                                                        {vendaDetalhada.cliente.endereco}
+                                                        {vendaDetalhada.cliente.cidade && `, ${vendaDetalhada.cliente.cidade}`}
+                                                        {vendaDetalhada.cliente.estado && ` - ${vendaDetalhada.cliente.estado}`}
+                                                        {vendaDetalhada.cliente.cep && ` | CEP: ${vendaDetalhada.cliente.cep}`}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Informações da Obra */}
+                                    {vendaDetalhada.obra && (
+                                        <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                                            <h3 className="font-semibold text-orange-900 mb-3 flex items-center gap-2">
+                                                🏗️ Status da Obra
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                                <div>
+                                                    <span className="text-orange-700 font-medium">Nome da Obra:</span>
+                                                    <p className="text-orange-900 font-semibold">{vendaDetalhada.obra.nomeObra}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-orange-700 font-medium">Status:</span>
+                                                    <div className="mt-1">
+                                                        {(() => {
+                                                            const statusObra = getStatusObraDisplay(vendaDetalhada.obra.status);
+                                                            return (
+                                                                <span className={`inline-block px-3 py-1.5 text-xs font-bold rounded-lg ${statusObra.class}`}>
+                                                                    {statusObra.icon} {statusObra.text}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                                {vendaDetalhada.obra.dataInicioReal && (
+                                                    <div>
+                                                        <span className="text-orange-700 font-medium">Data de Início:</span>
+                                                        <p className="text-orange-900">{new Date(vendaDetalhada.obra.dataInicioReal).toLocaleDateString('pt-BR')}</p>
+                                                    </div>
+                                                )}
+                                                {vendaDetalhada.obra.dataPrevistaFim && (
+                                                    <div>
+                                                        <span className="text-orange-700 font-medium">Previsão de Término:</span>
+                                                        <p className="text-orange-900">{new Date(vendaDetalhada.obra.dataPrevistaFim).toLocaleDateString('pt-BR')}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Alerta de obra concluída e parcela final */}
+                                            {vendaDetalhada.obra.status === 'CONCLUIDO' && (
+                                                <div className="mt-4 bg-green-100 border-l-4 border-green-500 p-3 rounded">
+                                                    <p className="text-green-800 text-sm font-semibold">
+                                                        ✅ Obra concluída! Verificar pagamento final.
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {vendaDetalhada.obra.status === 'ANDAMENTO' && (
+                                                <div className="mt-4 bg-orange-100 border-l-4 border-orange-500 p-3 rounded">
+                                                    <p className="text-orange-800 text-sm font-semibold">
+                                                        🚧 Obra em andamento. Acompanhar evolução.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Informações do Projeto */}
+                                    {vendaDetalhada.projeto && (
+                                        <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                                            <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                                                📋 Informações do Projeto
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                <div>
+                                                    <span className="text-purple-700 font-medium">Título:</span>
+                                                    <p className="text-purple-900 font-semibold">{vendaDetalhada.projeto.titulo}</p>
+                                                </div>
+                                                {vendaDetalhada.projeto.dataInicio && (
+                                                    <div>
+                                                        <span className="text-purple-700 font-medium">Data de Início:</span>
+                                                        <p className="text-purple-900">{new Date(vendaDetalhada.projeto.dataInicio).toLocaleDateString('pt-BR')}</p>
+                                                    </div>
+                                                )}
+                                                {vendaDetalhada.projeto.descricao && (
+                                                    <div className="md:col-span-2">
+                                                        <span className="text-purple-700 font-medium">Descrição:</span>
+                                                        <p className="text-purple-900">{vendaDetalhada.projeto.descricao}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Itens Vendidos */}
+                                    {vendaDetalhada.orcamento && vendaDetalhada.orcamento.items && vendaDetalhada.orcamento.items.length > 0 && (
+                                        <div>
+                                            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                📦 Itens Vendidos
+                                            </h3>
+                                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                                <table className="w-full text-sm">
+                                                    <thead className="bg-gray-50 border-b border-gray-200">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Item</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">Qtd</th>
+                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Valor Unit.</th>
+                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200">
+                                                        {vendaDetalhada.orcamento.items.map((item) => (
+                                                            <tr key={item.id} className="hover:bg-gray-50">
+                                                                <td className="px-4 py-3 text-gray-900">{item.nome}</td>
+                                                                <td className="px-4 py-3 text-center text-gray-900">{item.quantidade}</td>
+                                                                <td className="px-4 py-3 text-right text-gray-900">
+                                                                    R$ {item.valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                                                    R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot className="bg-gradient-to-r from-blue-50 to-cyan-50 border-t-2 border-blue-200">
+                                                        <tr>
+                                                            <td colSpan={3} className="px-4 py-3 text-right font-bold text-gray-900">
+                                                                TOTAL DA VENDA:
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right font-bold text-blue-900 text-lg">
+                                                                R$ {vendaDetalhada.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Footer */}
+                                <div className="flex justify-between items-center gap-3 p-6 border-t border-gray-100">
+                                    <button
+                                        onClick={handleGerarPDFVenda}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-xl transition-colors flex items-center gap-2"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                        Gerar PDF / Imprimir
+                                    </button>
+                                    <button
+                                        onClick={handleCloseVisualizarModal}
+                                        className="btn-secondary"
+                                    >
+                                        Fechar
+                                    </button>
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Baixa */}
             {isBaixaModalOpen && contaSelecionada && (
@@ -632,7 +1267,7 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                                 Cancelar
                             </button>
                             <button
-                                onClick={handleBaixaRecebimento}
+                                onClick={handleOpenConfirmBaixa}
                                 className="btn-success flex items-center gap-2"
                             >
                                 <CheckCircleIcon className="w-5 h-5" />
@@ -642,6 +1277,40 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                     </div>
                 </div>
             )}
+
+            {/* AlertDialog de Confirmação */}
+            <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirmar Recebimento</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {contaSelecionada && (
+                                <>
+                                    Confirmar o recebimento de{' '}
+                                    <span className="font-bold text-green-600">
+                                        R$ {parseFloat(valorRecebido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                    {' '}de {contaSelecionada.clienteNome}?
+                                </>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsConfirmDialogOpen(false)}>
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => {
+                                setIsConfirmDialogOpen(false);
+                                handleBaixaRecebimento();
+                            }}
+                            className="bg-green-600 hover:bg-green-700"
+                        >
+                            Confirmar Recebimento
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

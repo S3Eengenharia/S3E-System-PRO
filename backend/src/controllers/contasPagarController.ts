@@ -255,5 +255,82 @@ export class ContasPagarController {
             });
         }
     }
+
+    /**
+     * Lista contas por tipo (FORNECEDOR, RH, DESPESA_FIXA)
+     */
+    static async listarPorTipo(req: Request, res: Response) {
+        try {
+            const { tipo } = req.params;
+            const contas = await ContasPagarService.listarPorTipo(tipo);
+
+            res.json({
+                success: true,
+                data: contas
+            });
+        } catch (error) {
+            console.error('Erro ao listar contas por tipo:', error);
+            res.status(500).json({
+                error: 'Erro interno do servidor',
+                message: error instanceof Error ? error.message : 'Erro desconhecido'
+            });
+        }
+    }
+
+    /**
+     * Gera contas de salários para o mês
+     */
+    static async gerarContasSalarios(req: Request, res: Response) {
+        try {
+            const { mesReferencia } = req.body;
+            if (!mesReferencia) {
+                return res.status(400).json({
+                    error: 'Mês de referência é obrigatório (formato: YYYY-MM)'
+                });
+            }
+
+            const contas = await ContasPagarService.gerarContasSalarios(mesReferencia);
+
+            res.status(201).json({
+                success: true,
+                message: `${contas.length} conta(s) de salário gerada(s)`,
+                data: contas
+            });
+        } catch (error) {
+            console.error('Erro ao gerar contas de salários:', error);
+            res.status(500).json({
+                error: 'Erro interno do servidor',
+                message: error instanceof Error ? error.message : 'Erro desconhecido'
+            });
+        }
+    }
+
+    /**
+     * Gera contas de despesas fixas para o mês
+     */
+    static async gerarContasDespesasFixas(req: Request, res: Response) {
+        try {
+            const { mesReferencia } = req.body;
+            if (!mesReferencia) {
+                return res.status(400).json({
+                    error: 'Mês de referência é obrigatório (formato: YYYY-MM)'
+                });
+            }
+
+            const contas = await ContasPagarService.gerarContasDespesasFixas(mesReferencia);
+
+            res.status(201).json({
+                success: true,
+                message: `${contas.length} conta(s) de despesa fixa gerada(s)`,
+                data: contas
+            });
+        } catch (error) {
+            console.error('Erro ao gerar contas de despesas fixas:', error);
+            res.status(500).json({
+                error: 'Erro interno do servidor',
+                message: error instanceof Error ? error.message : 'Erro desconhecido'
+            });
+        }
+    }
 }
 

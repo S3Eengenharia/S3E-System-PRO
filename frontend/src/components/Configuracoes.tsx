@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { configuracoesService, type ConfiguracaoSistema, type Usuario } from '../services/configuracoesService';
 import { ThemeContext } from '../contexts/ThemeContext';
+import { toast } from 'sonner';
+import { API_CONFIG } from '../config/api';
 import {
   Dialog,
   DialogContent,
@@ -220,6 +222,21 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                 if (uploadResponse.success && uploadResponse.data) {
                     // Atualizar formConfig com a nova URL
                     formConfig.logoUrl = uploadResponse.data.logoUrl;
+                    
+                    // IMPORTANTE: Usar API_CONFIG para garantir a porta correta (3001)
+                    const logoUrlCompleta = `${API_CONFIG.BASE_URL}${uploadResponse.data.logoUrl}`;
+                    
+                    console.log('🔍 Base URL (API_CONFIG):', API_CONFIG.BASE_URL);
+                    console.log('🔍 Logo path:', uploadResponse.data.logoUrl);
+                    console.log('🔍 URL completa:', logoUrlCompleta);
+                    
+                    // Atualizar localStorage para que Sidebar pegue imediatamente
+                    localStorage.setItem('companyLogo', logoUrlCompleta);
+                    
+                    // Disparar evento para Sidebar atualizar
+                    window.dispatchEvent(new Event('storage'));
+                    
+                    console.log('✅ Logo atualizada no localStorage:', logoUrlCompleta);
                 }
             }
             
@@ -230,15 +247,15 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                 if (themeContext) {
                     themeContext.setTheme(formConfig.temaPreferido);
                 }
-                alert('✅ Configurações salvas com sucesso!');
+                toast.success('✅ Configurações salvas com sucesso!');
                 setLogoFile(null); // Limpar arquivo após salvar
                 await loadConfiguracoes();
             } else {
-                alert(`❌ ${response.error || 'Erro ao salvar configurações'}`);
+                toast.error(`❌ ${response.error || 'Erro ao salvar configurações'}`);
             }
         } catch (error) {
             console.error('Erro ao salvar configurações:', error);
-            alert('❌ Erro ao salvar configurações');
+            toast.error('❌ Erro ao salvar configurações');
         } finally {
             setSaving(false);
         }

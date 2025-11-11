@@ -157,28 +157,29 @@ class PDFCustomizationService {
 
     /**
      * Upload de imagem para marca d'água
+     * Converte para base64 para uso no PDF
      */
     async uploadWatermark(imageFile: File) {
         try {
-            const formData = new FormData();
-            formData.append('watermark', imageFile);
+            // Converter para base64 localmente
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(imageFile);
+            });
 
-            const response = await axiosApiService.post<{ url: string; success: boolean }>(
-                '/api/pdf-customization/upload-watermark',
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
+            return {
+                success: true,
+                data: {
+                    url: base64
                 }
-            );
-
-            return response;
+            };
         } catch (error: any) {
-            console.error('Erro ao fazer upload da marca d\'água:', error);
+            console.error('Erro ao processar marca d\'água:', error);
             return {
                 success: false,
-                error: error.response?.data?.message || 'Erro ao fazer upload da imagem'
+                error: 'Erro ao processar imagem'
             };
         }
     }
@@ -212,15 +213,47 @@ class PDFCustomizationService {
     }
 
     /**
-     * Gera preview do PDF (retorna base64 ou URL)
+     * Gera preview do PDF (retorna HTML)
      */
-    async generatePreview(orcamentoData: OrcamentoPDFData, customization: PDFCustomization) {
+    async generatePreview(orcamentoId: string, customization: PDFCustomization) {
         try {
-            const response = await axiosApiService.post<{ previewUrl: string; success: boolean }>(
-                '/api/pdf-customization/generate-preview',
+            const formData = new FormData();
+            formData.append('opacidade', customization.watermark.opacity.toString());
+            
+            // Se tiver logo/marca d'água, converter de base64 para blob
+            if (customization.watermark.type === 'logo' && customization.watermark.content) {
+                try {
+                    // Se for base64, converter para blob
+                    if (customization.watermark.content.startsWith('data:')) {
+                        const response = await fetch(customization.watermark.content);
+                        const blob = await response.blob();
+                        formData.append('logo', blob, 'logo.png');
+                    }
+                } catch (err) {
+                    console.warn('Não foi possível converter logo:', err);
+                }
+            }
+
+            // Se tiver folha timbrada (corners), adicionar
+            if (customization.design.corners.enabled && customization.design.corners.image) {
+                try {
+                    if (customization.design.corners.image.startsWith('data:')) {
+                        const response = await fetch(customization.design.corners.image);
+                        const blob = await response.blob();
+                        formData.append('folhaTimbrada', blob, 'folha.png');
+                    }
+                } catch (err) {
+                    console.warn('Não foi possível converter folha timbrada:', err);
+                }
+            }
+
+            const response = await axiosApiService.post<{ html: string; success: boolean }>(
+                `/api/orcamentos/${orcamentoId}/pdf/preview-personalizado`,
+                formData,
                 {
-                    orcamentoData,
-                    customization
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
                 }
             );
 
@@ -230,6 +263,95 @@ class PDFCustomizationService {
             return {
                 success: false,
                 error: error.response?.data?.message || 'Erro ao gerar preview'
+            };
+        }
+    }
+
+    /**
+     * Gera PDF personalizado e abre em nova janela
+     */
+    async generatePersonalizedPDF(orcamentoId: string, customization: PDFCustomization): Promise<GeneratePDFResponse> {
+        try {
+            console.log('📄 Gerando PDF personalizado para visualização...');
+            
+            const formData = new FormData();
+            formData.append('opacidade', customization.watermark.opacity.toString());
+            
+            // Se tiver logo/marca d'água, converter de base64 para blob
+            if (customization.watermark.type === 'logo' && customization.watermark.content) {
+                try {
+                    if (customization.watermark.content.startsWith('data:')) {
+                        const response = await fetch(customization.watermark.content);
+                        const blob = await response.blob();
+                        formData.append('logo', blob, 'logo.png');
+                    }
+                } catch (err) {
+                    console.warn('Não foi possível converter logo:', err);
+                }
+            }
+
+            // Se tiver folha timbrada (corners), adicionar
+            if (customization.design.corners.enabled && customization.design.corners.image) {
+                try {
+                    if (customization.design.corners.image.startsWith('data:')) {
+                        const response = await fetch(customization.design.corners.image);
+                        const blob = await response.blob();
+                        formData.append('folhaTimbrada', blob, 'folha.png');
+                    }
+                } catch (err) {
+                    console.warn('Não foi possível converter folha timbrada:', err);
+                }
+            }
+
+            // Buscar o HTML ao invés do PDF binário
+            const response = await axiosApiService.post(
+                `/api/orcamentos/${orcamentoId}/pdf/preview-personalizado`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                }
+            );
+
+            if (response.success && response.data?.html) {
+                // Criar blob com HTML e abrir em nova janela
+                const blob = new Blob([response.data.html], { type: 'text/html' });
+                const url = window.URL.createObjectURL(blob);
+                
+                // Abrir em nova janela
+                const win = window.open(url, '_blank');
+                
+                if (win) {
+                    // Aguardar carregar e disparar impressão automaticamente
+                    win.addEventListener('load', () => {
+                        setTimeout(() => {
+                            win.print();
+                            // Limpar blob URL após uso
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        }, 500);
+                    });
+                    
+                    return {
+                        success: true,
+                        fileName: 'Orcamento_Personalizado.pdf'
+                    };
+                } else {
+                    throw new Error('Popup bloqueado! Permita popups neste site.');
+                }
+            }
+
+            return {
+                success: false,
+                error: response.error || 'Erro ao gerar PDF',
+                fileName: ''
+            };
+        } catch (error: any) {
+            console.error('Erro ao gerar PDF:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message || 'Erro ao gerar PDF personalizado',
+                fileName: ''
             };
         }
     }

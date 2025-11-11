@@ -266,6 +266,7 @@ model OrcamentoFoto {
 
 enum ProjetoStatus {
   PROPOSTA
+  VALIDADO
   APROVADO
   EXECUCAO
   CONCLUIDO
@@ -508,8 +509,11 @@ model ContaReceber {
 
 model ContaPagar {
   id             String    @id @default(uuid())
+  tipo           String    @default("FORNECEDOR") // FORNECEDOR, RH, DESPESA_FIXA
   fornecedorId   String? // Opcional para permitir despesas sem fornecedor específico
   compraId       String?
+  funcionarioId  String? // Para salários (RH)
+  despesaFixaId  String? // Para despesas fixas
   descricao      String
   valorParcela   Float // Valor da parcela/despesa
   dataVencimento DateTime
@@ -523,6 +527,8 @@ model ContaPagar {
 
   fornecedor Fornecedor? @relation(fields: [fornecedorId], references: [id])
 
+  @@index([tipo])
+  @@index([status])
   @@map("contas_pagar")
 }
 
@@ -687,6 +693,139 @@ model RegistroAtividade {
   tarefa TarefaObra @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
 
   @@map("registros_atividade")
+}
+
+// ============================================
+// GERENCIAMENTO EMPRESARIAL - RH, FROTA, PLANOS
+// ============================================
+
+// Funcionários da Empresa
+model Funcionario {
+  id           String   @id @default(uuid())
+  nome         String
+  cargo        String
+  salario      Decimal  @db.Decimal(10, 2)
+  dataAdmissao DateTime
+  cpf          String   @unique
+  telefone     String?
+  email        String?
+  status       String   @default("Ativo") // Ativo, Inativo, Férias, Afastado
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vales Vale[]
+
+  @@map("funcionarios")
+}
+
+// Vales (Transporte, Alimentação, Adiantamentos)
+model Vale {
+  id            String      @id @default(uuid())
+  funcionarioId String
+  tipo          String // Vale Transporte, Vale Alimentação, Adiantamento
+  valor         Decimal     @db.Decimal(10, 2)
+  data          DateTime
+  descricao     String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  funcionario Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+
+  @@index([funcionarioId])
+  @@map("vales")
+}
+
+// Veículos da Frota
+model Veiculo {
+  id        String   @id @default(uuid())
+  modelo    String
+  placa     String   @unique
+  tipo      String // Carro, Caminhonete, Van, Caminhão
+  ano       Int
+  status    String   @default("Ativo") // Ativo, Manutenção, Inativo
+  kmAtual   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gastos GastoVeiculo[]
+
+  @@map("veiculos")
+}
+
+// Gastos dos Veículos (Combustível, Manutenção, etc)
+model GastoVeiculo {
+  id          String   @id @default(uuid())
+  veiculoId   String
+  tipo        String // Combustível, Manutenção, Seguro, IPVA, Multa, Pedágio
+  descricao   String?
+  valor       Decimal  @db.Decimal(10, 2)
+  data        DateTime
+  km          Int? // Quilometragem no momento do gasto
+  obraId      String? // Obra relacionada (se aplicável)
+  responsavel String? // Nome do responsável pelo gasto
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  veiculo Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  @@index([veiculoId])
+  @@index([data])
+  @@map("gastos_veiculo")
+}
+
+// Planos Estratégicos da Empresa (TodoList de Evolução)
+model PlanoEstrategico {
+  id          String   @id @default(uuid())
+  titulo      String
+  descricao   String
+  prazo       DateTime
+  responsavel String
+  prioridade  String   @default("Média") // Alta, Média, Baixa
+  status      String   @default("Pendente") // Pendente, Em Andamento, Concluído, Cancelado
+  categoria   String? // Financeiro, Operacional, Comercial, Tecnologia
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([prioridade])
+  @@map("planos_estrategicos")
+}
+
+// Despesas Fixas da Sede (Aluguel, Energia, Internet, etc.)
+model DespesaFixa {
+  id            String   @id @default(uuid())
+  descricao     String
+  categoria     String // Aluguel, Energia, Água, Internet, Telefone, Limpeza, Segurança, Outros
+  valor         Decimal  @db.Decimal(10, 2)
+  diaVencimento Int // Dia do mês que vence (1-31)
+  ativa         Boolean  @default(true)
+  fornecedor    String? // Nome do fornecedor/empresa
+  observacoes   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pagamentos PagamentoDespesaFixa[]
+
+  @@index([categoria])
+  @@index([ativa])
+  @@map("despesas_fixas")
+}
+
+// Histórico de Pagamentos das Despesas Fixas
+model PagamentoDespesaFixa {
+  id            String      @id @default(uuid())
+  despesaFixaId String
+  mesReferencia String // Ex: "2025-01", "2025-02"
+  valorPago     Decimal     @db.Decimal(10, 2)
+  dataPagamento DateTime
+  observacoes   String?
+  createdAt     DateTime    @default(now())
+
+  despesaFixa DespesaFixa @relation(fields: [despesaFixaId], references: [id], onDelete: Cascade)
+
+  @@index([despesaFixaId])
+  @@index([mesReferencia])
+  @@map("pagamentos_despesa_fixa")
 }
 
 model HistoryLog {
