@@ -271,7 +271,14 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
     const { id } = req.params;
 
     const orcamento = await prisma.orcamento.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        items: {
+          include: {
+            material: true
+          }
+        }
+      }
     });
 
     if (!orcamento) {
@@ -290,6 +297,50 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    // 🔍 VERIFICAR ESTOQUE - Identificar items frios
+    console.log('🔍 Verificando disponibilidade de estoque...');
+    const itemsFrios: any[] = [];
+    const itemsDisponiveis: any[] = [];
+
+    for (const item of orcamento.items) {
+      if (item.tipo === 'MATERIAL' && item.materialId) {
+        const material = await prisma.material.findUnique({
+          where: { id: item.materialId }
+        });
+
+        if (!material) {
+          itemsFrios.push({
+            id: item.id,
+            nome: (item as any).nome || 'Material não identificado',
+            quantidade: item.quantidade,
+            motivo: 'Material não encontrado no catálogo'
+          });
+        } else if (material.estoque < item.quantidade) {
+          itemsFrios.push({
+            id: item.id,
+            materialId: material.id,
+            nome: material.nome,
+            sku: material.sku,
+            quantidadeNecessaria: item.quantidade,
+            quantidadeDisponivel: material.estoque,
+            quantidadeFaltante: item.quantidade - material.estoque,
+            motivo: 'Estoque insuficiente'
+          });
+        } else {
+          itemsDisponiveis.push({
+            id: item.id,
+            materialId: material.id,
+            nome: material.nome,
+            quantidade: item.quantidade,
+            estoqueDisponivel: material.estoque
+          });
+        }
+      }
+    }
+
+    console.log(`✅ Items disponíveis: ${itemsDisponiveis.length}`);
+    console.log(`❄️ Items frios (sem estoque): ${itemsFrios.length}`);
+
     // Verificar se já existe um projeto vinculado
     const projetoExistente = await prisma.projeto.findUnique({
       where: { orcamentoId: id }
@@ -297,15 +348,17 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
 
     let projeto = null;
     if (projetoExistente) {
-      // Se já existe, atualizar o status para APROVADO
-      console.log(`📋 Atualizando projeto existente ${projetoExistente.id} para APROVADO`);
+      // Se já existe, atualizar o status para PROPOSTA e adicionar flag de items frios
+      console.log(`📋 Atualizando projeto existente ${projetoExistente.id} para PROPOSTA`);
       projeto = await prisma.projeto.update({
         where: { id: projetoExistente.id },
-        data: { status: 'APROVADO' }
+        data: { 
+          status: 'PROPOSTA' // ⚠️ PROPOSTA até que items frios sejam resolvidos
+        }
       });
     } else {
-      // Se não existe, criar novo projeto
-      console.log(`📋 Criando novo projeto para orçamento ${id}`);
+      // Se não existe, criar novo projeto com status PROPOSTA
+      console.log(`📋 Criando novo projeto para orçamento ${id} com status PROPOSTA`);
       projeto = await prisma.projeto.create({
         data: {
           orcamentoId: id,
@@ -314,7 +367,7 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
           descricao: orcamento.descricao,
           valorTotal: orcamento.precoVenda,
           dataInicio: new Date(),
-          status: 'APROVADO'
+          status: 'PROPOSTA' // ⚠️ Projeto começa como PROPOSTA
         }
       });
     }
@@ -329,7 +382,11 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
         cliente: {
           select: { id: true, nome: true }
         },
-        items: true,
+        items: {
+          include: {
+            material: true
+          }
+        },
         projeto: true
       }
     });
@@ -338,7 +395,11 @@ export const aprovarOrcamento = async (req: Request, res: Response): Promise<voi
       success: true,
       data: orcamentoAtualizado,
       projeto: projeto,
-      message: `Orçamento aprovado com sucesso${projeto ? ' e projeto atualizado' : ''}`
+      itemsFrios: itemsFrios,
+      itemsDisponiveis: itemsDisponiveis,
+      message: itemsFrios.length > 0 
+        ? `⚠️ Orçamento aprovado! ATENÇÃO: ${itemsFrios.length} item(ns) sem estoque. O projeto foi criado, mas sua aprovação está bloqueada até a compra dos materiais.`
+        : `✅ Orçamento aprovado com sucesso! Projeto criado e pronto para aprovação.`
     });
   } catch (error) {
     console.error('Erro ao aprovar orçamento:', error);
@@ -436,7 +497,14 @@ export const updateOrcamento = async (req: Request, res: Response): Promise<void
     // Verificar se orçamento existe
     const orcamentoExistente = await prisma.orcamento.findUnique({
       where: { id },
-      include: { items: true }
+      include: { 
+        items: {
+          include: {
+            material: true,
+            kit: true
+          }
+        }
+      }
     });
 
     if (!orcamentoExistente) {

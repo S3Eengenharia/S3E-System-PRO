@@ -101,6 +101,8 @@ export class EquipesService {
    */
   async listarEquipes(ativa?: boolean): Promise<EquipeComMembros[]> {
     try {
+      console.log('📋 Listando equipes com filtro ativa:', ativa);
+      
       const equipes = await prisma.equipe.findMany({
         where: ativa !== undefined ? { ativa } : {},
         include: {
@@ -117,31 +119,49 @@ export class EquipesService {
         orderBy: { nome: 'asc' }
       });
 
+      console.log(`✅ Encontradas ${equipes.length} equipes`);
+
       const allUsuarioIds = Array.from(
-        new Set(equipes.flatMap((e) => e.membros))
+        new Set(equipes.flatMap((e) => e.membros || []))
       );
+
+      console.log(`👥 Total de IDs de membros únicos: ${allUsuarioIds.length}`);
 
       // Buscar usuários ao invés de pessoas
       const usuarios = allUsuarioIds.length
         ? await prisma.user.findMany({ where: { id: { in: allUsuarioIds } } })
         : [];
+      
+      console.log(`✅ Usuários encontrados: ${usuarios.length} de ${allUsuarioIds.length} IDs`);
+      
       const usuarioById = new Map(usuarios.map((u) => [u.id, u]));
 
       return equipes.map((equipe) => {
-        const membros: EquipeMembro[] = equipe.membros
+        const membrosIds = equipe.membros || [];
+        const membros: EquipeMembro[] = membrosIds
           .map((id) => usuarioById.get(id))
-          .filter(Boolean)
+          .filter((u): u is NonNullable<typeof u> => u !== undefined)
           .map((u) => ({
-            id: (u as any).id,
-            nome: (u as any).name,
-            funcao: (u as any).role,
-            email: (u as any).email
+            id: u.id,
+            nome: u.name,
+            funcao: u.role,
+            email: u.email
           }));
+        
+        // Log de IDs faltando
+        const idsNaoEncontrados = membrosIds.filter(id => !usuarioById.has(id));
+        if (idsNaoEncontrados.length > 0) {
+          console.warn(`⚠️ Equipe "${equipe.nome}": ${idsNaoEncontrados.length} membros não encontrados na tabela User:`, idsNaoEncontrados);
+        }
+        
         return { ...equipe, membros };
       });
 
     } catch (error) {
-      console.error('Erro ao listar equipes:', error);
+      console.error('❌ Erro ao listar equipes:', error);
+      if (error instanceof Error) {
+        console.error('Stack trace:', error.stack);
+      }
       throw new Error('Erro ao listar equipes');
     }
   }

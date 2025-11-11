@@ -40,23 +40,30 @@ export class AlocacaoService {
    * Cria uma nova equipe
    */
   async criarEquipe(data: CriarEquipeDTO) {
-    // Validar se os membros existem
-    const membrosExistem = await prisma.user.findMany({
-      where: {
-        id: { in: data.membros }
-      }
-    });
+    // Filtrar valores nulos, undefined e strings vazias dos membros
+    const membrosValidos = (data.membros || []).filter(
+      (id: string | null | undefined) => id != null && id !== '' && typeof id === 'string'
+    );
 
-    if (membrosExistem.length !== data.membros.length) {
-      throw new Error('Um ou mais membros não foram encontrados');
+    // Validar se os membros existem (só se houver membros válidos)
+    if (membrosValidos.length > 0) {
+      const membrosExistem = await prisma.user.findMany({
+        where: {
+          id: { in: membrosValidos }
+        }
+      });
+
+      if (membrosExistem.length !== membrosValidos.length) {
+        throw new Error('Um ou mais membros não foram encontrados');
+      }
     }
 
-    // Criar equipe
+    // Criar equipe com apenas membros válidos
     const equipe = await prisma.equipe.create({
       data: {
         nome: data.nome,
         tipo: data.tipo,
-        membros: data.membros,
+        membros: membrosValidos,
         ativa: true
       }
     });
@@ -109,16 +116,27 @@ export class AlocacaoService {
    */
   async atualizarEquipe(id: string, data: Partial<CriarEquipeDTO>) {
     // Se estiver atualizando membros, validar
-    if (data.membros) {
-      const membrosExistem = await prisma.user.findMany({
-        where: {
-          id: { in: data.membros }
-        }
-      });
+    if (data.membros && Array.isArray(data.membros)) {
+      // Filtrar valores nulos, undefined e strings vazias
+      const membrosValidos = data.membros.filter(
+        (id: string | null | undefined) => id != null && id !== '' && typeof id === 'string'
+      );
 
-      if (membrosExistem.length !== data.membros.length) {
-        throw new Error('Um ou mais membros não foram encontrados');
+      // Só validar se houver membros válidos
+      if (membrosValidos.length > 0) {
+        const membrosExistem = await prisma.user.findMany({
+          where: {
+            id: { in: membrosValidos }
+          }
+        });
+
+        if (membrosExistem.length !== membrosValidos.length) {
+          throw new Error('Um ou mais membros não foram encontrados');
+        }
       }
+
+      // Atualizar data.membros com apenas os valores válidos
+      data.membros = membrosValidos;
     }
 
     const equipe = await prisma.equipe.update({

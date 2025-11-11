@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { projetosService, type Projeto, type CreateProjetoData } from '../services/projetosService';
 import { clientesService, type Cliente } from '../services/clientesService';
+import { obrasService } from '../services/obrasService';
 import { axiosApiService } from '../services/axiosApi';
 
 // Tipos locais para obra
@@ -127,15 +128,10 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
     // Estados para o formulário de obra
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [usuarios, setUsuarios] = useState<any[]>([]);
-    const [formState, setFormState] = useState<CreateProjetoData>({
-        titulo: '',
-        descricao: '',
-        tipo: 'Instalacao',
-        clienteId: '',
-        responsavelId: '',
-        dataInicio: '',
-        dataPrevisao: '',
-        orcamentoId: ''
+    const [projetosValidados, setProjetosValidados] = useState<Projeto[]>([]);
+    const [formState, setFormState] = useState<{ projetoId: string; nomeObra?: string }>({
+        projetoId: '',
+        nomeObra: ''
     });
 
     // Carregar projetos do backend
@@ -147,8 +143,21 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         await Promise.all([
             carregarProjetos(),
             carregarClientes(),
-            carregarUsuarios()
+            carregarUsuarios(),
+            carregarProjetosValidados()
         ]);
+    };
+
+    const carregarProjetosValidados = async () => {
+        try {
+            const response = await projetosService.listar({ status: 'VALIDADO' });
+            if (response.success && response.data) {
+                setProjetosValidados(Array.isArray(response.data) ? response.data : []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar projetos validados:', error);
+            setProjetosValidados([]);
+        }
     };
     
     const carregarClientes = async () => {
@@ -316,32 +325,21 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
     const handleOpenModal = (project: Project | null = null) => {
         if (project) {
-            // Editando obra existente
-            setProjectToEdit(project);
-            setFormState({
-                titulo: project.titulo,
-                descricao: project.descricao,
-                tipo: project.tipo,
-                clienteId: project.cliente.id,
-                responsavelId: project.responsavel.id,
-                dataInicio: project.dataInicio,
-                dataPrevisao: project.dataFim,
-                orcamentoId: ''
+            // Editando obra existente - não permitido pois obra vem de projeto
+            toast.warning('Edição não disponível', {
+                description: 'Obras são gerenciadas através de seus projetos. Vá até o Kanban de Obras para gerenciar.'
             });
+            return;
         } else {
-            // Nova obra
+            // Nova obra - limpar formulário
             setProjectToEdit(null);
             setFormState({
-                titulo: '',
-                descricao: '',
-                tipo: 'Instalacao',
-                clienteId: '',
-                responsavelId: '',
-                dataInicio: '',
-                dataPrevisao: '',
-                orcamentoId: ''
+                projetoId: '',
+                nomeObra: ''
             });
         }
+        // Recarregar projetos validados ao abrir modal
+        carregarProjetosValidados();
         setIsModalOpen(true);
     };
     useEffect(() => {
@@ -396,60 +394,36 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        // Validar que um projeto foi selecionado
+        if (!formState.projetoId) {
+            toast.error('Projeto obrigatório', {
+                description: 'Você deve selecionar um projeto validado para gerar uma obra.'
+            });
+            return;
+        }
+        
         try {
-            if (projectToEdit) {
-                // Atualizar obra existente
-                const response = await projetosService.atualizar(projectToEdit.id, {
-                    titulo: formState.titulo,
-                    descricao: formState.descricao,
-                    tipo: formState.tipo,
-                    clienteId: formState.clienteId,
-                    responsavelId: formState.responsavelId,
-                    dataInicio: formState.dataInicio,
-                    dataPrevisao: formState.dataPrevisao,
-                    orcamentoId: formState.orcamentoId || undefined
+            // Gerar obra a partir do projeto validado
+            const response = await obrasService.gerarObra({
+                projetoId: formState.projetoId,
+                nomeObra: formState.nomeObra || undefined
+            });
+            
+            if (response.success) {
+                toast.success('✅ Obra criada com sucesso!', {
+                    description: `A obra foi gerada a partir do projeto e adicionada ao Kanban de Obras.`
                 });
-                
-                if (response.success) {
-                    toast.success('Obra atualizada com sucesso!', {
-                        description: `A obra "${formState.titulo}" foi atualizada.`
-                    });
-                    handleCloseModal();
-                    await carregarProjetos();
-                } else {
-                    toast.error('Erro ao atualizar obra', {
-                        description: response.error || 'Erro desconhecido'
-                    });
-                }
+                handleCloseModal();
+                await carregarProjetos();
             } else {
-                // Criar nova obra
-                const response = await projetosService.criar({
-                    titulo: formState.titulo,
-                    descricao: formState.descricao,
-                    tipo: formState.tipo,
-                    clienteId: formState.clienteId,
-                    responsavelId: formState.responsavelId,
-                    dataInicio: formState.dataInicio,
-                    dataPrevisao: formState.dataPrevisao,
-                    orcamentoId: formState.orcamentoId || undefined
+                toast.error('Erro ao gerar obra', {
+                    description: response.error || 'Erro desconhecido'
                 });
-                
-                if (response.success) {
-                    toast.success('Obra criada com sucesso!', {
-                        description: `A obra "${formState.titulo}" foi cadastrada.`
-                    });
-                    handleCloseModal();
-                    await carregarProjetos();
-                } else {
-                    toast.error('Erro ao criar obra', {
-                        description: response.error || 'Erro desconhecido'
-                    });
-                }
             }
-        } catch (error) {
-            console.error('Erro ao salvar obra:', error);
-            toast.error('Erro ao salvar obra', {
-                description: 'Verifique os dados e tente novamente.'
+        } catch (error: any) {
+            console.error('Erro ao gerar obra:', error);
+            toast.error('Erro ao gerar obra', {
+                description: error?.response?.data?.message || error?.message || 'Erro desconhecido'
             });
         }
     };
@@ -852,10 +826,10 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                 </div>
                                 <div>
                                     <h2 className="text-2xl font-bold text-white">
-                                        {projectToEdit ? 'Editar Obra' : 'Nova Obra'}
+                                        Gerar Nova Obra
                                     </h2>
                                     <p className="text-sm text-white/80 mt-1">
-                                        {projectToEdit ? 'Atualize as informações da obra' : 'Cadastre uma nova obra de campo'}
+                                        Gere uma obra de campo a partir de um projeto validado
                                     </p>
                                 </div>
                             </div>
@@ -869,134 +843,84 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
                         {/* Formulário */}
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Título da Obra */}
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Título da Obra *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formState.titulo}
-                                        onChange={(e) => setFormState({...formState, titulo: e.target.value})}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                        placeholder="Ex: Instalação Elétrica Edifício Phoenix"
-                                    />
+                            {/* Alerta informativo sobre o fluxo */}
+                            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-semibold text-amber-900 mb-1">📋 Fluxo do Sistema</h4>
+                                        <p className="text-sm text-amber-800">
+                                            <strong>Orçamento</strong> → <strong>Projeto</strong> → <strong>Obra (Produção de Campo)</strong>
+                                        </p>
+                                        <p className="text-xs text-amber-700 mt-2">
+                                            Obras só podem ser criadas a partir de projetos validados. O projeto representa a parte administrativa/documental, e a obra é a execução no campo.
+                                        </p>
+                                    </div>
                                 </div>
+                            </div>
 
-                                {/* Cliente */}
+                            <div className="space-y-4">
+                                {/* Projeto Validado - OBRIGATÓRIO */}
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Cliente *
+                                        Projeto Validado * <span className="text-red-500">(Obrigatório)</span>
                                     </label>
                                     <select
-                                        value={formState.clienteId}
-                                        onChange={(e) => setFormState({...formState, clienteId: e.target.value})}
+                                        value={formState.projetoId || ''}
+                                        onChange={(e) => {
+                                            const projetoId = e.target.value;
+                                            const projetoSelecionado = projetosValidados.find(p => p.id === projetoId);
+                                            
+                                            if (projetoSelecionado) {
+                                                setFormState({
+                                                    projetoId,
+                                                    nomeObra: projetoSelecionado.titulo || ''
+                                                });
+                                            } else {
+                                                setFormState({ projetoId: '', nomeObra: '' });
+                                            }
+                                        }}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
                                     >
-                                        <option value="">Selecione o cliente</option>
-                                        {clientes.map(cliente => (
-                                            <option key={cliente.id} value={cliente.id}>
-                                                {cliente.nome}
+                                        <option value="">Selecione um projeto validado</option>
+                                        {projetosValidados.map(projeto => (
+                                            <option key={projeto.id} value={projeto.id}>
+                                                {projeto.titulo} - Cliente: {projeto.cliente?.nome}
                                             </option>
                                         ))}
                                     </select>
+                                    {projetosValidados.length === 0 && (
+                                        <p className="text-xs text-red-600 mt-2 font-semibold">
+                                            ❌ Nenhum projeto validado encontrado. Você precisa criar e validar um projeto antes de gerar uma obra.
+                                        </p>
+                                    )}
+                                    {formState.projetoId && (
+                                        <p className="text-xs text-green-600 mt-2 font-semibold">
+                                            ✅ A obra será gerada a partir deste projeto e adicionada ao Kanban de Obras.
+                                        </p>
+                                    )}
                                 </div>
 
-                                {/* Responsável */}
+                                {/* Nome da Obra - OPCIONAL */}
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Responsável Técnico *
-                                    </label>
-                                    <select
-                                        value={formState.responsavelId}
-                                        onChange={(e) => setFormState({...formState, responsavelId: e.target.value})}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                    >
-                                        <option value="">Selecione o responsável</option>
-                                        {usuarios.map(usuario => (
-                                            <option key={usuario.id} value={usuario.id}>
-                                                {usuario.nome} - {usuario.role}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Tipo de Obra */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Tipo de Obra *
-                                    </label>
-                                    <select
-                                        value={formState.tipo}
-                                        onChange={(e) => setFormState({...formState, tipo: e.target.value})}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                    >
-                                        <option value="Instalacao">Instalação</option>
-                                        <option value="Manutencao">Manutenção</option>
-                                        <option value="Retrofit">Retrofit</option>
-                                        <option value="Automacao">Automação</option>
-                                    </select>
-                                </div>
-
-                                {/* Orçamento Vinculado */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        ID do Orçamento (Opcional)
+                                        Nome da Obra (Opcional)
                                     </label>
                                     <input
                                         type="text"
-                                        value={formState.orcamentoId}
-                                        onChange={(e) => setFormState({...formState, orcamentoId: e.target.value})}
+                                        value={formState.nomeObra || ''}
+                                        onChange={(e) => setFormState({...formState, nomeObra: e.target.value})}
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                        placeholder="Digite o ID do orçamento"
+                                        placeholder="Deixe em branco para usar o título do projeto"
                                     />
-                                </div>
-
-                                {/* Data de Início */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Data de Início *
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={formState.dataInicio}
-                                        onChange={(e) => setFormState({...formState, dataInicio: e.target.value})}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                    />
-                                </div>
-
-                                {/* Data Prevista de Conclusão */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Data Prevista de Conclusão *
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={formState.dataPrevisao}
-                                        onChange={(e) => setFormState({...formState, dataPrevisao: e.target.value})}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                    />
-                                </div>
-
-                                {/* Descrição */}
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Descrição da Obra
-                                    </label>
-                                    <textarea
-                                        value={formState.descricao}
-                                        onChange={(e) => setFormState({...formState, descricao: e.target.value})}
-                                        rows={4}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                                        placeholder="Descreva os detalhes da obra, escopo, observações importantes..."
-                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Se deixar em branco, o nome será o mesmo do projeto selecionado.
+                                    </p>
                                 </div>
                             </div>
 
@@ -1009,9 +933,9 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                         </svg>
                                     </div>
                                     <div className="flex-1">
-                                        <h4 className="text-sm font-semibold text-blue-900 mb-1">💡 Dica Importante</h4>
+                                        <h4 className="text-sm font-semibold text-blue-900 mb-1">💡 Próximos Passos</h4>
                                         <p className="text-sm text-blue-800">
-                                            Após criar a obra, você poderá alocar equipes de eletricistas, gerenciar materiais e acompanhar o progresso através do quadro Kanban.
+                                            Após criar a obra, você poderá alocar equipes de eletricistas, gerenciar materiais e acompanhar o progresso através do Kanban de Obras.
                                         </p>
                                     </div>
                                 </div>
@@ -1028,19 +952,11 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold"
+                                    disabled={!formState.projetoId || projetosValidados.length === 0}
+                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {projectToEdit ? (
-                                        <>
-                                            <PencilIcon className="w-5 h-5" />
-                                            Atualizar Obra
-                                        </>
-                                    ) : (
-                                        <>
-                                            <PlusIcon className="w-5 h-5" />
-                                            Criar Obra
-                                        </>
-                                    )}
+                                    <PlusIcon className="w-5 h-5" />
+                                    Gerar Obra do Projeto
                                 </button>
                             </div>
                         </form>

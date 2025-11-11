@@ -9,6 +9,23 @@ router.use(authenticateToken);
 router.use(authorize('admin', 'operacional'));
 
 /**
+ * @route GET /api/equipes/diagnostic
+ * @desc Endpoint de diagnóstico
+ * @access Private
+ */
+router.get('/diagnostic', async (req, res) => {
+    try {
+        res.json({
+            success: true,
+            message: 'Rota de equipes está funcionando',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Erro no diagnostic' });
+    }
+});
+
+/**
  * @route GET /api/equipes
  * @desc Listar todas as equipes
  * @access Private

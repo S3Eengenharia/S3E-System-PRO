@@ -89,8 +89,44 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
     );
   }, [pessoasParaSelecao, busca]);
 
+  // Verificar se uma pessoa já está em outra equipe (exceto a equipe sendo editada)
+  const isPessoaEmOutraEquipe = (pessoaId: string): { emOutraEquipe: boolean; nomeEquipe?: string } => {
+    for (const equipe of equipes) {
+      // Ignorar a equipe atual se estiver editando
+      if (editingEquipeId && equipe.id === editingEquipeId) {
+        continue;
+      }
+      
+      // Verificar se a pessoa está nesta equipe
+      const estaNaEquipe = equipe.membros?.some(membro => membro.id === pessoaId);
+      if (estaNaEquipe) {
+        return { emOutraEquipe: true, nomeEquipe: equipe.nome };
+      }
+    }
+    
+    return { emOutraEquipe: false };
+  };
+
   const alternarSelecionado = (id: string) => {
-    setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    // Verificar se a pessoa já está em outra equipe
+    const { emOutraEquipe, nomeEquipe } = isPessoaEmOutraEquipe(id);
+    
+    // Se já está selecionado, permitir desmarcar
+    if (selecionados.includes(id)) {
+      setSelecionados(prev => prev.filter(x => x !== id));
+      return;
+    }
+    
+    // Se está em outra equipe, não permitir adicionar
+    if (emOutraEquipe) {
+      setError(`Esta pessoa já faz parte da equipe "${nomeEquipe}". Uma pessoa não pode estar em múltiplas equipes simultaneamente.`);
+      // Limpar o erro após 5 segundos
+      setTimeout(() => setError(null), 5000);
+      return;
+    }
+    
+    // Se passou pelas validações, adicionar
+    setSelecionados(prev => [...prev, id]);
   };
 
   const criarEquipe = async () => {
@@ -225,22 +261,52 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
                 <div className="p-4 text-sm text-gray-600">Nenhuma pessoa disponível</div>
               ) : (
                 <ul className="divide-y divide-gray-200">
-                  {filtrados.map(p => (
-                    <li key={p.id} className="flex items-center justify-between p-3">
-                      <div>
-                        <div className="font-medium text-gray-900">{p.nome}</div>
-                        <div className="text-xs text-gray-600">{p.email || 'sem email'} • {p.funcao}</div>
-                      </div>
-                      <label className="inline-flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selecionados.includes(p.id!)}
-                          onChange={() => alternarSelecionado(p.id!)}
-                        />
-                        Selecionar
-                      </label>
-                    </li>
-                  ))}
+                  {filtrados.map(p => {
+                    const isSelected = selecionados.includes(p.id!);
+                    const { emOutraEquipe, nomeEquipe } = isPessoaEmOutraEquipe(p.id!);
+                    const isDisabled = emOutraEquipe && !isSelected;
+                    
+                    return (
+                      <li 
+                        key={p.id} 
+                        className={`flex items-center justify-between p-3 ${isDisabled ? 'bg-gray-50 opacity-60' : ''}`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className={`font-medium ${isDisabled ? 'text-gray-500' : 'text-gray-900'}`}>
+                              {p.nome}
+                            </div>
+                            {isDisabled && (
+                              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+                                Em outra equipe
+                              </span>
+                            )}
+                          </div>
+                          <div className={`text-xs ${isDisabled ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {p.email || 'sem email'} • {p.funcao}
+                          </div>
+                          {isDisabled && nomeEquipe && (
+                            <div className="text-xs text-orange-600 mt-1 font-medium">
+                              Equipe: {nomeEquipe}
+                            </div>
+                          )}
+                        </div>
+                        <label 
+                          className={`inline-flex items-center gap-2 text-sm ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                          title={isDisabled ? `Esta pessoa já faz parte da equipe "${nomeEquipe}"` : ''}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => alternarSelecionado(p.id!)}
+                            disabled={isDisabled}
+                            className={isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                          />
+                          {isSelected ? 'Selecionado' : isDisabled ? 'Indisponível' : 'Selecionar'}
+                        </label>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

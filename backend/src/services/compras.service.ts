@@ -595,6 +595,46 @@ export class ComprasService {
                     );
                     
                     console.log(`✅ Item ${item.nomeProduto} processado no estoque`);
+                    
+                    // 🔍 VERIFICAR SE HÁ PROJETOS BLOQUEADOS ESPERANDO ESTE MATERIAL
+                    const projetosBloqueados = await tx.projeto.findMany({
+                        where: {
+                            status: 'PROPOSTA', // Projetos em PROPOSTA podem ter items frios
+                            orcamento: {
+                                items: {
+                                    some: {
+                                        materialId: materialIdFinal,
+                                        tipo: 'MATERIAL'
+                                    }
+                                }
+                            }
+                        },
+                        include: {
+                            orcamento: {
+                                include: {
+                                    items: {
+                                        include: {
+                                            material: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    if (projetosBloqueados.length > 0) {
+                        console.log(`📢 Material ${item.nomeProduto} desbloqueou ${projetosBloqueados.length} projeto(s)!`);
+                        
+                        // Atualizar observações dos projetos para notificar
+                        for (const proj of projetosBloqueados) {
+                            await tx.projeto.update({
+                                where: { id: proj.id },
+                                data: {
+                                    observacoes: `${proj.observacoes || ''}\n\n✅ Material recebido: ${item.nomeProduto} - ${item.quantidade} unidades (${new Date().toLocaleDateString('pt-BR')})`
+                                }
+                            });
+                        }
+                    }
                 }
                 
                 console.log('✅ Remessa parcial processada!');

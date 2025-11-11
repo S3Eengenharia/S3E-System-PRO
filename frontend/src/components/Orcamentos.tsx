@@ -286,22 +286,38 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 condicaoPagamento: orcamento.condicaoPagamento || 'À Vista'
             });
             // Mapear ItemOrcamento para OrcamentoItem
-            const mappedItems = (orcamento.items || []).map((item: any) => ({
-                id: item.id,
-                tipo: item.tipo,
-                materialId: item.materialId,
-                kitId: item.kitId,
-                quadroId: item.quadroId,
-                servicoId: item.servicoId,
-                nome: item.nome || item.descricao || 'Item',
-                descricao: item.descricao || '',
-                unidadeMedida: item.unidadeMedida || 'UN',
-                quantidade: item.quantidade,
-                custoUnit: item.custoUnitario || 0,
-                precoUnit: item.precoUnitario || item.precoUnit || 0,
-                subtotal: item.subtotal,
-                orcamentoId: item.orcamentoId
-            }));
+            const mappedItems = (orcamento.items || []).map((item: any) => {
+                // Se custoUnit for 0 ou null, tentar buscar do material
+                let custoUnitFinal = item.custoUnitario || item.custoUnit || 0;
+                let precoUnitFinal = item.precoUnitario || item.precoUnit || 0;
+                
+                // Se ainda estiver zerado, tentar buscar do material vinculado
+                if (custoUnitFinal === 0 && item.material) {
+                    custoUnitFinal = item.material.preco || 0;
+                    precoUnitFinal = custoUnitFinal * (1 + (orcamento.bdi || 0) / 100);
+                }
+                
+                const subtotalCalculado = precoUnitFinal * (item.quantidade || 1);
+                
+                return {
+                    id: item.id,
+                    tipo: item.tipo,
+                    materialId: item.materialId,
+                    kitId: item.kitId,
+                    quadroId: item.quadroId,
+                    servicoId: item.servicoId,
+                    nome: item.nome || item.material?.nome || item.descricao || 'Item',
+                    descricao: item.descricao || '',
+                    unidadeMedida: item.unidadeMedida || item.material?.unidadeMedida || 'UN',
+                    quantidade: item.quantidade || 1,
+                    custoUnit: custoUnitFinal,
+                    precoUnit: precoUnitFinal,
+                    subtotal: item.subtotal || subtotalCalculado,
+                    orcamentoId: item.orcamentoId
+                };
+            });
+            console.log('✅ Items existentes carregados:', mappedItems.length);
+            console.log('📦 Items:', mappedItems);
             setItems(mappedItems as OrcamentoItem[]);
         } else {
             setOrcamentoToEdit(null);
@@ -525,9 +541,33 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     const response = await orcamentosService.aprovar(orcamentoId);
                     
                     if (response.success) {
-                        toast.success('Orçamento aprovado!', {
-                            description: 'O orçamento foi aprovado e está disponível para criar projetos.'
-                        });
+                        const data: any = response.data || response;
+                        const itemsFrios = data.itemsFrios || [];
+                        const itemsDisponiveis = data.itemsDisponiveis || [];
+                        
+                        // Mostrar mensagem personalizada baseada em items frios
+                        if (itemsFrios.length > 0) {
+                            // Criar lista de items frios para exibir
+                            const listaItemsFrios = itemsFrios.map((item: any) => 
+                                `• ${item.nome} - Faltam: ${item.quantidadeFaltante || item.quantidadeNecessaria} ${item.sku ? `(${item.sku})` : ''}`
+                            ).join('\n');
+                            
+                            toast.warning('⚠️ Orçamento aprovado com restrições', {
+                                description: `${itemsFrios.length} item(ns) sem estoque suficiente:\n${listaItemsFrios}\n\n📦 Realize a compra destes materiais antes de aprovar o projeto.`,
+                                duration: 10000,
+                                action: {
+                                    label: 'Ver Detalhes',
+                                    onClick: () => {
+                                        alert(`Items sem estoque:\n\n${listaItemsFrios}\n\n⚠️ O projeto foi criado mas não pode ser aprovado até que todos os materiais estejam em estoque.`);
+                                    }
+                                }
+                            });
+                        } else {
+                            toast.success('✅ Orçamento aprovado!', {
+                                description: `Todos os ${itemsDisponiveis.length} item(ns) estão disponíveis em estoque. O projeto foi criado e está pronto para aprovação.`
+                            });
+                        }
+                        
                         await loadData();
                     } else {
                         toast.error('Erro ao aprovar', {
@@ -655,9 +695,10 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             // Buscar HTML via API autenticada
             const response = await axiosApiService.get(`/api/orcamentos/${orcamento.id}/pdf/preview?opacidade=0.08`);
             
-            if (response.success && response.data?.html) {
+            const responseData: any = response.data || {};
+            if (response.success && responseData.html) {
                 // Criar blob com o HTML
-                const blob = new Blob([response.data.html], { type: 'text/html' });
+                const blob = new Blob([responseData.html], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 
                 console.log('✅ PDF gerado, abrindo em nova janela...');

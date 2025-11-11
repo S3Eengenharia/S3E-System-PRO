@@ -52,11 +52,15 @@ export class EquipesController {
    */
   async listarEquipes(req: Request, res: Response) {
     try {
+      console.log('📋 [Controller] GET /api/equipes - Iniciando...');
       const { ativa } = req.query;
+      console.log('🔍 [Controller] Query params:', { ativa });
       
       const equipes = await equipesService.listarEquipes(
         ativa ? ativa === 'true' : undefined
       );
+
+      console.log(`✅ [Controller] ${equipes.length} equipes retornadas com sucesso`);
 
       res.json({
         success: true,
@@ -65,10 +69,14 @@ export class EquipesController {
       });
 
     } catch (error) {
-      console.error('Erro ao listar equipes:', error);
+      console.error('❌ [Controller] Erro ao listar equipes:', error);
+      if (error instanceof Error) {
+        console.error('Stack:', error.stack);
+      }
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Erro interno do servidor'
+        error: error instanceof Error ? error.message : 'Erro interno do servidor',
+        message: 'Erro ao listar equipes'
       });
     }
   }
