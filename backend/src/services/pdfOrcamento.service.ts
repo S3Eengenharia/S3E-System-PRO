@@ -361,7 +361,7 @@ export class PDFOrcamentoService {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 6px;
-            font-size: 8.5px;
+            font-size: 16px; /* Aumentado de 8.5px para 16px */
         }
 
         /* === ENDEREÇOS === */
@@ -391,7 +391,7 @@ export class PDFOrcamentoService {
 
         .descricao-content {
             color: #1e293b;
-            font-size: 9px;
+            font-size: 16px; /* Aumentado de 9px para 16px */
             line-height: 1.6;
             margin-top: 8px;
         }
@@ -441,7 +441,7 @@ export class PDFOrcamentoService {
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
-            font-size: 9px;
+            font-size: 16px; /* Aumentado de 9px para 16px */
         }
 
         table.itens-table thead {
@@ -455,7 +455,7 @@ export class PDFOrcamentoService {
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            font-size: 8px;
+            font-size: 14px; /* Aumentado de 8px para 14px */
         }
 
         table.itens-table th:nth-child(2),
@@ -468,7 +468,7 @@ export class PDFOrcamentoService {
         table.itens-table td {
             padding: 8px 6px;
             border-bottom: 1px solid #e2e8f0;
-            font-size: 8.5px;
+            font-size: 16px; /* Aumentado de 8.5px para 16px */
         }
 
         table.itens-table td:nth-child(2),
@@ -498,16 +498,7 @@ export class PDFOrcamentoService {
             margin-bottom: 4px;
         }
 
-        .item-descricao-tecnica {
-            color: #475569;
-            font-size: 8px;
-            margin-top: 4px;
-            padding: 6px;
-            background: rgba(248, 250, 252, 0.7);
-            border-left: 2px solid #cbd5e1;
-            border-radius: 3px;
-            line-height: 1.4;
-        }
+        /* Descrição técnica dos materiais removida - não é mais exibida */
 
         /* === TOTAIS === */
         .totais-section {
@@ -521,14 +512,14 @@ export class PDFOrcamentoService {
             display: flex;
             justify-content: space-between;
             padding: 6px 0;
-            font-size: 9px;
+            font-size: 16px; /* Aumentado de 9px para 16px */
         }
 
         .totais-row.total-final {
             border-top: 2px solid #1e40af;
             margin-top: 6px;
             padding-top: 8px;
-            font-size: 12px;
+            font-size: 18px; /* Aumentado de 12px para 18px */
             font-weight: bold;
             color: #1e40af;
         }
@@ -542,7 +533,7 @@ export class PDFOrcamentoService {
             width: 100%;
             border-collapse: collapse;
             margin-top: 8px;
-            font-size: 8.5px;
+            font-size: 16px; /* Aumentado de 8.5px para 16px */
         }
 
         table.pagamento-table thead {
@@ -559,12 +550,13 @@ export class PDFOrcamentoService {
             text-align: left;
             font-weight: 600;
             border-bottom: 2px solid #cbd5e1;
-            font-size: 8px;
+            font-size: 14px; /* Aumentado de 8px para 14px */
         }
 
         table.pagamento-table td {
             padding: 6px;
             border-bottom: 1px solid #e2e8f0;
+            font-size: 16px; /* Adicionado */
         }
 
         /* === OBSERVAÇÕES === */
@@ -578,7 +570,7 @@ export class PDFOrcamentoService {
 
         .observacoes-content {
             color: #78350f;
-            font-size: 9px;
+            font-size: 16px; /* Aumentado de 9px para 16px */
             line-height: 1.6;
             margin-top: 8px;
         }
@@ -656,7 +648,7 @@ export class PDFOrcamentoService {
             ${orcamento.cliente.endereco ? `
             <div class="address-box">
                 <div class="section-title">📍 Endereço de Cobrança</div>
-                <div style="font-size: 9px; line-height: 1.6;">
+                <div style="font-size: 16px; line-height: 1.6;">
                     ${orcamento.cliente.endereco}
                 </div>
             </div>
@@ -664,7 +656,7 @@ export class PDFOrcamentoService {
             ${orcamento.enderecoObra ? `
             <div class="address-box">
                 <div class="section-title">🏗️ Endereço da Obra</div>
-                <div style="font-size: 9px; line-height: 1.6;">
+                <div style="font-size: 16px; line-height: 1.6;">
                     ${orcamento.enderecoObra}<br>
                     ${orcamento.bairro ? `Bairro: ${orcamento.bairro}<br>` : ''}
                     ${orcamento.cidade ? `${orcamento.cidade} - ` : ''}${orcamento.cep || ''}
@@ -723,14 +715,7 @@ export class PDFOrcamentoService {
                         return `
                         <tr>
                             <td>
-                                <div class="item-tipo">${tipoLabel}</div>
                                 <div><strong>${nomeItem}</strong></div>
-                                ${descricaoDetalhada && descricaoDetalhada.trim().length > 0 ? `
-                                    <div class="item-descricao-tecnica">
-                                        <strong>Descrição Técnica:</strong><br>
-                                        ${descricaoDetalhada}
-                                    </div>
-                                ` : ''}
                             </td>
                             <td>UN</td>
                             <td>${item.quantidade.toFixed(2)}</td>
@@ -788,34 +773,65 @@ export class PDFOrcamentoService {
         </div>
         ` : ''}
 
-        <!-- Descrições Técnicas (sempre em nova página) -->
-        ${orcamento.descricao || orcamento.descricaoProjeto || orcamento.observacoes ? `
-        <div class="descricoes-wrapper">
-            <!-- Descrição Geral -->
-            ${orcamento.descricao ? `
-            <div class="descricao-section">
-                <div class="section-title">📄 Descrição Geral</div>
-                <div class="descricao-content">${orcamento.descricao}</div>
-            </div>
-            ` : ''}
-
-            <!-- Descrição Técnica do Projeto -->
-            ${orcamento.descricaoProjeto ? `
-            <div class="descricao-section projeto">
-                <div class="section-title">🔧 Descrição Técnica do Projeto</div>
-                <div class="descricao-content">${orcamento.descricaoProjeto}</div>
-            </div>
-            ` : ''}
-
-            <!-- Observações -->
-            ${orcamento.observacoes ? `
-            <div class="observacoes-section">
-                <div class="section-title">⚠️ Observações Importantes</div>
-                <div class="observacoes-content">${orcamento.observacoes}</div>
-            </div>
-            ` : ''}
-        </div>
-        ` : ''}
+        <!-- Lógica Condicional de Descrições -->
+        ${(() => {
+            // Se tiver APENAS descrição geral (sem técnica), coloca na primeira página
+            if (orcamento.descricao && !orcamento.descricaoProjeto) {
+                return `
+                <!-- Descrição Geral (na primeira página) -->
+                <div class="descricao-section" style="margin-bottom: 12px;">
+                    <div class="section-title">📄 Descrição Geral</div>
+                    <div class="descricao-content">${orcamento.descricao}</div>
+                </div>
+                ${orcamento.observacoes ? `
+                <div class="observacoes-section">
+                    <div class="section-title">⚠️ Observações Importantes</div>
+                    <div class="observacoes-content">${orcamento.observacoes}</div>
+                </div>
+                ` : ''}
+                `;
+            }
+            
+            // Se tiver descrição técnica, usa nova página (padrão existente)
+            if (orcamento.descricaoProjeto || (orcamento.descricao && orcamento.descricaoProjeto)) {
+                return `
+                <div class="descricoes-wrapper">
+                    ${orcamento.descricao ? `
+                    <div class="descricao-section">
+                        <div class="section-title">📄 Descrição Geral</div>
+                        <div class="descricao-content">${orcamento.descricao}</div>
+                    </div>
+                    ` : ''}
+                    
+                    ${orcamento.descricaoProjeto ? `
+                    <div class="descricao-section projeto">
+                        <div class="section-title">🔧 Descrição Técnica do Projeto</div>
+                        <div class="descricao-content">${orcamento.descricaoProjeto}</div>
+                    </div>
+                    ` : ''}
+                    
+                    ${orcamento.observacoes ? `
+                    <div class="observacoes-section">
+                        <div class="section-title">⚠️ Observações Importantes</div>
+                        <div class="observacoes-content">${orcamento.observacoes}</div>
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }
+            
+            // Se tiver apenas observações
+            if (orcamento.observacoes && !orcamento.descricao && !orcamento.descricaoProjeto) {
+                return `
+                <div class="observacoes-section" style="margin-bottom: 12px;">
+                    <div class="section-title">⚠️ Observações Importantes</div>
+                    <div class="observacoes-content">${orcamento.observacoes}</div>
+                </div>
+                `;
+            }
+            
+            return '';
+        })()}
     </div>
 </body>
 </html>

@@ -35,6 +35,47 @@ export class ObraController {
   }
 
   /**
+   * POST /api/obras/manutencao
+   * Cria uma Obra de Manutenção (sem projeto)
+   */
+  static async criarObraManutencao(req: Request, res: Response): Promise<void> {
+    try {
+      const { clienteId, nomeObra, descricao, endereco, dataPrevistaInicio, dataPrevistaFim } = req.body;
+
+      if (!clienteId || !nomeObra) {
+        res.status(400).json({ 
+          success: false, 
+          message: 'Cliente e nome da obra são obrigatórios' 
+        });
+        return;
+      }
+
+      console.log('🔧 Criando obra de manutenção:', { clienteId, nomeObra });
+
+      const obra = await obraService.criarObraManutencao({
+        clienteId,
+        nomeObra,
+        descricao,
+        endereco,
+        dataPrevistaInicio: dataPrevistaInicio ? new Date(dataPrevistaInicio) : undefined,
+        dataPrevistaFim: dataPrevistaFim ? new Date(dataPrevistaFim) : undefined
+      });
+
+      res.status(201).json({ 
+        success: true, 
+        data: obra,
+        message: 'Obra de manutenção criada com sucesso' 
+      });
+    } catch (error: any) {
+      console.error('Erro ao criar obra de manutenção:', error);
+      res.status(400).json({ 
+        success: false, 
+        message: error.message || 'Erro ao criar obra de manutenção' 
+      });
+    }
+  }
+
+  /**
    * GET /api/obras/kanban
    * Lista obras agrupadas por status (Kanban)
    */

@@ -3,6 +3,8 @@ import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { toast } from 'sonner';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -79,6 +81,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const [isEquipeManagerOpen, setIsEquipeManagerOpen] = useState(false);
     const [isAlocacaoModalOpen, setIsAlocacaoModalOpen] = useState(false);
     const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null);
+    const [alertaValidacao, setAlertaValidacao] = useState<{ tipo: 'erro' | 'info'; mensagem: string } | null>(null);
     const [formState, setFormState] = useState({
         nome: '',
         tipo: '' as '' | 'MONTAGEM' | 'CAMPO' | 'DISTINTA',
@@ -190,6 +193,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEquipeToEdit(null);
+        setAlertaValidacao(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -197,19 +201,22 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         
         // Validações
         if (!formState.nome.trim()) {
-            alert('Por favor, preencha o nome da equipe');
+            setAlertaValidacao({ tipo: 'erro', mensagem: 'Por favor, preencha o nome da equipe' });
             return;
         }
         
         if (!formState.tipo) {
-            alert('Por favor, selecione o tipo da equipe');
+            setAlertaValidacao({ tipo: 'erro', mensagem: 'Por favor, selecione o tipo da equipe' });
             return;
         }
         
         if (formState.membrosIds.length === 0) {
-            alert('Por favor, adicione pelo menos um membro à equipe');
+            setAlertaValidacao({ tipo: 'erro', mensagem: 'Por favor, adicione pelo menos um membro à equipe' });
             return;
         }
+        
+        // Limpar alerta se tudo estiver OK
+        setAlertaValidacao(null);
         
         try {
             // Formato esperado pelo backend
@@ -227,8 +234,9 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 if (response.success) {
                     await loadEquipes();
                     handleCloseModal();
+                    toast.success('✅ Equipe atualizada com sucesso!');
                 } else {
-                    alert('Erro ao atualizar equipe: ' + (response.error || 'Erro desconhecido'));
+                    toast.error('❌ Erro ao atualizar equipe: ' + (response.error || 'Erro desconhecido'));
                 }
             } else {
                 const response = await axiosApiService.post(ENDPOINTS.OBRAS.EQUIPES, equipeData);
@@ -236,14 +244,15 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 if (response.success) {
                     await loadEquipes();
                     handleCloseModal();
+                    toast.success('✅ Equipe criada com sucesso!');
                 } else {
-                    alert('Erro ao criar equipe: ' + (response.error || 'Erro desconhecido'));
+                    toast.error('❌ Erro ao criar equipe: ' + (response.error || 'Erro desconhecido'));
                 }
             }
         } catch (err: any) {
             console.error('Erro ao salvar equipe:', err);
             const errorMessage = err?.response?.data?.error || err?.message || 'Erro desconhecido';
-            alert('Erro ao salvar equipe: ' + errorMessage);
+            toast.error('❌ Erro ao salvar equipe: ' + errorMessage);
         }
     };
 
@@ -253,12 +262,13 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 const response = await axiosApiService.delete(`${ENDPOINTS.OBRAS.EQUIPES}/${equipe.id}`);
                 if (response.success) {
                     await loadEquipes();
+                    toast.success('✅ Equipe desativada com sucesso!');
                 } else {
-                    alert('Erro ao desativar equipe');
+                    toast.error('❌ Erro ao desativar equipe');
                 }
             } catch (err) {
                 console.error('Erro ao desativar equipe:', err);
-                alert('Erro ao desativar equipe');
+                toast.error('❌ Erro ao desativar equipe');
             }
         }
     };
@@ -266,6 +276,8 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormState(prev => ({ ...prev, [name]: value }));
+        // Limpar alerta quando usuário começar a corrigir
+        if (alertaValidacao) setAlertaValidacao(null);
     };
 
     const handleAddEletricista = (eletricistaId: string) => {
@@ -274,6 +286,8 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 ...prev, 
                 membrosIds: [...prev.membrosIds, eletricistaId] 
             }));
+            // Limpar alerta quando adicionar membro
+            if (alertaValidacao) setAlertaValidacao(null);
         }
     };
 
@@ -934,6 +948,19 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            {/* Alerta de Validação */}
+                            {alertaValidacao && (
+                                <Alert variant={alertaValidacao.tipo === 'erro' ? 'destructive' : 'default'} className="animate-fade-in">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <AlertTitle>Atenção!</AlertTitle>
+                                    <AlertDescription>
+                                        {alertaValidacao.mensagem}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     Nome da Equipe *
