@@ -35,6 +35,44 @@ export const getCompras = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+// Buscar compra por ID
+export const getCompraById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'ID da compra é obrigatório'
+      });
+      return;
+    }
+
+    console.log(`🔍 Buscando compra: ${id}`);
+    const compra = await ComprasService.buscarCompra(id);
+
+    res.json({
+      success: true,
+      data: compra
+    });
+  } catch (error) {
+    console.error('Erro ao buscar compra:', error);
+    
+    if (error instanceof Error && error.message === 'Compra não encontrada') {
+      res.status(404).json({
+        success: false,
+        error: 'Compra não encontrada'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao buscar compra',
+        message: error instanceof Error ? error.message : 'Erro desconhecido'
+      });
+    }
+  }
+};
+
 // Criar compra
 export const createCompra = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -217,6 +255,39 @@ export const updateCompraStatus = async (req: Request, res: Response): Promise<v
     console.error('Erro ao atualizar compra:', error);
     res.status(500).json({ 
       error: 'Erro ao atualizar compra',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+};
+
+export const receberRemessaParcial = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { status, dataEntregaReal, produtoIds } = req.body;
+
+    if (!status) {
+      res.status(400).json({ error: 'Status é obrigatório' });
+      return;
+    }
+
+    if (!produtoIds || !Array.isArray(produtoIds) || produtoIds.length === 0) {
+      res.status(400).json({ error: 'Pelo menos um produto deve ser selecionado' });
+      return;
+    }
+
+    console.log('📦 Recebendo remessa parcial:', id, 'Produtos:', produtoIds);
+    
+    const compraAtualizada = await ComprasService.receberRemessaParcial(id, status, produtoIds);
+
+    res.json({
+      success: true,
+      message: 'Remessa parcial recebida com sucesso',
+      data: compraAtualizada
+    });
+  } catch (error) {
+    console.error('Erro ao receber remessa parcial:', error);
+    res.status(500).json({ 
+      error: 'Erro ao receber remessa parcial',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }

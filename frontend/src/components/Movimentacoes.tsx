@@ -3,6 +3,7 @@ import { type StockMovement, MovementType, type MaterialItem } from '../types';
 import { movimentacoesService, type Movimentacao } from '../services/movimentacoesService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
+import { toast } from 'sonner';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -42,17 +43,22 @@ const UserIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 const entryReasons = [
-    "Recebimento de Compra",
     "Devolução de Obra",
+    "Devolução de Cliente",
     "Sobra de Projeto",
+    "Material em Excesso",
+    "Troca de Fornecedor",
     "Ajuste de Inventário",
     "Outro",
 ];
 
 const exitReasons = [
-    "Aplicação em Obra/Projeto",
-    "Uso Interno/Consumo",
+    "Alocação para Obra/Projeto",
+    "Uso em Instalação",
+    "Aplicação em Serviço",
     "Perda ou Avaria",
+    "Furto/Roubo",
+    "Material com Defeito",
     "Ajuste de Inventário",
     "Outro",
 ];
@@ -97,6 +103,9 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
     const [reason, setReason] = useState('');
     const [responsible, setResponsible] = useState('Admin');
     const [notes, setNotes] = useState('');
+    const [dataMovimentacao, setDataMovimentacao] = useState(new Date().toISOString().split('T')[0]);
+    const [obraVinculada, setObraVinculada] = useState('');
+    const [obras, setObras] = useState<any[]>([]);
     
     const materialDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -106,44 +115,78 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
             setLoading(true);
             setError(null);
             
+            console.log('📥 Carregando movimentações e materiais...');
+            
             // Carregar movimentações
             const movimentacoesResponse = await movimentacoesService.listar();
+            console.log('📊 Resposta movimentações:', movimentacoesResponse);
             
             if (movimentacoesResponse.success && movimentacoesResponse.data) {
                 // Converter movimentações da API para o formato do componente
-                const movimentacoesFormatadas: StockMovement[] = Array.isArray(movimentacoesResponse.data)
-                    ? movimentacoesResponse.data.map((mov: Movimentacao) => ({
-                        id: mov.id,
-                        materialId: mov.materialId,
-                        materialName: mov.material?.nome || 'Material não encontrado',
-                        type: mov.tipo === 'ENTRADA' ? MovementType.Entrada : MovementType.Saida,
-                        quantity: mov.quantidade,
-                        reason: mov.motivo,
-                        responsible: 'Sistema', // TODO: adicionar responsável quando disponível na API
-                        date: mov.createdAt || mov.data,
-                        notes: mov.observacoes
-                    }))
+                const movimentacoesArray = Array.isArray(movimentacoesResponse.data) 
+                    ? movimentacoesResponse.data 
                     : [];
                 
+                const movimentacoesFormatadas: StockMovement[] = movimentacoesArray
+                    .filter((mov: Movimentacao) => mov && mov.id) // Filtrar movimentos inválidos
+                    .map((mov: Movimentacao) => ({
+                        id: mov.id || `mov-${Date.now()}`,
+                        materialId: mov.materialId || '',
+                        materialName: mov.material?.nome || 'Material não encontrado',
+                        type: mov.tipo === 'ENTRADA' ? MovementType.Entrada : MovementType.Saida,
+                        quantity: mov.quantidade || 0,
+                        reason: mov.motivo || 'Não informado',
+                        responsible: 'Sistema',
+                        date: mov.createdAt || mov.data || new Date().toISOString(),
+                        notes: mov.observacoes || ''
+                    }));
+                
                 setMovements(movimentacoesFormatadas);
+                console.log(`✅ ${movimentacoesFormatadas.length} movimentações carregadas`);
             } else {
                 console.warn('Nenhuma movimentação encontrada ou erro na resposta:', movimentacoesResponse);
                 setMovements([]);
             }
             
             // Carregar materiais
-            const materiaisResponse = await axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS);
+            const materiaisResponse = await axiosApiService.get<any>(ENDPOINTS.MATERIAIS);
+            console.log('📦 Resposta materiais:', materiaisResponse);
             
             if (materiaisResponse.success && materiaisResponse.data) {
-                const materiaisData = Array.isArray(materiaisResponse.data) ? materiaisResponse.data : [];
-                setMaterials(materiaisData);
+                const materiaisArray = Array.isArray(materiaisResponse.data) 
+                    ? materiaisResponse.data 
+                    : [];
+                
+                // Mapear para MaterialItem garantindo compatibilidade
+                const materiaisFormatados: MaterialItem[] = materiaisArray
+                    .filter((mat: any) => mat && mat.id) // Filtrar materiais inválidos
+                    .map((mat: any) => ({
+                        id: mat.id,
+                        name: mat.nome || mat.name || 'Material sem nome',
+                        sku: mat.sku || '',
+                        type: mat.categoria || mat.category || mat.type || 'Outros',
+                        category: mat.categoria || mat.category || 'Sem categoria' as any,
+                        description: mat.descricao || mat.description || '',
+                        stock: mat.estoque || mat.stock || 0,
+                        minStock: mat.estoqueMinimo || mat.minStock || 0,
+                        unitOfMeasure: mat.unidadeMedida || mat.unitOfMeasure || 'un',
+                        location: mat.localizacao || mat.location || 'Não definido',
+                        price: mat.preco || mat.price || 0
+                    }));
+                
+                setMaterials(materiaisFormatados);
+                console.log(`✅ ${materiaisFormatados.length} materiais carregados`);
             } else {
                 console.warn('Nenhum material encontrado ou erro na resposta:', materiaisResponse);
                 setMaterials([]);
             }
         } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
             setError('Erro ao carregar movimentações');
-            console.error('Erro ao carregar movimentações:', err);
+            console.error('❌ Erro ao carregar movimentações:', err);
+            toast.error('❌ Erro ao carregar dados', {
+                description: errorMessage
+            });
             setMovements([]);
             setMaterials([]);
         } finally {
@@ -153,7 +196,30 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
 
     useEffect(() => {
         loadData();
+        loadObras();
     }, []);
+
+    const loadObras = async () => {
+        try {
+            console.log('🏗️ Carregando obras...');
+            const response = await axiosApiService.get<any>('/api/obras/kanban');
+            
+            if (response.success && response.data) {
+                // Consolidar todas as obras de todos os status
+                const todasObras = [
+                    ...(response.data.BACKLOG || []),
+                    ...(response.data.A_FAZER || []),
+                    ...(response.data.ANDAMENTO || []),
+                    ...(response.data.CONCLUIDO || [])
+                ];
+                setObras(todasObras);
+                console.log(`✅ ${todasObras.length} obras carregadas`);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar obras:', error);
+            setObras([]);
+        }
+    };
 
     // Filtros
     const filteredMovements = useMemo(() => {
@@ -167,9 +233,9 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
         // Filtro por busca
         if (searchTerm) {
             filtered = filtered.filter(movement =>
-                movement.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                movement.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                movement.responsible.toLowerCase().includes(searchTerm.toLowerCase())
+                (movement.materialName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (movement.reason || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (movement.responsible || '').toLowerCase().includes(searchTerm.toLowerCase())
             );
         }
 
@@ -211,19 +277,25 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
         setQuantity('');
         setReason('');
         setNotes('');
+        setDataMovimentacao(new Date().toISOString().split('T')[0]);
+        setObraVinculada('');
         setIsMaterialListOpen(false);
     };
 
     const handleSubmitMovement = async (type: MovementType) => {
         if (!selectedMaterial || !quantity || !reason) {
-            alert('Preencha todos os campos obrigatórios');
+            toast.error('❌ Campos obrigatórios não preenchidos', {
+                description: 'Selecione o material, quantidade e motivo.'
+            });
             return;
         }
 
         try {
             const quantidadeNum = parseFloat(quantity);
             if (isNaN(quantidadeNum) || quantidadeNum <= 0) {
-                alert('Quantidade inválida');
+                toast.error('❌ Quantidade inválida', {
+                    description: 'Informe uma quantidade maior que zero.'
+                });
                 return;
             }
 
@@ -232,23 +304,30 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                 tipo: type === MovementType.Entrada ? 'ENTRADA' : 'SAIDA' as 'ENTRADA' | 'SAIDA',
                 quantidade: quantidadeNum,
                 motivo: reason,
-                observacoes: notes || undefined
+                observacoes: notes || undefined,
+                referencia: obraVinculada || undefined
             };
 
             const response = await movimentacoesService.criar(movimentacaoData);
             
             if (response.success && response.data) {
-                alert(`✅ ${type === MovementType.Entrada ? 'Entrada' : 'Saída'} registrada com sucesso!`);
+                toast.success(`✅ ${type === MovementType.Entrada ? 'Entrada' : 'Saída'} registrada com sucesso!`, {
+                    description: `${selectedMaterial.name} - ${quantidadeNum} unidades`
+                });
                 resetForm();
                 setIsEntradaModalOpen(false);
                 setIsSaidaModalOpen(false);
                 await loadData();
             } else {
-                alert(`❌ Erro ao registrar movimentação: ${response.error || 'Erro desconhecido'}`);
+                toast.error('❌ Erro ao registrar movimentação', {
+                    description: response.error || 'Erro desconhecido.'
+                });
             }
         } catch (error) {
             console.error('Erro ao registrar movimentação:', error);
-            alert('❌ Erro ao registrar movimentação. Verifique o console para mais detalhes.');
+            toast.error('❌ Erro ao registrar movimentação', {
+                description: 'Verifique sua conexão e tente novamente.'
+            });
         }
     };
 
@@ -282,14 +361,14 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                         className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
                     >
                         <ArrowDownTrayIcon className="w-5 h-5" />
-                        Entrada
+                        Devolução Estoque
                     </button>
                     <button
                         onClick={() => setIsSaidaModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
                     >
                         <ArrowUpTrayIcon className="w-5 h-5" />
-                        Saída
+                        Realizar Baixa Estoque
                     </button>
                 </div>
             </header>
@@ -440,28 +519,31 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {filteredMovements.map((movement) => (
-                        <div key={movement.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-indigo-300 transition-all duration-200">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <h3 className="font-bold text-lg text-gray-900">{movement.materialName}</h3>
-                                        <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getTypeClass(movement.type)}`}>
-                                            {getTypeIcon(movement.type)} {movement.type === MovementType.Entrada ? 'Entrada' : 'Saída'}
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-600">
-                                        <div className="flex items-center gap-2">
-                                            <span>📦</span>
-                                            <span><strong>Quantidade:</strong> {movement.quantity}</span>
+                    {filteredMovements.map((movement) => {
+                        if (!movement || !movement.id) return null;
+                        
+                        return (
+                            <div key={movement.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-indigo-300 transition-all duration-200">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <h3 className="font-bold text-lg text-gray-900">{movement.materialName || 'Material'}</h3>
+                                            <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getTypeClass(movement.type)}`}>
+                                                {getTypeIcon(movement.type)} {movement.type === MovementType.Entrada ? 'Entrada' : 'Saída'}
+                                            </span>
                                         </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-600">
+                                            <div className="flex items-center gap-2">
+                                                <span>📦</span>
+                                                <span><strong>Quantidade:</strong> {movement.quantity || 0}</span>
+                                            </div>
                                         <div className="flex items-center gap-2">
                                             <span>📝</span>
-                                            <span><strong>Motivo:</strong> {movement.reason}</span>
+                                            <span><strong>Motivo:</strong> {movement.reason || 'Não informado'}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <UserIcon className="w-4 h-4" />
-                                            <span><strong>Por:</strong> {movement.responsible}</span>
+                                            <span><strong>Por:</strong> {movement.responsible || 'Sistema'}</span>
                                         </div>
                                     </div>
                                     {movement.notes && (
@@ -480,14 +562,15 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                    );
+                })}
                 </div>
             )}
 
-            {/* MODAL DE ENTRADA */}
+            {/* MODAL DE DEVOLUÇÃO ESTOQUE (ENTRADA) */}
             {isEntradaModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
                         <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
                             <div className="flex items-center gap-4">
@@ -495,8 +578,8 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                                     <ArrowDownTrayIcon className="w-7 h-7 text-white" />
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">Registrar Entrada</h2>
-                                    <p className="text-sm text-gray-600 mt-1">Adicione materiais ao estoque</p>
+                                    <h2 className="text-2xl font-bold text-gray-900">Devolução de Estoque</h2>
+                                    <p className="text-sm text-gray-600 mt-1">Registrar entrada de material no estoque</p>
                                 </div>
                             </div>
                             <button
@@ -507,12 +590,134 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                <p className="text-blue-800 font-medium">
-                                    🚧 Modal simplificado para demonstração. 
-                                    A implementação completa incluirá seleção de materiais e validações.
-                                </p>
+                        <div className="p-6 space-y-5">
+                            {/* Seleção de Material */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Material/Item *
+                                </label>
+                                <div className="relative" ref={materialDropdownRef}>
+                                    <input
+                                        type="text"
+                                        value={selectedMaterial ? `${selectedMaterial.name} (SKU: ${selectedMaterial.sku})` : materialSearchTerm}
+                                        onChange={(e) => {
+                                            setMaterialSearchTerm(e.target.value);
+                                            setIsMaterialListOpen(true);
+                                            if (selectedMaterial) setSelectedMaterial(null);
+                                        }}
+                                        onFocus={() => setIsMaterialListOpen(true)}
+                                        placeholder="Digite para buscar material..."
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    />
+                                    {isMaterialListOpen && filteredMaterials.length > 0 && (
+                                        <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                            {filteredMaterials.map((material) => (
+                                                <button
+                                                    key={material.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedMaterial(material);
+                                                        setIsMaterialListOpen(false);
+                                                        setMaterialSearchTerm('');
+                                                    }}
+                                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                                                >
+                                                    <p className="font-semibold text-gray-900">{material.name}</p>
+                                                    <p className="text-sm text-gray-500">SKU: {material.sku} | Estoque: {material.stock}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {selectedMaterial && (
+                                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <p className="text-sm text-green-800">
+                                            <strong>Selecionado:</strong> {selectedMaterial.name} | Estoque atual: {selectedMaterial.stock} unidades
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Quantidade */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Quantidade *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(e.target.value)}
+                                    min="1"
+                                    step="1"
+                                    placeholder="Ex: 10"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                />
+                            </div>
+
+                            {/* Motivo */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Motivo da Devolução *
+                                </label>
+                                <select
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                >
+                                    <option value="">Selecione o motivo</option>
+                                    {entryReasons.map((r) => (
+                                        <option key={r} value={r}>{r}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Obra Vinculada */}
+                            {reason === 'Devolução de Obra' && (
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Obra de Origem
+                                    </label>
+                                    <select
+                                        value={obraVinculada}
+                                        onChange={(e) => setObraVinculada(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    >
+                                        <option value="">Nenhuma obra selecionada</option>
+                                        {obras.map((obra) => (
+                                            <option key={obra.id} value={obra.id}>
+                                                {obra.nomeObra} - {obra.status}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Data */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data da Devolução *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={dataMovimentacao}
+                                    onChange={(e) => setDataMovimentacao(e.target.value)}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                />
+                            </div>
+
+                            {/* Observações */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Observações
+                                </label>
+                                <textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    rows={3}
+                                    placeholder="Informações adicionais sobre a devolução..."
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                />
                             </div>
 
                             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
@@ -524,9 +729,10 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                                 </button>
                                 <button
                                     onClick={() => handleSubmitMovement(MovementType.Entrada)}
-                                    className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                                    className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold flex items-center gap-2"
                                 >
-                                    Registrar Entrada
+                                    <ArrowDownTrayIcon className="w-5 h-5" />
+                                    Registrar Devolução
                                 </button>
                             </div>
                         </div>
@@ -534,10 +740,10 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                 </div>
             )}
 
-            {/* MODAL DE SAÍDA */}
+            {/* MODAL DE BAIXA ESTOQUE (SAÍDA) */}
             {isSaidaModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
                         <div className="relative p-6 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-red-50">
                             <div className="flex items-center gap-4">
@@ -545,8 +751,8 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                                     <ArrowUpTrayIcon className="w-7 h-7 text-white" />
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="text-2xl font-bold text-gray-900">Registrar Saída</h2>
-                                    <p className="text-sm text-gray-600 mt-1">Remova materiais do estoque</p>
+                                    <h2 className="text-2xl font-bold text-gray-900">Realizar Baixa de Estoque</h2>
+                                    <p className="text-sm text-gray-600 mt-1">Registrar saída de material do estoque</p>
                                 </div>
                             </div>
                             <button
@@ -557,13 +763,165 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                <p className="text-blue-800 font-medium">
-                                    🚧 Modal simplificado para demonstração. 
-                                    A implementação completa incluirá seleção de materiais e validações.
-                                </p>
+                        <div className="p-6 space-y-5">
+                            {/* Seleção de Material */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Material/Item *
+                                </label>
+                                <div className="relative" ref={materialDropdownRef}>
+                                    <input
+                                        type="text"
+                                        value={selectedMaterial ? `${selectedMaterial.name} (SKU: ${selectedMaterial.sku})` : materialSearchTerm}
+                                        onChange={(e) => {
+                                            setMaterialSearchTerm(e.target.value);
+                                            setIsMaterialListOpen(true);
+                                            if (selectedMaterial) setSelectedMaterial(null);
+                                        }}
+                                        onFocus={() => setIsMaterialListOpen(true)}
+                                        placeholder="Digite para buscar material..."
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    />
+                                    {isMaterialListOpen && filteredMaterials.length > 0 && (
+                                        <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                            {filteredMaterials.map((material) => (
+                                                <button
+                                                    key={material.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedMaterial(material);
+                                                        setIsMaterialListOpen(false);
+                                                        setMaterialSearchTerm('');
+                                                    }}
+                                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                                                >
+                                                    <p className="font-semibold text-gray-900">{material.name}</p>
+                                                    <p className="text-sm text-gray-500">SKU: {material.sku} | Estoque: {material.stock}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {selectedMaterial && (
+                                    <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                                        <p className="text-sm text-orange-800">
+                                            <strong>Selecionado:</strong> {selectedMaterial.name} | Estoque atual: {selectedMaterial.stock} unidades
+                                        </p>
+                                        {selectedMaterial.stock <= 0 && (
+                                            <p className="text-xs text-red-600 mt-1 font-semibold">
+                                                ⚠️ Atenção: Estoque atual está zerado!
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Quantidade */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Quantidade *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(e.target.value)}
+                                    min="1"
+                                    max={selectedMaterial?.stock || 999999}
+                                    step="1"
+                                    placeholder="Ex: 5"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                />
+                                {selectedMaterial && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Disponível em estoque: {selectedMaterial.stock} unidades
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Motivo */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Motivo da Baixa *
+                                </label>
+                                <select
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                >
+                                    <option value="">Selecione o motivo</option>
+                                    {exitReasons.map((r) => (
+                                        <option key={r} value={r}>{r}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Obra Destino */}
+                            {(reason === 'Alocação para Obra/Projeto' || reason === 'Uso em Instalação' || reason === 'Aplicação em Serviço') && (
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Alocar para Obra *
+                                    </label>
+                                    <select
+                                        value={obraVinculada}
+                                        onChange={(e) => setObraVinculada(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    >
+                                        <option value="">Selecione a obra de destino</option>
+                                        {obras.filter(o => o.status === 'ANDAMENTO' || o.status === 'A_FAZER').map((obra) => (
+                                            <option key={obra.id} value={obra.id}>
+                                                {obra.nomeObra} - {obra.clienteNome} ({obra.status})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {obras.filter(o => o.status === 'ANDAMENTO' || o.status === 'A_FAZER').length === 0 && (
+                                        <p className="text-xs text-yellow-600 mt-1">
+                                            ⚠️ Nenhuma obra em andamento ou planejada
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Data */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data da Baixa *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={dataMovimentacao}
+                                    onChange={(e) => setDataMovimentacao(e.target.value)}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                />
+                            </div>
+
+                            {/* Observações */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Observações
+                                </label>
+                                <textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    rows={3}
+                                    placeholder="Informações adicionais sobre a baixa (ex: número de OS, descrição do uso...)"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                />
+                            </div>
+
+                            {/* Alerta de estoque baixo */}
+                            {selectedMaterial && quantity && parseFloat(quantity) > selectedMaterial.stock && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <p className="text-sm font-semibold text-red-800">
+                                            ⚠️ ATENÇÃO: Quantidade solicitada maior que o estoque disponível!
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
                                 <button
@@ -574,9 +932,11 @@ const Movimentacoes: React.FC<MovimentacoesProps> = ({ toggleSidebar }) => {
                                 </button>
                                 <button
                                     onClick={() => handleSubmitMovement(MovementType.Saida)}
-                                    className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
+                                    disabled={!!(selectedMaterial && quantity && parseFloat(quantity) > selectedMaterial.stock)}
+                                    className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Registrar Saída
+                                    <ArrowUpTrayIcon className="w-5 h-5" />
+                                    Realizar Baixa
                                 </button>
                             </div>
                         </div>

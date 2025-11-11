@@ -653,18 +653,25 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     // Helpers
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Ativo':
-            case 'Em Execução':
-                return 'bg-green-100 text-green-800 ring-1 ring-green-200';
+            case 'PROPOSTA':
             case 'Pendente':
             case 'Planejamento':
-                return 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200';
+                return 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400';
+            case 'VALIDADO':
+                return 'bg-cyan-100 text-cyan-800 ring-1 ring-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400';
+            case 'APROVADO':
+                return 'bg-green-100 text-green-800 ring-1 ring-green-200 dark:bg-green-900/30 dark:text-green-400';
+            case 'EXECUCAO':
+            case 'Ativo':
+            case 'Em Execução':
+                return 'bg-blue-100 text-blue-800 ring-1 ring-blue-200 dark:bg-blue-900/30 dark:text-blue-400';
+            case 'CONCLUIDO':
             case 'Concluído':
-                return 'bg-blue-100 text-blue-800 ring-1 ring-blue-200';
+                return 'bg-purple-100 text-purple-800 ring-1 ring-purple-200 dark:bg-purple-900/30 dark:text-purple-400';
             case 'Cancelado':
-                return 'bg-red-100 text-red-800 ring-1 ring-red-200';
+                return 'bg-red-100 text-red-800 ring-1 ring-red-200 dark:bg-red-900/30 dark:text-red-400';
             default:
-                return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+                return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200 dark:bg-gray-700 dark:text-gray-300';
         }
     };
 
@@ -743,11 +750,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         >
                             <option value="Todos">Todos os Status</option>
-                            <option value="Pendente">Pendente</option>
-                            <option value="Planejamento">Planejamento</option>
-                            <option value="Em Execução">Em Execução</option>
-                            <option value="Concluído">Concluído</option>
-                            <option value="Cancelado">Cancelado</option>
+                            <option value="PROPOSTA">📋 Proposta</option>
+                            <option value="VALIDADO">✅ Validado</option>
+                            <option value="APROVADO">🎉 Aprovado</option>
+                            <option value="EXECUCAO">🏗️ Em Execução</option>
+                            <option value="CONCLUIDO">🎊 Concluído</option>
                         </select>
                     </div>
 

@@ -262,6 +262,18 @@ export const SalesIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+// Ícone de Gerenciamento Empresarial (Prédio com Gráfico)
+export const ManagementIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+        <path d="M9 9h1v1H9z"/>
+        <path d="M14 9h1v1h-1z"/>
+        <path d="M9 13h1v1H9z"/>
+        <path d="M14 13h1v1h-1z"/>
+    </svg>
+);
+
 // ============================================
 // NAVEGAÇÃO PRINCIPAL DO SISTEMA
 // Organizada por Setores de Negócio
@@ -280,6 +292,7 @@ export const navLinks = [
     { name: 'Fornecedores', icon: SupplierIcon },
     { name: 'Compras', icon: ShoppingBagIcon },
     { name: 'Estoque', icon: CubeIcon },
+    { name: 'Movimentações', icon: MovementIcon }, // Movido de FINANCEIRO para SUPRIMENTOS
     { name: 'Catálogo', icon: CatalogIcon },
     { name: 'Comparação de Preços', icon: CompareIcon },
     
@@ -292,6 +305,8 @@ export const navLinks = [
     // ========== FINANCEIRO / CONTÁBIL ==========
     { name: 'Financeiro', icon: FinanceIcon },
     { name: 'Emissão NF-e', icon: InvoiceIcon },
-    { name: 'Movimentações', icon: MovementIcon },
     { name: 'Histórico', icon: HistoryIcon },
+    
+    // ========== GERENCIAMENTO / ADMINISTRATIVO ==========
+    { name: 'Gerenciamento Empresarial', icon: ManagementIcon },
 ];

@@ -457,7 +457,9 @@ export type CatalogItem = Product | Kit;
 // Stock Movement Types
 export interface StockMovement {
   id: string;
-  product: {
+  materialId?: string;
+  materialName?: string;
+  product?: {
     id: string;
     name: string;
     sku: string;

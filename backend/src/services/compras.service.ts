@@ -241,6 +241,50 @@ export class ComprasService {
     }
 
     /**
+     * Busca uma compra específica por ID
+     */
+    static async buscarCompra(id: string) {
+        try {
+            const compra = await prisma.compra.findUnique({
+                where: { id },
+                include: {
+                    fornecedor: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            cnpj: true,
+                            telefone: true,
+                            email: true,
+                            endereco: true
+                        }
+                    },
+                    items: {
+                        include: {
+                            material: {
+                                select: {
+                                    id: true,
+                                    nome: true,
+                                    sku: true,
+                                    categoria: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!compra) {
+                throw new Error('Compra não encontrada');
+            }
+
+            return compra;
+        } catch (error) {
+            console.error('Erro ao buscar compra:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Lista compras com filtros
      */
     static async listarCompras(
@@ -425,6 +469,123 @@ export class ComprasService {
                 }
                 
                 console.log('✅ Todos os Materials criados e estoque atualizado!');
+            }
+
+            return compraAtualizada;
+        });
+    }
+
+    /**
+     * Receber remessa parcial (apenas itens específicos)
+     */
+    static async receberRemessaParcial(id: string, novoStatus: string, produtoIds: string[]) {
+        const compra = await prisma.compra.findUnique({
+            where: { id },
+            include: { items: true }
+        });
+
+        if (!compra) {
+            throw new Error('Compra não encontrada');
+        }
+
+        // Se mudou para Recebido, processar apenas os itens marcados
+        const deveAtualizarEstoque = novoStatus === 'Recebido' && compra.status !== 'Recebido';
+
+        return await prisma.$transaction(async (tx) => {
+            // Atualizar compra (mantém pendente se ainda há itens não recebidos)
+            const todosRecebidos = produtoIds.length === compra.items.length;
+            const compraAtualizada = await tx.compra.update({
+                where: { id },
+                data: {
+                    status: todosRecebidos ? novoStatus : 'Pendente',
+                    dataRecebimento: deveAtualizarEstoque ? new Date() : compra.dataRecebimento
+                },
+                include: { items: true, fornecedor: true }
+            });
+
+            // Atualizar estoque apenas dos itens marcados
+            if (deveAtualizarEstoque) {
+                console.log('📦 Recebendo itens parciais - Processando estoque...');
+                console.log('📦 Produtos selecionados:', produtoIds);
+                
+                // Filtrar apenas os itens que foram marcados para recebimento
+                const itensSelecionados = compra.items.filter(item => 
+                    item.materialId && produtoIds.includes(item.materialId)
+                );
+                
+                console.log(`📦 ${itensSelecionados.length} de ${compra.items.length} itens serão processados`);
+                
+                for (const item of itensSelecionados) {
+                    let materialIdFinal = item.materialId;
+                    
+                    // Se item não tem materialId, criar Material automaticamente
+                    if (!materialIdFinal) {
+                        console.log(`🆕 Item sem material vinculado: "${item.nomeProduto}". Criando...`);
+                        
+                        // Tentar encontrar material existente
+                        let material = null;
+                        if (item.ncm) {
+                            material = await tx.material.findFirst({
+                                where: { sku: String(item.ncm) }
+                            });
+                        }
+                        
+                        if (!material) {
+                            material = await tx.material.findFirst({
+                                where: { 
+                                    descricao: { 
+                                        contains: item.nomeProduto.substring(0, 20), 
+                                        mode: 'insensitive' 
+                                    } 
+                                }
+                            });
+                        }
+                        
+                        // Criar novo Material se não encontrou
+                        if (!material) {
+                            const timestamp = Date.now();
+                            const random = Math.random().toString(36).substr(2, 9);
+                            const skuGerado = item.ncm ? `NCM-${item.ncm}-${random}` : `AUTO-${timestamp}-${random}`;
+                            
+                            material = await tx.material.create({
+                                data: {
+                                    nome: item.nomeProduto,
+                                    sku: skuGerado,
+                                    tipo: 'Produto',
+                                    categoria: 'Importado XML',
+                                    descricao: `Produto importado via XML - NF ${compra.numeroNF}`,
+                                    unidadeMedida: 'UN',
+                                    preco: item.valorUnit,
+                                    estoque: 0,
+                                    estoqueMinimo: 5,
+                                    ativo: true
+                                }
+                            });
+                            console.log(`✅ Material criado: ${material.id} (SKU: ${skuGerado})`);
+                        }
+                        
+                        materialIdFinal = material.id;
+                        
+                        // Atualizar CompraItem com o materialId
+                        await tx.compraItem.update({
+                            where: { id: item.id },
+                            data: { materialId: material.id }
+                        });
+                    }
+                    
+                    // Dar entrada no estoque
+                    await EstoqueService.incrementarEstoque(
+                        materialIdFinal,
+                        item.quantidade,
+                        'COMPRA',
+                        id,
+                        `Compra NF: ${compra.numeroNF} - Recebimento parcial confirmado`
+                    );
+                    
+                    console.log(`✅ Item ${item.nomeProduto} processado no estoque`);
+                }
+                
+                console.log('✅ Remessa parcial processada!');
             }
 
             return compraAtualizada;

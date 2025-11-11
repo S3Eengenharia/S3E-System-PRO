@@ -270,6 +270,11 @@ export const CORNER_DESIGNS = {
         svg: '<svg viewBox="0 0 100 100"><g><line x1="0" y1="0" x2="100" y2="0" stroke="currentColor" stroke-width="3"/><line x1="0" y1="0" x2="0" y2="100" stroke="currentColor" stroke-width="3"/></g></svg>',
         description: 'Linhas simples e profissionais'
     },
+    custom: {
+        name: 'Personalizado',
+        svg: '',
+        description: 'Imagem de fundo personalizada'
+    },
     none: {
         name: 'Nenhum',
         svg: '',

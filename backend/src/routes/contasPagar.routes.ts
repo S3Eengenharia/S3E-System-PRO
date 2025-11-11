@@ -83,5 +83,26 @@ router.get(
     ContasPagarController.getContasAVencer
 );
 
+// Listar contas por tipo
+router.get(
+    '/tipo/:tipo',
+    authenticate,
+    ContasPagarController.listarPorTipo
+);
+
+// Gerar contas de salários do mês
+router.post(
+    '/gerar/salarios',
+    authenticate,
+    ContasPagarController.gerarContasSalarios
+);
+
+// Gerar contas de despesas fixas do mês
+router.post(
+    '/gerar/despesas-fixas',
+    authenticate,
+    ContasPagarController.gerarContasDespesasFixas
+);
+
 export default router;
 

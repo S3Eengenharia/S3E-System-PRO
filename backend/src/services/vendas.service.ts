@@ -44,6 +44,65 @@ export class VendasService {
 
         // Usar transação para garantir consistência
         return await prisma.$transaction(async (tx) => {
+            // 0. Buscar orçamento e projeto vinculado
+            const orcamento = await tx.orcamento.findUnique({
+                where: { id: orcamentoId },
+                include: { projeto: true }
+            });
+
+            if (!orcamento) {
+                throw new Error('Orçamento não encontrado');
+            }
+
+            let projetoIdFinal = projetoId;
+
+            // Se o orçamento já tem um projeto vinculado, usar ele e atualizar status
+            if (orcamento.projeto) {
+                console.log(`📋 Atualizando status do projeto ${orcamento.projeto.id} para APROVADO`);
+                await tx.projeto.update({
+                    where: { id: orcamento.projeto.id },
+                    data: { 
+                        status: 'APROVADO'
+                    }
+                });
+                projetoIdFinal = orcamento.projeto.id;
+            } 
+            // Se não tem projeto mas foi passado projetoId, atualizar esse projeto
+            else if (projetoId) {
+                console.log(`📋 Atualizando projeto fornecido ${projetoId} para APROVADO`);
+                await tx.projeto.update({
+                    where: { id: projetoId },
+                    data: { 
+                        status: 'APROVADO'
+                    }
+                });
+            }
+            // Se não tem projeto, criar um novo com status APROVADO
+            else {
+                console.log(`📋 Criando novo projeto para o orçamento ${orcamentoId}`);
+                const novoProjeto = await tx.projeto.create({
+                    data: {
+                        orcamentoId: orcamento.id,
+                        clienteId: orcamento.clienteId,
+                        titulo: orcamento.titulo,
+                        descricao: orcamento.descricao,
+                        valorTotal: orcamento.precoVenda,
+                        dataInicio: new Date(),
+                        status: 'APROVADO' // Projeto aprovado quando venda é criada
+                    }
+                });
+                projetoIdFinal = novoProjeto.id;
+            }
+
+            // Atualizar status do orçamento para Aprovado
+            await tx.orcamento.update({
+                where: { id: orcamentoId },
+                data: { 
+                    status: 'Aprovado',
+                    aprovedAt: new Date()
+                }
+            });
+
             // 1. Criar a venda principal
             const venda = await tx.venda.create({
                 data: {
@@ -51,7 +110,7 @@ export class VendasService {
                     orcamentoId,
                     valorTotal,
                     clienteId,
-                    projetoId,
+                    projetoId: projetoIdFinal,
                     formaPagamento,
                     parcelas,
                     valorEntrada,

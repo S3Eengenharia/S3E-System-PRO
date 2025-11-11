@@ -7,16 +7,28 @@ import configuracaoService from '../services/configuracao.service.js';
 // Configuração do multer para upload de imagem
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/logos');
+    // Determinar pasta base (pode estar rodando da raiz ou da pasta backend)
+    const cwd = process.cwd();
+    const isBackendFolder = cwd.endsWith('backend');
+    const uploadDir = isBackendFolder 
+      ? path.join(cwd, 'uploads', 'logos')
+      : path.join(cwd, 'backend', 'uploads', 'logos');
+    
+    console.log('📁 CWD:', cwd);
+    console.log('📁 Upload directory:', uploadDir);
+    
     // Criar diretório se não existir
     if (!fs.existsSync(uploadDir)) {
+      console.log('📁 Criando diretório:', uploadDir);
       fs.mkdirSync(uploadDir, { recursive: true });
     }
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+    const filename = 'logo-' + uniqueSuffix + path.extname(file.originalname);
+    console.log('📷 Nome do arquivo:', filename);
+    cb(null, filename);
   }
 });
 

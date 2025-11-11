@@ -113,6 +113,22 @@ class ComprasService {
   }
 
   /**
+   * Receber remessa parcial (somente itens específicos)
+   */
+  async receberRemessaParcial(
+    id: string, 
+    status: 'Pendente' | 'Aprovado' | 'Recebido' | 'Cancelado', 
+    dataEntregaReal: string,
+    produtoIds: string[]
+  ) {
+    return axiosApiService.put<Compra>(`/api/compras/${id}/receber-parcial`, { 
+      status,
+      dataEntregaReal,
+      produtoIds
+    });
+  }
+
+  /**
    * Fazer parse de XML de nota fiscal no backend
    * Envia o conteúdo XML como JSON { xml: string }
    */

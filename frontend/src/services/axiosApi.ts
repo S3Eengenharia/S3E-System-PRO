@@ -178,6 +178,29 @@ class AxiosApiService {
     }
   }
 
+  // PATCH request
+  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    try {
+      const response = await this.axiosInstance.patch(endpoint, data);
+      
+      // Se o backend já retorna { success, data }, retornar direto
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        return response.data as ApiResponse<T>;
+      }
+      
+      // Caso contrário, envolver na estrutura padrão
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   // DELETE request
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
