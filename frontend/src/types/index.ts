@@ -577,6 +577,7 @@ export interface PurchaseOrder {
     condicoesPagamento?: string;
     parcelas?: number;
     dataPrimeiroVencimento?: string;
+    dataRecebimento?: string | null; // Data de recebimento da compra
     destinatarioCNPJ?: string;
     statusImportacao?: string;
     valorIPI?: number;
@@ -625,7 +626,8 @@ export interface MaterialItem {
     imageUrl?: string;
     supplierId?: string;
     supplierName?: string;
-    price?: number;
+    supplier?: { id: string; name: string }; // Objeto supplier do backend
+    price: number;
 }
 
 

@@ -210,6 +210,40 @@ class MateriaisService {
   }
 
   /**
+   * Buscar histórico de compras de um material
+   */
+  async getHistoricoCompras(id: string) {
+    try {
+      console.log('📜 Buscando histórico de compras do material:', id);
+      
+      const response = await axiosApiService.get(`${ENDPOINTS.MATERIAIS}/${id}/historico-compras`);
+      
+      console.log('✅ Histórico carregado:', response);
+      return response.data || response || [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar histórico de compras:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Corrigir nomes genéricos de materiais importados via XML
+   */
+  async corrigirNomesGenericos() {
+    try {
+      console.log('🔄 Corrigindo nomes genéricos de materiais...');
+      
+      const response = await axiosApiService.post(`${ENDPOINTS.MATERIAIS}/corrigir-nomes`, {});
+      
+      console.log('✅ Nomes corrigidos:', response);
+      return response.data || response || { success: false };
+    } catch (error) {
+      console.error('❌ Erro ao corrigir nomes genéricos:', error);
+      return { success: false, error };
+    }
+  }
+
+  /**
    * Registrar movimentação de estoque
    */
   async registrarMovimentacao(data: {
@@ -284,6 +318,43 @@ class MateriaisService {
         success: false,
         data: [],
         message: 'Erro ao buscar movimentações'
+      };
+    }
+  }
+
+  /**
+   * Buscar materiais similares (para verificação de duplicatas)
+   */
+  async buscarMateriaisSimilares(nomeProduto: string, ncm?: string) {
+    try {
+      console.log(`🔍 Buscando materiais similares a: "${nomeProduto}"`);
+      
+      const response = await axiosApiService.post<any[]>(`${ENDPOINTS.MATERIAIS}/buscar-similares`, {
+        nomeProduto,
+        ncm
+      });
+      
+      if (response.success && response.data) {
+        console.log(`✅ ${response.data.length} materiais similares encontrados`);
+        return {
+          success: true,
+          data: response.data || [],
+          message: `${response.data.length} materiais similares encontrados`
+        };
+      } else {
+        console.warn('⚠️ Nenhum material similar encontrado');
+        return {
+          success: true,
+          data: [],
+          message: 'Nenhum material similar encontrado'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar materiais similares:', error);
+      return {
+        success: false,
+        data: [],
+        message: 'Erro ao buscar materiais similares'
       };
     }
   }

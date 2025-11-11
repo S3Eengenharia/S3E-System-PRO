@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { obrasService, type Obra, type ObraKanbanData } from '../services/obrasService';
+import { axiosApiService } from '../services/axiosApi';
 
 // Icons
 const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -35,9 +37,71 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
     const [draggedItem, setDraggedItem] = useState<Obra | null>(null);
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
+    // Modal de Obra de Manutenção
+    const [modalManutencaoOpen, setModalManutencaoOpen] = useState(false);
+    const [clientes, setClientes] = useState<any[]>([]);
+    const [formManutencao, setFormManutencao] = useState({
+        clienteId: '',
+        nomeObra: '',
+        descricao: '',
+        endereco: '',
+        dataPrevistaInicio: new Date().toISOString().split('T')[0],
+        dataPrevistaFim: ''
+    });
+
     useEffect(() => {
         loadObrasKanban();
+        loadClientes();
     }, []);
+
+    const loadClientes = async () => {
+        try {
+            const response = await axiosApiService.get('/api/clientes');
+            setClientes(response.data || response || []);
+        } catch (error) {
+            console.error('Erro ao carregar clientes:', error);
+        }
+    };
+
+    const handleAbrirModalManutencao = () => {
+        setFormManutencao({
+            clienteId: '',
+            nomeObra: '',
+            descricao: '',
+            endereco: '',
+            dataPrevistaInicio: new Date().toISOString().split('T')[0],
+            dataPrevistaFim: ''
+        });
+        setModalManutencaoOpen(true);
+    };
+
+    const handleCriarObraManutencao = async () => {
+        if (!formManutencao.clienteId || !formManutencao.nomeObra) {
+            toast.error('❌ Cliente e nome da obra são obrigatórios');
+            return;
+        }
+
+        try {
+            console.log('🔧 Criando obra de manutenção:', formManutencao);
+            
+            const response = await obrasService.criarObraManutencao(formManutencao);
+            
+            console.log('✅ Resposta da criação:', response);
+            
+            if (response.success || response.data) {
+                toast.success('✅ Obra de manutenção criada com sucesso no Backlog!');
+                setModalManutencaoOpen(false);
+                await loadObrasKanban();
+                if (onRefresh) onRefresh();
+            } else {
+                toast.error(`❌ ${response.error || 'Erro ao criar obra'}`);
+            }
+        } catch (error: any) {
+            console.error('❌ Erro ao criar obra de manutenção:', error);
+            const mensagem = error?.response?.data?.message || error?.message || 'Erro ao criar obra de manutenção';
+            toast.error(`❌ ${mensagem}`);
+        }
+    };
 
     const loadObrasKanban = async () => {
         try {
@@ -154,9 +218,17 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
         >
             {/* Header */}
             <div className="flex justify-between items-start mb-3">
-                <h4 className="font-bold text-gray-900 text-sm line-clamp-2 flex-1">
-                    {obra.nomeObra}
-                </h4>
+                <div className="flex-1">
+                    <h4 className="font-bold text-gray-900 text-sm line-clamp-2">
+                        {obra.nomeObra}
+                    </h4>
+                    {/* Badge de Tipo */}
+                    {obra.tipoObra === 'MANUTENCAO' && (
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-bold rounded">
+                            🔧 Manutenção
+                        </span>
+                    )}
+                </div>
                 <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded">
                     #{obra.id.slice(0, 8)}
                 </span>
@@ -210,7 +282,28 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="space-y-6">
+            {/* Header com botão de Nova Obra de Manutenção */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Kanban de Obras</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Arraste e solte para mover entre as etapas
+                    </p>
+                </div>
+                <button
+                    onClick={handleAbrirModalManutencao}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold flex items-center gap-2"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    🔧 Nova Obra de Manutenção
+                </button>
+            </div>
+
+            {/* Grid do Kanban */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {Object.entries(kanbanData).map(([status, obras]) => {
                 const config = getColumnConfig(status);
                 const isOver = dragOverColumn === status;
@@ -247,6 +340,158 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
                     </div>
                 );
             })}
+            </div>
+
+            {/* Modal de Criar Obra de Manutenção */}
+            {modalManutencaoOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border-2 border-orange-200 dark:border-orange-800">
+                        {/* Header */}
+                        <div className="p-6 bg-gradient-to-r from-orange-600 to-orange-700">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white">Nova Obra de Manutenção</h3>
+                                        <p className="text-sm text-orange-100">Para clientes sem projeto</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setModalManutencaoOpen(false)}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Formulário */}
+                        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                            {/* Cliente */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    👤 Cliente *
+                                </label>
+                                <select
+                                    value={formManutencao.clienteId}
+                                    onChange={(e) => setFormManutencao(prev => ({ ...prev, clienteId: e.target.value }))}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
+                                    required
+                                >
+                                    <option value="">Selecione um cliente</option>
+                                    {clientes.map(cliente => (
+                                        <option key={cliente.id} value={cliente.id}>
+                                            {cliente.nome} - {cliente.cpfCnpj}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Nome da Obra */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    🏗️ Nome da Obra *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formManutencao.nomeObra}
+                                    onChange={(e) => setFormManutencao(prev => ({ ...prev, nomeObra: e.target.value }))}
+                                    placeholder="Ex: Manutenção Elétrica Residencial"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
+                                    required
+                                />
+                            </div>
+
+                            {/* Descrição */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    📝 Descrição
+                                </label>
+                                <textarea
+                                    value={formManutencao.descricao}
+                                    onChange={(e) => setFormManutencao(prev => ({ ...prev, descricao: e.target.value }))}
+                                    placeholder="Descreva o serviço de manutenção..."
+                                    rows={3}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
+                                />
+                            </div>
+
+                            {/* Endereço */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    📍 Endereço da Obra
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formManutencao.endereco}
+                                    onChange={(e) => setFormManutencao(prev => ({ ...prev, endereco: e.target.value }))}
+                                    placeholder="Rua, Número, Bairro, Cidade"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
+                                />
+                            </div>
+
+                            {/* Datas */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        📅 Data Prevista Início
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formManutencao.dataPrevistaInicio}
+                                        onChange={(e) => setFormManutencao(prev => ({ ...prev, dataPrevistaInicio: e.target.value }))}
+                                        className="w-full px-4 py-3 border-2 border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        📅 Data Prevista Fim
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formManutencao.dataPrevistaFim}
+                                        onChange={(e) => setFormManutencao(prev => ({ ...prev, dataPrevistaFim: e.target.value }))}
+                                        className="w-full px-4 py-3 border-2 border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Informação */}
+                            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+                                <p className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Esta obra será criada no <strong>Backlog</strong> e não terá projeto vinculado (manutenção avulsa).
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-dark-bg border-t-2 border-gray-200 dark:border-dark-border flex justify-end gap-3">
+                            <button
+                                onClick={() => setModalManutencaoOpen(false)}
+                                className="px-6 py-3 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-dark-border text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-dark-hover transition-all font-semibold"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleCriarObraManutencao}
+                                className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
+                            >
+                                ✅ Criar Obra
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

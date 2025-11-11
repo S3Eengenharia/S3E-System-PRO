@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { 
     funcionariosService, 
@@ -8,6 +8,7 @@ import {
     planosService,
     despesasFixasService 
 } from '../services/gerenciamentoService';
+import { axiosApiService } from '../services/axiosApi';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -280,6 +281,7 @@ const RHView: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isValeModalOpen, setIsValeModalOpen] = useState(false);
+    const [editandoFuncionario, setEditandoFuncionario] = useState<string | null>(null);
     const [funcionarioForm, setFuncionarioForm] = useState({
         nome: '',
         cargo: '',
@@ -290,6 +292,12 @@ const RHView: React.FC = () => {
         email: '',
         status: 'Ativo'
     });
+    
+    // Estados para busca rápida de usuários
+    const [usuariosCadastrados, setUsuariosCadastrados] = useState<any[]>([]);
+    const [buscaUsuario, setBuscaUsuario] = useState('');
+    const [mostrarListaUsuarios, setMostrarListaUsuarios] = useState(false);
+    const [usuarioSelecionado, setUsuarioSelecionado] = useState<any | null>(null);
     const [valeForm, setValeForm] = useState({
         funcionarioId: '',
         tipo: 'Vale Transporte',
@@ -319,29 +327,124 @@ const RHView: React.FC = () => {
         }
     };
 
+    const handleAbrirModalEdicao = (funcionario: any) => {
+        setEditandoFuncionario(funcionario.id);
+        setFuncionarioForm({
+            nome: funcionario.nome,
+            cargo: funcionario.cargo,
+            salario: funcionario.salario.toString(),
+            dataAdmissao: funcionario.dataAdmissao || new Date().toISOString().split('T')[0],
+            cpf: funcionario.cpf || '',
+            telefone: funcionario.telefone || '',
+            email: funcionario.email || '',
+            status: funcionario.status
+        });
+        setIsModalOpen(true);
+    };
+
+    const carregarUsuarios = async () => {
+        try {
+            const response = await axiosApiService.get('/api/configuracoes/usuarios');
+            const usuarios = response.data || response || [];
+            setUsuariosCadastrados(usuarios);
+            console.log(`✅ ${usuarios.length} usuários carregados para seleção rápida`);
+        } catch (error) {
+            console.error('Erro ao carregar usuários:', error);
+        }
+    };
+
+    const handleAbrirModalNovo = async () => {
+        // Resetar formulário
+        setEditandoFuncionario(null);
+        setFuncionarioForm({
+            nome: '',
+            cargo: '',
+            salario: '',
+            dataAdmissao: new Date().toISOString().split('T')[0],
+            cpf: '',
+            telefone: '',
+            email: '',
+            status: 'Ativo'
+        });
+        setBuscaUsuario('');
+        setUsuarioSelecionado(null);
+        
+        // Carregar usuários para seleção rápida
+        await carregarUsuarios();
+        
+        setIsModalOpen(true);
+    };
+
+    const handleSelecionarUsuario = (usuario: any) => {
+        console.log('👤 Usuário selecionado:', usuario);
+        setUsuarioSelecionado(usuario);
+        setBuscaUsuario(usuario.name || usuario.email);
+        setMostrarListaUsuarios(false);
+        
+        // Preencher automaticamente os campos do formulário
+        setFuncionarioForm({
+            nome: usuario.name || '',
+            cargo: usuario.role === 'eletricista' ? 'Eletricista' : usuario.role === 'gerente' ? 'Gerente' : 'Funcionário',
+            salario: '',
+            dataAdmissao: new Date().toISOString().split('T')[0],
+            cpf: '',
+            telefone: '',
+            email: usuario.email || '',
+            status: 'Ativo'
+        });
+        
+        toast.success(`✅ Dados de ${usuario.name} carregados! Complete as informações.`);
+    };
+
+    const usuariosFiltrados = useMemo(() => {
+        if (!buscaUsuario) return usuariosCadastrados;
+        return usuariosCadastrados.filter(u => 
+            u.name?.toLowerCase().includes(buscaUsuario.toLowerCase()) ||
+            u.email?.toLowerCase().includes(buscaUsuario.toLowerCase())
+        );
+    }, [buscaUsuario, usuariosCadastrados]);
+
+    const handleFecharModal = () => {
+        setIsModalOpen(false);
+        setEditandoFuncionario(null);
+        setBuscaUsuario('');
+        setUsuarioSelecionado(null);
+        setMostrarListaUsuarios(false);
+        setFuncionarioForm({
+            nome: '',
+            cargo: '',
+            salario: '',
+            dataAdmissao: new Date().toISOString().split('T')[0],
+            cpf: '',
+            telefone: '',
+            email: '',
+            status: 'Ativo'
+        });
+    };
+
     const handleSubmitFuncionario = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await funcionariosService.criar({
-                ...funcionarioForm,
-                salario: parseFloat(funcionarioForm.salario)
-            });
-            toast.success('Funcionário cadastrado com sucesso!');
-            setIsModalOpen(false);
-            setFuncionarioForm({
-                nome: '',
-                cargo: '',
-                salario: '',
-                dataAdmissao: new Date().toISOString().split('T')[0],
-                cpf: '',
-                telefone: '',
-                email: '',
-                status: 'Ativo'
-            });
+            if (editandoFuncionario) {
+                // Modo de edição
+                await funcionariosService.atualizar(editandoFuncionario, {
+                    ...funcionarioForm,
+                    salario: parseFloat(funcionarioForm.salario)
+                });
+                toast.success('Funcionário atualizado com sucesso!');
+            } else {
+                // Modo de criação
+                await funcionariosService.criar({
+                    ...funcionarioForm,
+                    salario: parseFloat(funcionarioForm.salario)
+                });
+                toast.success('Funcionário cadastrado com sucesso!');
+            }
+            handleFecharModal();
             carregarDados();
         } catch (error) {
-            console.error('Erro ao cadastrar funcionário:', error);
-            toast.error('Erro ao cadastrar funcionário');
+            console.error('Erro ao salvar funcionário:', error);
+            toast.error(editandoFuncionario ? 'Erro ao atualizar funcionário' : 'Erro ao cadastrar funcionário');
         }
     };
 
@@ -392,7 +495,7 @@ const RHView: React.FC = () => {
                         Registrar Vale
                     </button>
                     <button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={handleAbrirModalNovo}
                         className="btn-success flex items-center gap-2"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -434,7 +537,7 @@ const RHView: React.FC = () => {
                         <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 font-medium">Nenhum funcionário cadastrado</p>
                         <button
-                            onClick={() => setIsModalOpen(true)}
+                            onClick={handleAbrirModalNovo}
                             className="mt-4 btn-success inline-flex items-center gap-2"
                         >
                             Cadastrar Primeiro Funcionário
@@ -468,7 +571,10 @@ const RHView: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                                            <button 
+                                                onClick={() => handleAbrirModalEdicao(func)}
+                                                className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                                            >
                                                 Editar
                                             </button>
                                         </td>
@@ -480,14 +586,115 @@ const RHView: React.FC = () => {
                 )}
             </div>
 
-            {/* Modal Adicionar Funcionário */}
+            {/* Modal Adicionar/Editar Funcionário */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-2xl font-bold text-gray-900">Adicionar Funcionário</h3>
+                        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <h3 className="text-2xl font-bold text-gray-900">
+                                {editandoFuncionario ? 'Editar Funcionário' : 'Adicionar Funcionário'}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={handleFecharModal}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
                         </div>
                         <form onSubmit={handleSubmitFuncionario} className="p-6 space-y-4">
+                            {/* Campo de Busca Rápida de Usuários (só no modo criação) */}
+                            {!editandoFuncionario && (
+                                <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                                    <label className="block text-sm font-semibold text-blue-900 mb-2">
+                                        🔍 Busca Rápida de Usuário (Opcional)
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={buscaUsuario}
+                                            onChange={(e) => {
+                                                setBuscaUsuario(e.target.value);
+                                                setMostrarListaUsuarios(true);
+                                                setUsuarioSelecionado(null);
+                                            }}
+                                            onFocus={() => setMostrarListaUsuarios(true)}
+                                            placeholder="Digite nome ou email de um usuário cadastrado..."
+                                            className="w-full px-4 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
+                                        
+                                        {/* Lista de Usuários Encontrados */}
+                                        {mostrarListaUsuarios && usuariosFiltrados.length > 0 && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-blue-300 rounded-xl shadow-xl max-h-60 overflow-y-auto z-10">
+                                                {usuariosFiltrados.slice(0, 10).map((usuario) => (
+                                                    <button
+                                                        key={usuario.id}
+                                                        type="button"
+                                                        onClick={() => handleSelecionarUsuario(usuario)}
+                                                        className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                                                                {usuario.name?.charAt(0)?.toUpperCase() || '?'}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="font-semibold text-gray-900">{usuario.name}</p>
+                                                                <p className="text-xs text-gray-600">{usuario.email}</p>
+                                                            </div>
+                                                            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                                                                usuario.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                                                usuario.role === 'gerente' ? 'bg-blue-100 text-blue-700' :
+                                                                usuario.role === 'eletricista' ? 'bg-orange-100 text-orange-700' :
+                                                                'bg-gray-100 text-gray-700'
+                                                            }`}>
+                                                                {usuario.role}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        
+                                        {/* Usuário Selecionado */}
+                                        {usuarioSelecionado && (
+                                            <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span className="text-sm text-green-800 font-medium">
+                                                    Usuário vinculado: <strong>{usuarioSelecionado.name}</strong>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setUsuarioSelecionado(null);
+                                                        setBuscaUsuario('');
+                                                        setFuncionarioForm({
+                                                            nome: '',
+                                                            cargo: '',
+                                                            salario: '',
+                                                            dataAdmissao: new Date().toISOString().split('T')[0],
+                                                            cpf: '',
+                                                            telefone: '',
+                                                            email: '',
+                                                            status: 'Ativo'
+                                                        });
+                                                    }}
+                                                    className="ml-auto text-red-600 hover:text-red-700 text-xs font-semibold"
+                                                >
+                                                    ✕ Limpar
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-blue-700 mt-2">
+                                        💡 Digite para buscar um usuário existente e preencher automaticamente nome e email
+                                    </p>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
@@ -560,11 +767,11 @@ const RHView: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 btn-secondary">
+                                <button type="button" onClick={handleFecharModal} className="flex-1 btn-secondary">
                                     Cancelar
                                 </button>
                                 <button type="submit" className="flex-1 btn-success">
-                                    Cadastrar
+                                    {editandoFuncionario ? 'Atualizar' : 'Cadastrar'}
                                 </button>
                             </div>
                         </form>
@@ -660,6 +867,11 @@ const CarrosView: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isVeiculoModalOpen, setIsVeiculoModalOpen] = useState(false);
     const [isGastoModalOpen, setIsGastoModalOpen] = useState(false);
+    const [isVisualizarModalOpen, setIsVisualizarModalOpen] = useState(false);
+    const [veiculoSelecionado, setVeiculoSelecionado] = useState<any | null>(null);
+    const [gastosVeiculo, setGastosVeiculo] = useState<any[]>([]);
+    const [filtroGastoPeriodo, setFiltroGastoPeriodo] = useState<'semana' | 'mes' | 'ano'>('mes');
+    const [gastoVisualizando, setGastoVisualizando] = useState<any | null>(null);
     const [veiculoForm, setVeiculoForm] = useState({
         modelo: '',
         placa: '',
@@ -695,6 +907,90 @@ const CarrosView: React.FC = () => {
             toast.error('Erro ao carregar veículos');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleVisualizarVeiculo = async (veiculo: any) => {
+        setVeiculoSelecionado(veiculo);
+        setIsVisualizarModalOpen(true);
+        await carregarGastosVeiculo(veiculo.id);
+    };
+
+    const handleFecharVisualizacao = () => {
+        setIsVisualizarModalOpen(false);
+        setVeiculoSelecionado(null);
+        setGastosVeiculo([]);
+        setGastoVisualizando(null);
+    };
+
+    const carregarGastosVeiculo = async (veiculoId: string) => {
+        try {
+            const response = await gastosVeiculoService.listar();
+            const gastosDoVeiculo = (response.data || response || []).filter(
+                (gasto: any) => gasto.veiculoId === veiculoId
+            );
+            setGastosVeiculo(gastosDoVeiculo);
+        } catch (error) {
+            console.error('Erro ao carregar gastos do veículo:', error);
+        }
+    };
+
+    const filtrarGastosPorPeriodo = () => {
+        const agora = new Date();
+        const filtrados = gastosVeiculo.filter(gasto => {
+            const dataGasto = new Date(gasto.data);
+            
+            if (filtroGastoPeriodo === 'semana') {
+                const umaSemanaAtras = new Date(agora);
+                umaSemanaAtras.setDate(agora.getDate() - 7);
+                return dataGasto >= umaSemanaAtras;
+            } else if (filtroGastoPeriodo === 'mes') {
+                return dataGasto.getMonth() === agora.getMonth() && 
+                       dataGasto.getFullYear() === agora.getFullYear();
+            } else { // ano
+                return dataGasto.getFullYear() === agora.getFullYear();
+            }
+        });
+        return filtrados;
+    };
+
+    const handleExcluirVeiculo = async (veiculoId: string) => {
+        if (!confirm('Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        try {
+            await veiculosService.deletar(veiculoId);
+            toast.success('Veículo excluído com sucesso!');
+            carregarDados();
+        } catch (error) {
+            console.error('Erro ao excluir veículo:', error);
+            toast.error('Erro ao excluir veículo');
+        }
+    };
+
+    const handleAdicionarContaPagar = async () => {
+        if (!gastoVisualizando || !veiculoSelecionado) return;
+
+        try {
+            // Criar despesa fixa para o gasto da frota
+            await despesasFixasService.criar({
+                descricao: `Frota - ${gastoVisualizando.tipo} | ${veiculoSelecionado.modelo} (${veiculoSelecionado.placa})`,
+                categoria: 'Frota',
+                valor: parseFloat(gastoVisualizando.valor),
+                diaVencimento: new Date(gastoVisualizando.data).getDate(),
+                fornecedor: gastoVisualizando.responsavel || 'Não informado',
+                observacoes: gastoVisualizando.descricao || `${gastoVisualizando.tipo} - ${veiculoSelecionado.modelo}`
+            });
+
+            toast.success('✅ Gasto adicionado às Contas a Pagar com sucesso!');
+            setGastoVisualizando(null);
+            
+            // Opcional: Pode redirecionar para a página de despesas
+            // ou apenas mostrar uma confirmação
+        } catch (error) {
+            console.error('Erro ao adicionar às contas a pagar:', error);
+            toast.error('❌ Erro ao adicionar às contas a pagar');
         }
     };
 
@@ -821,15 +1117,38 @@ const CarrosView: React.FC = () => {
                 ) : (
                     <div className="space-y-3">
                         {veiculos.map((veiculo) => (
-                            <div key={veiculo.id} className="border border-gray-200 rounded-xl p-4 hover:bg-gray-50">
+                            <div key={veiculo.id} className="border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-all">
                                 <div className="flex justify-between items-center">
-                                    <div>
+                                    <div className="flex-1">
                                         <h4 className="font-bold text-gray-900">{veiculo.modelo} - {veiculo.placa}</h4>
                                         <p className="text-sm text-gray-600">{veiculo.tipo} | {veiculo.ano}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-sm text-gray-600">Gasto Total</p>
-                                        <p className="text-lg font-bold text-orange-600">R$ {veiculo.gastoTotal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</p>
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-right">
+                                            <p className="text-sm text-gray-600">Gasto Total</p>
+                                            <p className="text-lg font-bold text-orange-600">R$ {veiculo.gastoTotal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleVisualizarVeiculo(veiculo)}
+                                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-all"
+                                                title="Visualizar veículo"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleExcluirVeiculo(veiculo.id)}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                title="Excluir veículo"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1044,6 +1363,294 @@ const CarrosView: React.FC = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Visualizar Veículo */}
+            {isVisualizarModalOpen && veiculoSelecionado && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full my-8 max-h-[95vh] overflow-y-auto">
+                        {/* Header do Modal */}
+                        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-orange-500 to-orange-600">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <TruckIcon className="w-7 h-7 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">Detalhes do Veículo</h3>
+                                        <p className="text-sm text-orange-100 mt-1">Informações completas</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleFecharVisualizacao}
+                                    className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Conteúdo do Modal */}
+                        <div className="p-6 space-y-6">
+                            {/* Informações Principais */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                                    <p className="text-sm font-medium text-orange-700 mb-1">Modelo</p>
+                                    <p className="text-lg font-bold text-orange-900">{veiculoSelecionado.modelo}</p>
+                                </div>
+                                <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                                    <p className="text-sm font-medium text-orange-700 mb-1">Placa</p>
+                                    <p className="text-lg font-bold text-orange-900">{veiculoSelecionado.placa}</p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">🚗 Tipo</p>
+                                    <p className="text-lg font-semibold text-gray-900">{veiculoSelecionado.tipo}</p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">📅 Ano</p>
+                                    <p className="text-lg font-semibold text-gray-900">{veiculoSelecionado.ano}</p>
+                                </div>
+                            </div>
+
+                            {/* Métricas */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">📏 Quilometragem Atual</p>
+                                    <p className="text-xl font-semibold text-gray-900">
+                                        {veiculoSelecionado.kmAtual?.toLocaleString('pt-BR') || '0'} km
+                                    </p>
+                                </div>
+                                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                                    <p className="text-sm text-orange-700 mb-1">💰 Gasto Total</p>
+                                    <p className="text-xl font-bold text-orange-600">
+                                        R$ {veiculoSelecionado.gastoTotal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Histórico de Gastos */}
+                            <div className="border-t border-gray-200 pt-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h4 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        Histórico de Gastos
+                                    </h4>
+                                    {/* Filtros de Período */}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setFiltroGastoPeriodo('semana')}
+                                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                                filtroGastoPeriodo === 'semana'
+                                                    ? 'bg-orange-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Semana
+                                        </button>
+                                        <button
+                                            onClick={() => setFiltroGastoPeriodo('mes')}
+                                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                                filtroGastoPeriodo === 'mes'
+                                                    ? 'bg-orange-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Mês
+                                        </button>
+                                        <button
+                                            onClick={() => setFiltroGastoPeriodo('ano')}
+                                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                                filtroGastoPeriodo === 'ano'
+                                                    ? 'bg-orange-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Ano
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Tabela de Gastos */}
+                                {filtrarGastosPorPeriodo().length === 0 ? (
+                                    <div className="text-center py-12 bg-gray-50 rounded-xl">
+                                        <svg className="w-16 h-16 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        <p className="text-gray-500 font-medium">Nenhum gasto registrado neste período</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50 border-b border-gray-200">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Data</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tipo</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Descrição</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Valor</th>
+                                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {filtrarGastosPorPeriodo().map((gasto) => (
+                                                    <tr key={gasto.id} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                                            {new Date(gasto.data).toLocaleDateString('pt-BR')}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${
+                                                                gasto.tipo === 'Combustível' ? 'bg-blue-100 text-blue-700' :
+                                                                gasto.tipo === 'Manutenção' ? 'bg-orange-100 text-orange-700' :
+                                                                'bg-gray-100 text-gray-700'
+                                                            }`}>
+                                                                {gasto.tipo}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
+                                                            {gasto.descricao || 'Sem descrição'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm font-bold text-orange-600 text-right">
+                                                            R$ {parseFloat(gasto.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <button
+                                                                onClick={() => setGastoVisualizando(gasto)}
+                                                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-all"
+                                                                title="Ver detalhes"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                </svg>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Total do Período */}
+                                {filtrarGastosPorPeriodo().length > 0 && (
+                                    <div className="mt-4 flex justify-end">
+                                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                                            <p className="text-sm text-orange-700 mb-1">Total no período</p>
+                                            <p className="text-2xl font-bold text-orange-600">
+                                                R$ {filtrarGastosPorPeriodo()
+                                                    .reduce((sum, g) => sum + parseFloat(g.valor || 0), 0)
+                                                    .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer do Modal */}
+                        <div className="p-6 border-t border-gray-200 bg-gray-50">
+                            <button
+                                onClick={handleFecharVisualizacao}
+                                className="w-full btn-secondary"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Detalhes do Gasto */}
+            {gastoVisualizando && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-orange-500 to-orange-600">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-white">Detalhes do Gasto</h3>
+                                </div>
+                                <button
+                                    onClick={() => setGastoVisualizando(null)}
+                                    className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                                    <p className="text-sm text-orange-700 mb-1">💰 Valor</p>
+                                    <p className="text-2xl font-bold text-orange-600">
+                                        R$ {parseFloat(gastoVisualizando.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">📅 Data</p>
+                                    <p className="text-lg font-semibold text-gray-900">
+                                        {new Date(gastoVisualizando.data).toLocaleDateString('pt-BR')}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">🏷️ Tipo</p>
+                                    <p className="text-lg font-semibold text-gray-900">{gastoVisualizando.tipo}</p>
+                                </div>
+                                {gastoVisualizando.km && (
+                                    <div className="bg-gray-50 rounded-xl p-4">
+                                        <p className="text-sm text-gray-600 mb-1">📏 Quilometragem</p>
+                                        <p className="text-lg font-semibold text-gray-900">{gastoVisualizando.km} km</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {gastoVisualizando.responsavel && (
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">👤 Responsável</p>
+                                    <p className="text-lg font-semibold text-gray-900">{gastoVisualizando.responsavel}</p>
+                                </div>
+                            )}
+
+                            {gastoVisualizando.descricao && (
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-2">📝 Descrição</p>
+                                    <p className="text-gray-900">{gastoVisualizando.descricao}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 border-t border-gray-200 bg-gray-50 flex gap-3">
+                            <button
+                                onClick={() => setGastoVisualizando(null)}
+                                className="flex-1 btn-secondary"
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                onClick={handleAdicionarContaPagar}
+                                className="flex-1 btn-success"
+                            >
+                                💳 Adicionar às Contas a Pagar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1688,8 +2295,12 @@ const DespesasFixasView: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-                                                {despesa.categoria}
+                                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                                despesa.categoria === 'Frota' 
+                                                    ? 'bg-orange-100 text-orange-700' 
+                                                    : 'bg-blue-100 text-blue-700'
+                                            }`}>
+                                                {despesa.categoria === 'Frota' ? '🚗' : ''} {despesa.categoria}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right font-bold text-gray-900">
@@ -1774,6 +2385,7 @@ const DespesasFixasView: React.FC = () => {
                                         <option value="Segurança">🛡️ Segurança</option>
                                         <option value="Contador">📊 Contador</option>
                                         <option value="Software">💻 Software/Sistemas</option>
+                                        <option value="Frota">🚗 Frota (Veículos)</option>
                                         <option value="Outros">📝 Outros</option>
                                     </select>
                                 </div>

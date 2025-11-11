@@ -15,6 +15,13 @@ router.use(authenticate);
 router.post('/gerar', authorize('admin', 'gerente'), ObraController.gerarObra);
 
 /**
+ * @route POST /api/obras/manutencao
+ * @desc Cria uma obra de manutenção (sem projeto)
+ * @access Admin/Gerente
+ */
+router.post('/manutencao', authorize('admin', 'gerente'), ObraController.criarObraManutencao);
+
+/**
  * @route GET /api/obras/kanban
  * @desc Lista obras agrupadas por status (Kanban)
  * @access Authenticated

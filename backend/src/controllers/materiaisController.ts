@@ -176,3 +176,154 @@ export const getMovimentacoes = async (req: Request, res: Response): Promise<voi
   }
 };
 
+// Obter histórico de compras de um material
+export const getHistoricoCompras = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const compraItems = await prisma.compraItem.findMany({
+      where: { materialId: id },
+      include: {
+        compra: {
+          select: {
+            dataCompra: true,
+            dataEmissaoNF: true,
+            numeroNF: true,
+            fornecedorNome: true,
+            status: true
+          }
+        }
+      },
+      orderBy: { compra: { dataCompra: 'desc' } }
+    });
+
+    const historico = compraItems.map(item => ({
+      dataCompra: item.compra.dataCompra,
+      numeroNF: item.compra.numeroNF,
+      fornecedor: item.compra.fornecedorNome,
+      quantidade: item.quantidade,
+      valorUnitario: item.valorUnit,
+      valorTotal: item.valorTotal,
+      status: item.compra.status,
+      nomeProduto: item.nomeProduto // Incluir nome do produto da compra
+    }));
+
+    res.json(historico);
+  } catch (error) {
+    console.error('Erro ao buscar histórico de compras:', error);
+    res.status(500).json({ error: 'Erro ao buscar histórico de compras' });
+  }
+};
+
+// Buscar materiais similares pelo nome (para verificação de duplicatas)
+export const buscarMateriaisSimilares = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { nomeProduto, ncm } = req.body;
+
+    if (!nomeProduto) {
+      res.status(400).json({ error: 'Nome do produto é obrigatório' });
+      return;
+    }
+
+    console.log(`🔍 Buscando materiais similares a: "${nomeProduto}"`);
+
+    // Extrair palavras-chave do nome (mínimo 3 caracteres)
+    const palavrasChave = nomeProduto
+      .split(/\s+/)
+      .filter((palavra: string) => palavra.length >= 3)
+      .slice(0, 5); // Limitar a 5 palavras-chave principais
+
+    const materiaisSimilares = await prisma.material.findMany({
+      where: {
+        AND: [
+          { ativo: true },
+          {
+            OR: [
+              // Busca exata pelo nome
+              { nome: { equals: nomeProduto, mode: 'insensitive' } },
+              // Busca exata pela descrição
+              { descricao: { equals: nomeProduto, mode: 'insensitive' } },
+              // Busca por NCM se fornecido
+              ...(ncm ? [{ sku: { contains: String(ncm) } }] : []),
+              // Busca por palavras-chave no nome
+              ...palavrasChave.map((palavra: string) => ({
+                nome: { contains: palavra, mode: 'insensitive' as any }
+              })),
+              // Busca por palavras-chave na descrição
+              ...palavrasChave.map((palavra: string) => ({
+                descricao: { contains: palavra, mode: 'insensitive' as any }
+              }))
+            ]
+          }
+        ]
+      },
+      include: {
+        fornecedor: {
+          select: { id: true, nome: true }
+        }
+      },
+      take: 10, // Limitar a 10 resultados
+      orderBy: { nome: 'asc' }
+    });
+
+    console.log(`✅ Encontrados ${materiaisSimilares.length} materiais similares`);
+
+    res.json(materiaisSimilares);
+  } catch (error) {
+    console.error('Erro ao buscar materiais similares:', error);
+    res.status(500).json({ error: 'Erro ao buscar materiais similares' });
+  }
+};
+
+// Corrigir nomes genéricos de materiais baseado no histórico de compras
+export const corrigirNomesGenericos = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Buscar materiais com nomes genéricos
+    const materiaisGenericos = await prisma.material.findMany({
+      where: {
+        OR: [
+          { nome: { contains: 'Produto importado via XML' } },
+          { categoria: 'Importado XML' }
+        ]
+      }
+    });
+
+    console.log(`📋 Encontrados ${materiaisGenericos.length} materiais com nomes genéricos`);
+
+    let corrigidos = 0;
+
+    for (const material of materiaisGenericos) {
+      // Buscar a compra mais recente deste material
+      const compraItem = await prisma.compraItem.findFirst({
+        where: { materialId: material.id },
+        orderBy: { compra: { dataCompra: 'desc' } },
+        include: { compra: true }
+      });
+
+      if (compraItem && compraItem.nomeProduto && !compraItem.nomeProduto.includes('Produto importado')) {
+        // Atualizar com o nome real do produto
+        await prisma.material.update({
+          where: { id: material.id },
+          data: {
+            nome: compraItem.nomeProduto,
+            descricao: compraItem.nomeProduto,
+            categoria: 'Material Elétrico' // Atualizar categoria também
+          }
+        });
+        console.log(`✅ Material ${material.id} atualizado: "${compraItem.nomeProduto}"`);
+        corrigidos++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${corrigidos} materiais corrigidos com sucesso`,
+      total: materiaisGenericos.length,
+      corrigidos
+    });
+  } catch (error) {
+    console.error('Erro ao corrigir nomes genéricos:', error);
+    res.status(500).json({ error: 'Erro ao corrigir nomes genéricos' });
+  }
+};
+

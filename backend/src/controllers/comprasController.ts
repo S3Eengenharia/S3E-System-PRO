@@ -293,3 +293,39 @@ export const receberRemessaParcial = async (req: Request, res: Response): Promis
   }
 };
 
+// Receber compra com associações explícitas de materiais
+export const receberComAssociacoes = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { associacoes, dataRecebimento } = req.body;
+
+    if (!associacoes || typeof associacoes !== 'object') {
+      res.status(400).json({ error: 'Associações de materiais são obrigatórias' });
+      return;
+    }
+
+    console.log('🔗 Recebendo compra com associações:', id);
+    console.log('📋 Associações:', associacoes);
+
+    const dataRecebimentoFinal = dataRecebimento ? new Date(dataRecebimento) : new Date();
+    
+    const compraAtualizada = await ComprasService.receberComAssociacoes(
+      id, 
+      associacoes,
+      dataRecebimentoFinal
+    );
+
+    res.json({
+      success: true,
+      message: 'Compra recebida com sucesso! Materiais associados corretamente.',
+      data: compraAtualizada
+    });
+  } catch (error) {
+    console.error('Erro ao receber compra com associações:', error);
+    res.status(500).json({ 
+      error: 'Erro ao receber compra com associações',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+};
+

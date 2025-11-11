@@ -172,7 +172,7 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             }
         } catch (error) {
             console.error('Erro ao carregar configurações:', error);
-            alert('❌ Erro ao carregar configurações');
+            toast.error('❌ Erro ao carregar configurações');
         } finally {
             setLoading(false);
         }
@@ -193,7 +193,7 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         } catch (error) {
             console.error('Erro ao carregar usuários:', error);
             setUsuarios([]);
-            alert('❌ Erro ao carregar usuários');
+            toast.error('❌ Erro ao carregar usuários');
         } finally {
             setLoadingUsuarios(false);
         }
@@ -266,14 +266,14 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             const response = await configuracoesService.atualizarUsuarioRole(userId, newRole);
             
             if (response.success) {
-                alert('✅ Permissão atualizada com sucesso!');
+                toast.success('✅ Permissão atualizada com sucesso!');
                 await loadUsuarios();
             } else {
-                alert(`❌ ${response.error || 'Erro ao atualizar permissão'}`);
+                toast.error(`❌ ${response.error || 'Erro ao atualizar permissão'}`);
             }
         } catch (error) {
             console.error('Erro ao atualizar role:', error);
-            alert('❌ Erro ao atualizar permissão');
+            toast.error('❌ Erro ao atualizar permissão');
         }
     };
 
@@ -283,14 +283,14 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             const response = await configuracoesService.toggleUsuarioStatus(userId, newStatus);
             
             if (response.success) {
-                alert(`✅ Usuário ${newStatus ? 'ativado' : 'desativado'} com sucesso!`);
+                toast.success(`✅ Usuário ${newStatus ? 'ativado' : 'desativado'} com sucesso!`);
                 await loadUsuarios();
             } else {
-                alert(`❌ ${response.error || 'Erro ao alterar status'}`);
+                toast.error(`❌ ${response.error || 'Erro ao alterar status'}`);
             }
         } catch (error) {
             console.error('Erro ao alterar status:', error);
-            alert('❌ Erro ao alterar status do usuário');
+            toast.error('❌ Erro ao alterar status do usuário');
         }
     };
 
@@ -318,12 +318,12 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         try {
             // Validações
             if (!novoUsuario.email || !novoUsuario.password || !novoUsuario.name || !novoUsuario.role) {
-                alert('❌ Todos os campos são obrigatórios');
+                toast.error('❌ Todos os campos são obrigatórios');
                 return;
             }
 
             if (novoUsuario.password.length < 6) {
-                alert('❌ A senha deve ter pelo menos 6 caracteres');
+                toast.error('❌ A senha deve ter pelo menos 6 caracteres');
                 return;
             }
 
@@ -331,15 +331,15 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             const response = await configuracoesService.criarUsuario(novoUsuario);
 
             if (response.success) {
-                alert('✅ Usuário criado com sucesso!');
+                toast.success('✅ Usuário criado com sucesso!');
                 handleCloseModalUsuario();
                 await loadUsuarios();
             } else {
-                alert(`❌ ${response.error || 'Erro ao criar usuário'}`);
+                toast.error(`❌ ${response.error || 'Erro ao criar usuário'}`);
             }
         } catch (error) {
             console.error('❌ Erro ao criar usuário:', error);
-            alert('❌ Erro ao criar usuário');
+            toast.error('❌ Erro ao criar usuário');
         } finally {
             setCreatingUser(false);
         }
@@ -363,18 +363,18 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             const response = await configuracoesService.excluirUsuario(usuarioParaExcluir.id);
 
             if (response.success) {
-                alert('✅ Usuário excluído com sucesso!');
+                toast.success('✅ Usuário excluído com sucesso!');
                 handleCloseModalExcluir();
                 await loadUsuarios();
             } else {
-                alert(`❌ ${response.error || 'Erro ao excluir usuário'}`);
+                toast.error(`❌ ${response.error || 'Erro ao excluir usuário'}`);
             }
         } catch (error: any) {
             console.error('❌ Erro ao excluir usuário:', error);
             if (error.response?.data?.message) {
-                alert(`❌ ${error.response.data.message}`);
+                toast.error(`❌ ${error.response.data.message}`);
             } else {
-                alert('❌ Erro ao excluir usuário');
+                toast.error('❌ Erro ao excluir usuário');
             }
         } finally {
             setExcluindoUsuario(false);

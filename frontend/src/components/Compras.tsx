@@ -210,11 +210,15 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         // Inicializar todos os itens como recebidos por padrão
         if (purchaseToView) {
             const inicialRecebidos: {[key: string]: boolean} = {};
-            purchaseToView.items.forEach(item => {
-                if (item.productId) {
-                    inicialRecebidos[item.productId] = true;
+            purchaseToView.items.forEach((item: any, index: number) => {
+                // SEMPRE usar item.id (ID do CompraItem) que é único para cada linha
+                // Fallback para materialId-index se não houver ID
+                const itemId = (item as any).id || `${item.materialId || item.productId}-${index}`;
+                if (itemId) {
+                    inicialRecebidos[itemId] = true;
                 }
             });
+            console.log(`✅ Inicializando ${Object.keys(inicialRecebidos).length} itens como marcados`, inicialRecebidos);
             setItensRecebidos(inicialRecebidos);
         }
         setIsReceivingModalOpen(true);
@@ -224,22 +228,42 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         if (!purchaseToView) return;
         
         // Verificar se pelo menos um item foi marcado
-        const itensParaReceber = Object.keys(itensRecebidos).filter(key => itensRecebidos[key]);
-        if (itensParaReceber.length === 0) {
+        const compraItemIds = Object.keys(itensRecebidos).filter(key => itensRecebidos[key]);
+        if (compraItemIds.length === 0) {
             toast.error('❌ Selecione pelo menos um item para receber');
             return;
         }
         
+        // Mapear de CompraItem.id para Material.id
+        // O backend espera receber os materialId (produtoIds) para processar o estoque
+        const materialIds: string[] = [];
+        purchaseToView.items.forEach((item: any, index: number) => {
+            const itemId = item.id || `${item.materialId || item.productId}-${index}`;
+            if (compraItemIds.includes(itemId)) {
+                // Adicionar o materialId correspondente
+                const materialId = item.materialId || item.productId;
+                if (materialId) {
+                    materialIds.push(materialId);
+                }
+            }
+        });
+        
+        console.log('📦 Recebendo remessa:', purchaseToView.id, 'Data:', dataRecebimento);
+        console.log('📦 CompraItems selecionados:', compraItemIds);
+        console.log('📦 MaterialIds para processamento:', materialIds);
+        
+        if (materialIds.length === 0) {
+            toast.error('❌ Nenhum material válido para processar');
+            return;
+        }
+        
         try {
-            console.log('📦 Recebendo remessa:', purchaseToView.id, 'Data:', dataRecebimento);
-            console.log('📦 Itens selecionados:', itensParaReceber);
-            
-            // Enviar itens específicos para receber
+            // Enviar materialIds para o backend processar o estoque
             await comprasService.receberRemessaParcial(
                 purchaseToView.id, 
                 PurchaseStatus.Recebido, 
                 dataRecebimento,
-                itensParaReceber
+                materialIds // ✅ Enviando materialIds, não compraItemIds
             );
             
             // Recarregar lista
@@ -250,11 +274,11 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             setIsReceivingModalOpen(false);
             setPurchaseToView(null);
             
-            const todosRecebidos = itensParaReceber.length === purchaseToView.items.length;
+            const todosRecebidos = materialIds.length === purchaseToView.items.length;
             if (todosRecebidos) {
                 toast.success('✅ Remessa recebida com sucesso! O estoque foi atualizado.');
             } else {
-                toast.success(`✅ ${itensParaReceber.length} de ${purchaseToView.items.length} itens recebidos! O estoque foi atualizado.`);
+                toast.success(`✅ ${materialIds.length} de ${purchaseToView.items.length} itens recebidos! O estoque foi atualizado.`);
             }
         } catch (error) {
             console.error('❌ Erro ao receber remessa:', error);
@@ -1360,6 +1384,14 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                         <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">Data da Compra</h4>
                                         <p className="text-gray-900 font-medium">{new Date(purchaseToView.orderDate).toLocaleDateString('pt-BR')}</p>
                                     </div>
+                                    {purchaseToView.dataRecebimento && purchaseToView.status === PurchaseStatus.Recebido && (
+                                        <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+                                            <h4 className="text-xs font-semibold text-green-600 uppercase mb-1 flex items-center gap-1">
+                                                <span>✅</span> Data de Recebimento
+                                            </h4>
+                                            <p className="text-green-900 font-bold">{new Date(purchaseToView.dataRecebimento).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                    )}
                                     {(purchaseToView as any).destinatarioCNPJ && (
                                         <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                             <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1">CNPJ Destinatário</h4>
@@ -1670,40 +1702,49 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     📦 Itens da Compra - Marque os recebidos
                                 </h4>
                                 <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-xl p-3 bg-gray-50">
-                                    {purchaseToView.items.map((item, index) => (
-                                        <label
-                                            key={item.productId || index}
-                                            className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-all"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={itensRecebidos[item.productId || ''] || false}
-                                                onChange={(e) => {
-                                                    setItensRecebidos(prev => ({
-                                                        ...prev,
-                                                        [item.productId || '']: e.target.checked
-                                                    }));
-                                                }}
-                                                className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-gray-900 text-sm">{item.productName}</p>
-                                                <div className="flex gap-4 mt-1 text-xs text-gray-600">
+                                    {purchaseToView.items.map((item: any, index) => {
+                                        // SEMPRE usar item.id (ID único do CompraItem)
+                                        // Fallback para combinação única se não houver ID
+                                        const itemId = item.id || `${item.materialId || item.productId}-${index}`;
+                                        
+                                        return (
+                                            <label
+                                                key={itemId}
+                                                className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-all"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={itensRecebidos[itemId] || false}
+                                                    onChange={(e) => {
+                                                        setItensRecebidos(prev => ({
+                                                            ...prev,
+                                                            [itemId]: e.target.checked
+                                                        }));
+                                                    }}
+                                                    className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                                />
+                                                <div className="flex-1">
+                                                    <p className="font-semibold text-gray-900 text-sm">{item.productName}</p>
+                                                    <div className="flex gap-4 mt-1 text-xs text-gray-600">
                                                     <span>Qtd: {item.quantity}</span>
                                                     <span>Valor: R$ {item.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                             </div>
                                         </label>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 <div className="mt-2 flex justify-between text-xs">
                                     <button
                                         type="button"
                                         onClick={() => {
                                             const todosTrue: {[key: string]: boolean} = {};
-                                            purchaseToView.items.forEach(item => {
-                                                if (item.productId) todosTrue[item.productId] = true;
+                                            purchaseToView.items.forEach((item: any, index: number) => {
+                                                // Usar a mesma lógica: item.id ou fallback
+                                                const itemId = item.id || `${item.materialId || item.productId}-${index}`;
+                                                if (itemId) todosTrue[itemId] = true;
                                             });
+                                            console.log(`✓ Marcando todos os ${Object.keys(todosTrue).length} itens`, todosTrue);
                                             setItensRecebidos(todosTrue);
                                         }}
                                         className="text-green-600 hover:text-green-700 font-semibold"
@@ -1712,7 +1753,10 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setItensRecebidos({})}
+                                        onClick={() => {
+                                            console.log('✗ Desmarcando todos os itens');
+                                            setItensRecebidos({});
+                                        }}
                                         className="text-red-600 hover:text-red-700 font-semibold"
                                     >
                                         ✗ Desmarcar Todos
