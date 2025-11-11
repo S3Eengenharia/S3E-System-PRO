@@ -129,6 +129,23 @@ class ComprasService {
   }
 
   /**
+   * Receber compra com associações explícitas de materiais
+   * Previne criação de duplicatas
+   */
+  async receberComAssociacoes(
+    id: string,
+    associacoes: { [compraItemId: string]: { materialId?: string; criarNovo?: boolean; nomeMaterial?: string } },
+    dataRecebimento?: string
+  ) {
+    console.log('🔗 Recebendo compra com associações:', id, associacoes);
+    
+    return axiosApiService.put<Compra>(`/api/compras/${id}/receber-com-associacoes`, {
+      associacoes,
+      dataRecebimento: dataRecebimento || new Date().toISOString()
+    });
+  }
+
+  /**
    * Fazer parse de XML de nota fiscal no backend
    * Envia o conteúdo XML como JSON { xml: string }
    */

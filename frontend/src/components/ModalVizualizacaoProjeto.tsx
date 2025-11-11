@@ -1,7 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { etapasAdminService, type EtapaAdmin, type ListaEtapasResponse } from '../services/etapasAdminService';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 type ProjetoStatus = 'PROPOSTA' | 'VALIDADO' | 'APROVADO' | 'EXECUCAO' | 'CONCLUIDO';
 
@@ -64,6 +75,18 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   const [documentos, setDocumentos] = useState<Array<{ id: string; nome: string; tipo: string; url: string }>>([]);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
+  // AlertDialog
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    description: '',
+    onConfirm: () => {}
+  });
+
   useEffect(() => {
     if (isOpen && activeTab === 'EtapasAdmin') {
       carregarEtapas();
@@ -105,23 +128,43 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   const podeAprovar = useMemo(() => projeto.status === 'VALIDADO', [projeto.status]);
 
   async function handleValidarProjeto() {
-    try {
-      setLoadingAcao(true);
-      await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'VALIDADO' });
-      if (onRefresh) onRefresh();
-    } finally {
-      setLoadingAcao(false);
-    }
+    setAlertConfig({
+      title: '✅ Validar Proposta',
+      description: 'Deseja validar esta proposta tecnicamente? Após validada, poderá ser enviada para aprovação do cliente.',
+      onConfirm: async () => {
+        try {
+          setLoadingAcao(true);
+          await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'VALIDADO' });
+          toast.success('✅ Proposta validada com sucesso!');
+          if (onRefresh) onRefresh();
+        } catch (error) {
+          toast.error('❌ Erro ao validar proposta');
+        } finally {
+          setLoadingAcao(false);
+        }
+      }
+    });
+    setAlertOpen(true);
   }
 
   async function handleAprovarProjeto() {
-    try {
-      setLoadingAcao(true);
-      await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'APROVADO' });
-      if (onRefresh) onRefresh();
-    } finally {
-      setLoadingAcao(false);
-    }
+    setAlertConfig({
+      title: '🎉 Aprovar Projeto',
+      description: 'Deseja aprovar este projeto? Isso permitirá gerar a venda e iniciar a obra.',
+      onConfirm: async () => {
+        try {
+          setLoadingAcao(true);
+          await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'APROVADO' });
+          toast.success('🎉 Projeto aprovado com sucesso!');
+          if (onRefresh) onRefresh();
+        } catch (error) {
+          toast.error('❌ Erro ao aprovar projeto');
+        } finally {
+          setLoadingAcao(false);
+        }
+      }
+    });
+    setAlertOpen(true);
   }
 
   async function handleGerarObra() {
@@ -173,7 +216,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
 
   function handleSalvarTask() {
     if (!taskForm.titulo || !taskForm.descricao || !taskForm.prazo) {
-      alert('Preencha todos os campos obrigatórios');
+      toast.error('❌ Preencha todos os campos obrigatórios');
       return;
     }
 
@@ -218,39 +261,124 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   }
 
   function handleExcluirTask(taskId: string) {
-    if (confirm('Deseja realmente excluir esta tarefa?')) {
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-    }
+    setAlertConfig({
+      title: '🗑️ Excluir Tarefa',
+      description: 'Deseja realmente excluir esta tarefa? Esta ação não pode ser desfeita.',
+      onConfirm: () => {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        toast.success('✅ Tarefa excluída com sucesso!');
+      }
+    });
+    setAlertOpen(true);
   }
 
-  async function handleIniciarObra() {
-    if (!confirm('Deseja iniciar a obra? Isso criará uma nova entrada no Kanban de Obras.')) return;
+  // Calcular tempo decorrido desde criação da etapa
+  function calcularTempoDecorrido(dataCriacao: string): { horas: number; atrasada: boolean; cor: string; texto: string } {
+    const agora = new Date();
+    const criacao = new Date(dataCriacao);
+    const diferencaMs = agora.getTime() - criacao.getTime();
+    const horas = Math.floor(diferencaMs / (1000 * 60 * 60));
+    const atrasada = horas > 24;
     
-    try {
-      setLoadingAcao(true);
-      // Primeiro atualizar status do projeto para EXECUCAO
-      await axiosApiService.put(`${ENDPOINTS.PROJETOS}/${projeto.id}/status`, { status: 'EXECUCAO' });
-      
-      // Criar obra no sistema
-      const obraData = {
-        projetoId: projeto.id,
-        nomeObra: projeto.titulo,
-        clienteId: projeto.cliente.id,
-        status: 'A_FAZER',
-        dataInicio: new Date().toISOString()
-      };
-      
-      await axiosApiService.post('/api/obras', obraData);
-      
-      if (onRefresh) onRefresh();
-      onClose();
-      alert('✅ Obra iniciada com sucesso! Acesse o Kanban de Obras para gerenciar.');
-    } catch (error) {
-      console.error('Erro ao iniciar obra:', error);
-      alert('❌ Erro ao iniciar obra');
-    } finally {
-      setLoadingAcao(false);
+    let cor = 'text-green-600';
+    let texto = `${horas}h`;
+    
+    if (horas > 24) {
+      cor = 'text-red-600 font-bold';
+      const dias = Math.floor(horas / 24);
+      texto = `${dias}d ${horas % 24}h ⚠️`;
+    } else if (horas > 18) {
+      cor = 'text-orange-600';
+    } else if (horas > 12) {
+      cor = 'text-yellow-600';
     }
+    
+    return { horas, atrasada, cor, texto };
+  }
+
+  // Calcular progresso do projeto baseado em Etapas Admin + Tasks + Obras
+  const progressoProjeto = useMemo(() => {
+    // Etapas Admin concluídas
+    const etapasTotal = etapasResp?.etapas?.length || 0;
+    const etapasConcluidas = etapasResp?.etapas?.filter(e => e.concluida).length || 0;
+    
+    // Tasks concluídas
+    const tasksTotal = tasks.length;
+    const tasksConcluidas = tasks.filter(t => t.status === 'Concluído').length;
+    
+    // Obras concluídas (simulado - será integrado com o backend)
+    // TODO: Buscar obras do backend quando integrado
+    const obrasTotal = projeto.status === 'EXECUCAO' || projeto.status === 'CONCLUIDO' ? 1 : 0;
+    const obrasConcluidas = projeto.status === 'CONCLUIDO' ? 1 : 0;
+    
+    // Calcular totais
+    const totalItens = etapasTotal + tasksTotal + obrasTotal;
+    const totalConcluidos = etapasConcluidas + tasksConcluidas + obrasConcluidas;
+    
+    const percentual = totalItens > 0 ? Math.round((totalConcluidos / totalItens) * 100) : 0;
+    
+    return {
+      percentual,
+      etapasTotal,
+      etapasConcluidas,
+      tasksTotal,
+      tasksConcluidas,
+      obrasTotal,
+      obrasConcluidas,
+      totalItens,
+      totalConcluidos
+    };
+  }, [etapasResp, tasks, projeto.status]);
+
+  async function handleIniciarObra() {
+    setAlertConfig({
+      title: '🚀 Iniciar Obra',
+      description: 'Deseja iniciar a obra? Isso criará automaticamente uma nova entrada no Kanban de Obras na etapa Backlog.',
+      onConfirm: async () => {
+        try {
+          setLoadingAcao(true);
+          
+          console.log('🚀 Iniciando obra para projeto:', projeto.id);
+          
+          // Verificar se já existe obra para este projeto
+          try {
+            const obraExistente = await axiosApiService.get(`/api/obras/projeto/${projeto.id}`);
+            if (obraExistente && obraExistente.data) {
+              toast.warning('⚠️ Já existe uma obra criada para este projeto!');
+              setLoadingAcao(false);
+              return;
+            }
+          } catch (err) {
+            // Obra não existe, pode prosseguir
+            console.log('✅ Nenhuma obra existente, criando nova...');
+          }
+          
+          // Gerar obra automaticamente (backend já atualiza status do projeto)
+          const obraData = {
+            projetoId: projeto.id,
+            nomeObra: projeto.titulo,
+            dataPrevistaInicio: new Date().toISOString(),
+            dataPrevistaFim: null
+          };
+          
+          const response = await axiosApiService.post('/api/obras/gerar', obraData);
+          
+          console.log('✅ Obra criada:', response);
+          
+          toast.success('✅ Obra iniciada com sucesso! Acesse o Kanban de Obras (Backlog).');
+          
+          if (onRefresh) onRefresh();
+          onClose();
+        } catch (error: any) {
+          console.error('❌ Erro ao iniciar obra:', error);
+          const mensagem = error?.response?.data?.message || error?.message || 'Erro ao iniciar obra';
+          toast.error(`❌ ${mensagem}`);
+        } finally {
+          setLoadingAcao(false);
+        }
+      }
+    });
+    setAlertOpen(true);
   }
 
   if (!isOpen) return null;
@@ -265,7 +393,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
               <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-            </div>
+          </div>
             <div className="flex-1">
               <h2 className="text-2xl font-bold text-white">{projeto.titulo}</h2>
               <p className="text-sm text-white/80 mt-1">Cliente: {projeto.cliente?.nome}</p>
@@ -303,7 +431,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
         {/* Conteúdo */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
-            {activeTab === 'Visão Geral' && (
+          {activeTab === 'Visão Geral' && (
               <div className="space-y-6 animate-fade-in">
                 {/* Cards de Informações Principais */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -345,7 +473,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                        </div>
+                </div>
                         <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Data de Criação</h3>
                       </div>
                       <p className="text-lg font-bold text-purple-700 dark:text-purple-400">
@@ -353,6 +481,70 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* Card de Progresso do Projeto */}
+                <div className="bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-2xl p-6 shadow-soft">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Progresso do Projeto
+                    </h3>
+                    <span className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+                      {progressoProjeto.percentual}%
+                    </span>
+                  </div>
+                  
+                  {/* Barra de Progresso */}
+                  <div className="mb-4">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all duration-500 rounded-full"
+                        style={{ width: `${progressoProjeto.percentual}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Detalhes do Progresso */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Etapas Admin */}
+                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Etapas Admin</div>
+                      <div className="text-lg font-bold text-blue-700 dark:text-blue-400">
+                        {progressoProjeto.etapasConcluidas}/{progressoProjeto.etapasTotal}
+                      </div>
+                    </div>
+                    
+                    {/* Tasks */}
+                    <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Tasks Kanban</div>
+                      <div className="text-lg font-bold text-purple-700 dark:text-purple-400">
+                        {progressoProjeto.tasksConcluidas}/{progressoProjeto.tasksTotal}
+                      </div>
+                    </div>
+                    
+                    {/* Obras */}
+                    <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Obras</div>
+                      <div className="text-lg font-bold text-orange-700 dark:text-orange-400">
+                        {progressoProjeto.obrasConcluidas}/{progressoProjeto.obrasTotal}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Informação */}
+                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>
+                        O progresso é calculado com base em: <strong>Etapas Admin concluídas</strong> + <strong>Tasks concluídas</strong> + <strong>Obras concluídas</strong>
+                      </span>
+                    </p>
+                  </div>
                 </div>
 
                 {/* Botão Validar Proposta */}
@@ -365,13 +557,13 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           Este projeto está em fase de proposta. Valide tecnicamente antes de enviar para aprovação do cliente.
                         </p>
                       </div>
-                      <button
+                  <button
                         onClick={handleValidarProjeto}
-                        disabled={loadingAcao}
+                    disabled={loadingAcao}
                         className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:from-blue-700 hover:to-cyan-700 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                      >
+                  >
                         {loadingAcao ? '⏳ Validando...' : '✅ Validar Proposta'}
-                      </button>
+                  </button>
                     </div>
                   </div>
                 )}
@@ -385,7 +577,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           A proposta foi validada tecnicamente. Agora pode ser aprovada pelo cliente para gerar a venda.
                         </p>
-                      </div>
+              </div>
                       <button
                         onClick={handleAprovarProjeto}
                         disabled={loadingAcao}
@@ -451,7 +643,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                         </a>
                       )}
                       <button
-                        onClick={() => alert('Navegando para página do cliente...')}
+                        onClick={() => toast.info('📋 Navegando para página do cliente...')}
                         className="w-full flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
                       >
                         <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -544,7 +736,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                 </div>
 
                 {/* Descrição do Projeto */}
-                {projeto.descricao && (
+              {projeto.descricao && (
                   <div className="bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-2xl p-6 shadow-soft">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                       <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -587,31 +779,31 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
 
-            {activeTab === 'Materiais' && (
+          {activeTab === 'Materiais' && (
               <div className="space-y-6 animate-fade-in">
-                <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                     Materiais do Projeto (BOM)
                   </h3>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
                       placeholder="🔍 Buscar materiais..."
                       className="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-blue-500 dark:bg-dark-bg dark:text-white"
-                    />
+                  />
                     <button className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all">
-                      Localizar
-                    </button>
-                  </div>
+                    Localizar
+                  </button>
                 </div>
+              </div>
 
                 <div className="overflow-x-auto bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-2xl shadow-soft">
                   <table className="min-w-full">
@@ -622,9 +814,9 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Quantidade</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Subtotal</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Alocação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                    </tr>
+                  </thead>
+                  <tbody>
                       {projeto.orcamento?.items?.map((i, idx) => (
                         <tr key={i.id} className="border-t border-gray-200 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
                           <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium">
@@ -641,13 +833,13 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <select className="px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-dark-bg dark:text-white">
-                              <option>Não alocado</option>
-                              <option>Reservar do estoque</option>
-                              <option>Solicitar compra</option>
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
+                            <option>Não alocado</option>
+                            <option>Reservar do estoque</option>
+                            <option>Solicitar compra</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
                       {(!projeto.orcamento?.items || projeto.orcamento.items.length === 0) && (
                         <tr>
                           <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -660,28 +852,39 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           </td>
                         </tr>
                       )}
-                    </tbody>
-                  </table>
-                </div>
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
+          )}
 
-            {activeTab === 'EtapasAdmin' && (
+          {activeTab === 'EtapasAdmin' && (
               <div className="space-y-6 animate-fade-in">
-                <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                     </svg>
                     Etapas Administrativas
                   </h3>
-                  <button 
-                    onClick={carregarEtapas} 
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-medium"
-                  >
-                    🔄 Atualizar
-                  </button>
-                </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => toast.info('🔨 Funcionalidade de criar etapa será implementada em breve')} 
+                      className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all shadow-medium flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Criar Etapa
+                    </button>
+                    <button 
+                      onClick={carregarEtapas} 
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-medium"
+                    >
+                      🔄 Atualizar
+                    </button>
+                  </div>
+              </div>
 
                 {loadingEtapas && (
                   <div className="flex items-center justify-center py-8">
@@ -700,10 +903,12 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
 
                 {!loadingEtapas && !erroEtapas && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {etapasResp?.etapas.map((etapa) => {
-                      const atrasada = etapa.atrasada;
+                {etapasResp?.etapas.map((etapa) => {
+                  const atrasada = etapa.atrasada;
                       const realizada = etapa.concluida;
-                      return (
+                      const tempoDecorrido = calcularTempoDecorrido(etapa.dataCriacao || etapa.dataPrevista);
+                      
+                  return (
                         <div 
                           key={etapa.id} 
                           className={`rounded-2xl border-2 p-6 shadow-soft transition-all ${
@@ -724,49 +929,81 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                                 : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300'
                             }`}>
                               {realizada ? '✓ Concluída' : atrasada ? '⚠ Atrasada' : '⏳ Pendente'}
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            {new Date(etapa.dataPrevista).toLocaleString('pt-BR')}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              disabled={realizada}
-                              onClick={() => handleConcluirEtapa(etapa)}
+                        </span>
+                      </div>
+                          <div className="space-y-2 mb-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              {new Date(etapa.dataPrevista).toLocaleString('pt-BR')}
+                            </div>
+                            {!realizada && (
+                              <div className={`text-sm flex items-center gap-2 ${tempoDecorrido.cor}`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="font-semibold">⏱️ {tempoDecorrido.texto}</span>
+                                {tempoDecorrido.atrasada && (
+                                  <span className="text-xs bg-red-100 dark:bg-red-900/40 px-2 py-1 rounded-full">
+                                    +24h
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={realizada}
+                              onClick={() => {
+                                setAlertConfig({
+                                  title: '✅ Concluir Etapa',
+                                  description: `Deseja marcar a etapa "${etapa.nome || etapa.tipo}" como concluída?`,
+                                  onConfirm: async () => {
+                                    await handleConcluirEtapa(etapa);
+                                    toast.success('✅ Etapa concluída com sucesso!');
+                                  }
+                                });
+                                setAlertOpen(true);
+                              }}
                               className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white text-sm font-semibold rounded-lg hover:from-green-700 hover:to-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              ✓ Realizada
+                              ✓ Concluir
+                        </button>
+                        <button
+                          disabled={realizada}
+                          onClick={() => setAdiarAberto({ etapa, novaData: '', justificativa: '' })}
+                              className="px-4 py-2 bg-white dark:bg-dark-card border-2 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 text-sm font-semibold rounded-lg hover:bg-blue-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ⏰
                             </button>
                             <button
                               disabled={realizada}
-                              onClick={() => setAdiarAberto({ etapa, novaData: '', justificativa: '' })}
-                              className="flex-1 px-4 py-2 bg-white dark:bg-dark-card border-2 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 text-sm font-semibold rounded-lg hover:bg-blue-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => toast.info('🔨 Editar etapa será implementado em breve')}
+                              className="px-4 py-2 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-dark-border text-gray-600 dark:text-gray-400 text-sm font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              ⏰ Adiar
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                              ✏️
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
                     {(!etapasResp?.etapas || etapasResp.etapas.length === 0) && (
                       <div className="col-span-3 text-center py-12">
                         <div className="w-16 h-16 bg-gray-100 dark:bg-dark-bg rounded-full flex items-center justify-center mx-auto mb-4">
                           <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
-                        </div>
+              </div>
                         <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma etapa administrativa cadastrada</p>
                       </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
+            </div>
+          )}
 
-            {activeTab === 'Kanban' && (
+          {activeTab === 'Kanban' && (
               <div className="space-y-6 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -845,14 +1082,14 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                               → Iniciar
                             </button>
                           </div>
-                        </div>
-                      ))}
+                  </div>
+                ))}
                       {tasks.filter(t => t.status === 'A Fazer').length === 0 && (
                         <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
                           Nenhuma tarefa
-                        </div>
+              </div>
                       )}
-                    </div>
+            </div>
                   </div>
 
                   {/* Em Andamento */}
@@ -996,9 +1233,9 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                   </div>
                 </div>
               </div>
-            )}
+          )}
 
-            {activeTab === 'Qualidade' && (
+          {activeTab === 'Qualidade' && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1172,7 +1409,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                  </div>
+              </div>
                   <h3 className="text-lg font-bold text-white">Adiar Prazo</h3>
                 </div>
                 <button 
@@ -1439,7 +1676,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                   </button>
                   <button 
                     onClick={() => {
-                      alert('Funcionalidade de upload será implementada em breve');
+                      toast.info('📤 Funcionalidade de upload será implementada em breve');
                       setUploadModalOpen(false);
                     }}
                     className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium"
@@ -1451,6 +1688,30 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
             </div>
           </div>
         )}
+
+        {/* AlertDialog para Confirmações */}
+        <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{alertConfig.title}</AlertDialogTitle>
+              <AlertDialogDescription>{alertConfig.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setAlertOpen(false)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => {
+                  alertConfig.onConfirm();
+                  setAlertOpen(false);
+                }}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
     </div>

@@ -105,9 +105,66 @@ export class ObraService {
         data: { status: 'EXECUCAO' }
       });
 
+      console.log('✅ Obra criada com sucesso:', obra.id);
+
       return obra;
     } catch (error) {
       console.error('Erro ao gerar obra:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cria uma Obra de Manutenção (sem projeto vinculado)
+   */
+  async criarObraManutencao(data: {
+    clienteId: string;
+    nomeObra: string;
+    descricao?: string;
+    endereco?: string;
+    dataPrevistaInicio?: Date;
+    dataPrevistaFim?: Date;
+  }) {
+    try {
+      console.log('🔧 Criando obra de manutenção:', data);
+
+      // Verificar se cliente existe
+      const cliente = await prisma.cliente.findUnique({
+        where: { id: data.clienteId }
+      });
+
+      if (!cliente) {
+        throw new Error('Cliente não encontrado');
+      }
+
+      // Criar obra sem projeto
+      const obra = await prisma.obra.create({
+        data: {
+          projetoId: null, // ✅ Obra de manutenção não tem projeto
+          clienteId: data.clienteId, // ✅ Cliente direto
+          nomeObra: data.nomeObra,
+          descricao: data.descricao || null,
+          endereco: data.endereco || null,
+          status: 'BACKLOG', // ✅ Inicia no Backlog
+          dataPrevistaInicio: data.dataPrevistaInicio || new Date(),
+          dataPrevistaFim: data.dataPrevistaFim || null,
+          tipoObra: 'MANUTENCAO' // ✅ Marcador de tipo
+        },
+        include: {
+          projeto: {
+            include: {
+              cliente: true
+            }
+          },
+          cliente: true // ✅ Incluir cliente direto
+        }
+      });
+
+      console.log('✅ Obra de manutenção criada:', obra.id);
+
+      return obra;
+    } catch (error) {
+      console.error('Erro ao criar obra de manutenção:', error);
       throw error;
     }
   }
@@ -124,6 +181,7 @@ export class ObraService {
               cliente: { select: { id: true, nome: true } }
             }
           },
+          cliente: { select: { id: true, nome: true } }, // ✅ Cliente direto (manutenção)
           tarefas: {
             include: {
               registrosAtividade: true
@@ -132,6 +190,8 @@ export class ObraService {
         },
         orderBy: { createdAt: 'desc' }
       });
+
+      console.log(`📦 Total de obras encontradas: ${obras.length}`);
 
       // Agrupar por status
       const kanbanData: ObraKanbanData = {
@@ -142,12 +202,16 @@ export class ObraService {
       };
 
       obras.forEach(obra => {
+        // ✅ Cliente pode vir de 2 fontes: projeto.cliente OU cliente direto (manutenção)
+        const clienteNome = obra.projeto?.cliente?.nome || obra.cliente?.nome || 'Cliente não informado';
+        
         const obraFormatada = {
           id: obra.id,
           projetoId: obra.projetoId,
           nomeObra: obra.nomeObra,
           status: obra.status,
-          clienteNome: obra.projeto.cliente.nome,
+          clienteNome, // ✅ Agora funciona para ambos os tipos
+          tipoObra: (obra as any).tipoObra || 'PROJETO', // ✅ Identificar tipo
           dataPrevistaFim: obra.dataPrevistaFim,
           totalTarefas: obra.tarefas.length,
           tarefasConcluidas: obra.tarefas.filter(t => t.progresso === 100).length,
@@ -157,7 +221,15 @@ export class ObraService {
           observacoes: obra.observacoes
         };
 
+        console.log(`📋 Obra: ${obra.nomeObra} → ${obra.status} (Cliente: ${clienteNome})`);
         kanbanData[obra.status].push(obraFormatada);
+      });
+
+      console.log(`✅ Kanban organizado:`, {
+        BACKLOG: kanbanData.BACKLOG.length,
+        A_FAZER: kanbanData.A_FAZER.length,
+        ANDAMENTO: kanbanData.ANDAMENTO.length,
+        CONCLUIDO: kanbanData.CONCLUIDO.length
       });
 
       return kanbanData;
@@ -191,8 +263,8 @@ export class ObraService {
         }
       });
 
-      // Se concluiu a obra, atualizar status do projeto também
-      if (newStatus === 'CONCLUIDO') {
+      // Se concluiu a obra, atualizar status do projeto também (se houver projeto)
+      if (newStatus === 'CONCLUIDO' && obra.projetoId) {
         await prisma.projeto.update({
           where: { id: obra.projetoId },
           data: { 
@@ -200,6 +272,9 @@ export class ObraService {
             dataFim: new Date()
           }
         });
+        console.log(`✅ Projeto ${obra.projetoId} marcado como CONCLUIDO`);
+      } else if (newStatus === 'CONCLUIDO' && !obra.projetoId) {
+        console.log(`✅ Obra de manutenção concluída (sem projeto vinculado)`);
       }
 
       return obra;

@@ -127,15 +127,16 @@ export class ComprasService {
                         
                         material = await tx.material.create({
                             data: {
-                                nome: item.nomeProduto, // ✅ Campo obrigatório
-                                sku: skuGerado, // ✅ Campo obrigatório e único
-                                tipo: 'Produto', // ✅ Campo obrigatório
-                                categoria: 'Importado XML', // ✅ Campo obrigatório
-                                descricao: `Produto importado via XML - NF ${numeroNF}`,
-                                unidadeMedida: 'UN',
+                                nome: item.nomeProduto, // ✅ Nome real do produto do XML
+                                sku: skuGerado, // ✅ SKU único gerado
+                                tipo: 'Material Elétrico', // ✅ Tipo padrão
+                                categoria: 'Material Elétrico', // ✅ Categoria padrão (pode ser melhorado)
+                                descricao: item.nomeProduto, // ✅ Usar nome do produto ao invés de texto genérico
+                                unidadeMedida: 'un',
                                 preco: item.valorUnit,
                                 estoque: 0, // Será atualizado depois se status = Recebido
                                 estoqueMinimo: 5,
+                                localizacao: 'Almoxarifado', // ✅ Localização padrão
                                 fornecedorId: fornecedor.id,
                                 ativo: true
                             }
@@ -143,6 +144,17 @@ export class ComprasService {
                         console.log(`✅ Material criado: ${material.id} (SKU: ${skuGerado})`);
                     } else {
                         console.log(`🔗 Material existente encontrado: ${material.id}`);
+                        // Atualizar preço se o novo for diferente
+                        if (material.preco !== item.valorUnit) {
+                            await tx.material.update({
+                                where: { id: material.id },
+                                data: {
+                                    preco: item.valorUnit, // Atualizar com o preço mais recente
+                                    fornecedorId: fornecedor.id // Atualizar fornecedor
+                                }
+                            });
+                            console.log(`💰 Preço atualizado: R$ ${material.preco} → R$ ${item.valorUnit}`);
+                        }
                     }
                     
                     materialId = material.id;
@@ -588,6 +600,124 @@ export class ComprasService {
                 console.log('✅ Remessa parcial processada!');
             }
 
+            return compraAtualizada;
+        });
+    }
+
+    /**
+     * Receber compra com associações explícitas de materiais
+     * Previne criação de duplicatas ao permitir que o usuário associe a materiais existentes
+     */
+    static async receberComAssociacoes(
+        id: string, 
+        associacoes: { [compraItemId: string]: { materialId?: string; criarNovo?: boolean; nomeMaterial?: string } },
+        dataRecebimento: Date = new Date()
+    ) {
+        const compra = await prisma.compra.findUnique({
+            where: { id },
+            include: { items: true, fornecedor: true }
+        });
+
+        if (!compra) {
+            throw new Error('Compra não encontrada');
+        }
+
+        console.log(`📦 Recebendo compra ${compra.numeroNF} com associações explícitas`);
+
+        return await prisma.$transaction(async (tx) => {
+            // Processar cada item da compra
+            for (const item of compra.items) {
+                const associacao = associacoes[item.id];
+
+                if (!associacao) {
+                    console.log(`⚠️ Item "${item.nomeProduto}" sem associação definida - pulando`);
+                    continue;
+                }
+
+                let materialIdFinal = item.materialId;
+
+                // Se usuário optou por criar novo material
+                if (associacao.criarNovo) {
+                    console.log(`🆕 Criando novo material para: "${item.nomeProduto}"`);
+                    
+                    const timestamp = Date.now();
+                    const random = Math.random().toString(36).substr(2, 9);
+                    const skuGerado = item.ncm ? `NCM-${item.ncm}-${random}` : `AUTO-${timestamp}-${random}`;
+
+                    const novoMaterial = await tx.material.create({
+                        data: {
+                            nome: associacao.nomeMaterial || item.nomeProduto,
+                            sku: skuGerado,
+                            tipo: 'Material Elétrico',
+                            categoria: 'Material Elétrico',
+                            descricao: associacao.nomeMaterial || item.nomeProduto,
+                            unidadeMedida: 'un',
+                            preco: item.valorUnit,
+                            estoque: 0,
+                            estoqueMinimo: 5,
+                            localizacao: 'Almoxarifado',
+                            fornecedorId: compra.fornecedorId,
+                            ativo: true
+                        }
+                    });
+
+                    materialIdFinal = novoMaterial.id;
+                    console.log(`✅ Novo material criado: ${novoMaterial.id}`);
+                }
+                // Se usuário escolheu associar a material existente
+                else if (associacao.materialId) {
+                    console.log(`🔗 Associando "${item.nomeProduto}" ao material existente: ${associacao.materialId}`);
+                    materialIdFinal = associacao.materialId;
+
+                    // Atualizar preço do material se for diferente
+                    const materialExistente = await tx.material.findUnique({
+                        where: { id: associacao.materialId }
+                    });
+
+                    if (materialExistente && materialExistente.preco !== item.valorUnit) {
+                        await tx.material.update({
+                            where: { id: associacao.materialId },
+                            data: {
+                                preco: item.valorUnit,
+                                fornecedorId: compra.fornecedorId
+                            }
+                        });
+                        console.log(`💰 Preço atualizado: R$ ${materialExistente.preco} → R$ ${item.valorUnit}`);
+                    }
+                }
+
+                // Atualizar CompraItem com o materialId definitivo
+                if (materialIdFinal && materialIdFinal !== item.materialId) {
+                    await tx.compraItem.update({
+                        where: { id: item.id },
+                        data: { materialId: materialIdFinal }
+                    });
+                }
+
+                // Dar entrada no estoque
+                if (materialIdFinal) {
+                    await EstoqueService.incrementarEstoque(
+                        materialIdFinal,
+                        item.quantidade,
+                        'COMPRA',
+                        id,
+                        `Compra NF: ${compra.numeroNF} - ${item.nomeProduto}`
+                    );
+                    console.log(`✅ Entrada no estoque: ${item.nomeProduto} - Qtd: ${item.quantidade}`);
+                }
+            }
+
+            // Atualizar status da compra
+            const compraAtualizada = await tx.compra.update({
+                where: { id },
+                data: {
+                    status: 'Recebido',
+                    dataRecebimento
+                },
+                include: { items: true, fornecedor: true }
+            });
+
+            console.log('✅ Compra recebida com sucesso com todas as associações!');
             return compraAtualizada;
         });
     }

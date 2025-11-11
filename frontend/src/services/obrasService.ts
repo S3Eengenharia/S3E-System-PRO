@@ -2,10 +2,11 @@ import { axiosApiService } from './axiosApi';
 
 export interface Obra {
   id: string;
-  projetoId: string;
+  projetoId: string | null; // ✅ Opcional para obras de manutenção
   nomeObra: string;
   status: 'BACKLOG' | 'A_FAZER' | 'ANDAMENTO' | 'CONCLUIDO';
   clienteNome: string;
+  tipoObra?: 'PROJETO' | 'MANUTENCAO'; // ✅ Tipo da obra
   dataPrevistaFim?: string;
   totalTarefas: number;
   tarefasConcluidas: number;
@@ -64,6 +65,20 @@ class ObrasService {
    */
   async gerarObra(data: CreateObraData) {
     return axiosApiService.post('/api/obras/gerar', data);
+  }
+
+  /**
+   * Cria uma obra de manutenção (sem projeto)
+   */
+  async criarObraManutencao(data: {
+    clienteId: string;
+    nomeObra: string;
+    descricao?: string;
+    endereco?: string;
+    dataPrevistaInicio?: string;
+    dataPrevistaFim?: string;
+  }) {
+    return axiosApiService.post('/api/obras/manutencao', data);
   }
 
   /**

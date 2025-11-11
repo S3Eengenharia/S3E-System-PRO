@@ -86,6 +86,7 @@ model Cliente {
   orcamentos Orcamento[]
   projetos   Projeto[]
   vendas     Venda[]
+  obras      Obra[]     // ✅ Relação com obras de manutenção
 
   @@map("clientes")
 }
@@ -637,8 +638,12 @@ model AlocacaoObra {
 // Obra representa o Projeto em fase de execução (Kanban)
 model Obra {
   id                String       @id @default(uuid())
-  projetoId         String       @unique
+  projetoId         String?      @unique  // ✅ Opcional para obras de manutenção
+  clienteId         String?               // ✅ Cliente direto (para manutenção)
   nomeObra          String
+  descricao         String?               // ✅ Descrição da obra
+  endereco          String?               // ✅ Endereço da obra
+  tipoObra          String       @default("PROJETO") // PROJETO ou MANUTENCAO
   status            StatusObra   @default(BACKLOG)
   dataPrevistaInicio DateTime?
   dataPrevistaFim   DateTime?
@@ -648,7 +653,8 @@ model Obra {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  projeto Projeto     @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  projeto Projeto?    @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  cliente Cliente?    @relation(fields: [clienteId], references: [id])
   tarefas TarefaObra[]
 
   @@map("obras")

@@ -184,42 +184,68 @@ const NovaCompraPage: React.FC<NovaCompraPageProps> = ({ toggleSidebar }) => {
             const resp = await comprasService.parseXML(xmlContent);
             const data = (resp as any)?.data || (resp as any) || {};
 
-            // Preencher formulário
-            setSupplierName(data.fornecedor?.nome || '');
-            setSupplierCNPJ(data.fornecedor?.cnpj || '');
-            setSupplierAddress(data.fornecedor?.endereco || '');
+            console.log('📦 Dados do XML parseado:', data);
 
-            setInvoiceNumber(data.notaFiscal?.numero || '');
-            setPurchaseDate(data.notaFiscal?.dataEmissao?.split('T')[0] || '');
-            setValorIPI(String(data.notaFiscal?.valorIPI || 0));
-            setValorTotalProdutos(String(data.notaFiscal?.valorTotalProdutos || 0));
-            setValorTotalNota(String(data.notaFiscal?.valorTotalNota || 0));
-            setFrete(String(data.notaFiscal?.valorFrete || 0));
-            setOutrasDespesas(String(data.notaFiscal?.outrasDespesas || 0));
+            // Preencher Fornecedor
+            if (data.fornecedor) {
+                setSupplierName(data.fornecedor.nome || '');
+                setSupplierCNPJ(data.fornecedor.cnpj || '');
+                setSupplierAddress(data.fornecedor.endereco || '');
+            }
 
+            // Preencher Informações da Compra
+            setInvoiceNumber(data.numeroNF || '');
+            if (data.dataEmissao) {
+                const dataEmissao = data.dataEmissao.split('T')[0];
+                setPurchaseDate(dataEmissao);
+            }
+
+            // Preencher CNPJ Destinatário
+            setDestinatarioCNPJ(data.destinatarioCNPJ || '');
+
+            // Preencher Valores Fiscais
+            setValorIPI(String(data.valorIPI || 0));
+            setValorTotalProdutos(String(data.valorTotalProdutos || 0));
+            setValorTotalNota(String(data.valorTotalNota || 0));
+            setFrete(String(data.valorFrete || 0));
+            setOutrasDespesas(String(data.outrasDespesas || 0));
+
+            // Preencher Itens
             if (data.items && Array.isArray(data.items)) {
                 const xmlItems: ExtendedItem[] = data.items.map((item: any) => ({
                     productId: '',
-                    productName: item.descricao || item.nome || '',
+                    productName: item.nomeProduto || '',
                     quantity: item.quantidade || 0,
-                    unitCost: item.valorUnitario || 0,
+                    unitCost: item.valorUnit || 0,
                     totalCost: item.valorTotal || 0,
                     ncm: item.ncm || '',
-                    sku: item.codigo || ''
+                    sku: item.sku || ''
                 }));
                 setPurchaseItems(xmlItems);
+                console.log(`✅ ${xmlItems.length} itens adicionados ao formulário`);
             }
 
-            if (data.pagamento?.parcelas && Array.isArray(data.pagamento.parcelas)) {
-                const xmlParcelas = data.pagamento.parcelas.map((p: any, i: number) => ({
-                    numero: String(i + 1).padStart(3, '0'),
-                    dataVencimento: p.dataVencimento?.split('T')[0] || '',
+            // Preencher Parcelas
+            if (data.parcelas && Array.isArray(data.parcelas) && data.parcelas.length > 0) {
+                const xmlParcelas = data.parcelas.map((p: any) => ({
+                    numero: p.numero || '',
+                    dataVencimento: p.dataVencimento || '',
                     valor: p.valor || 0
                 }));
                 setParcelas(xmlParcelas);
+                console.log(`✅ ${xmlParcelas.length} parcelas adicionadas`);
+                
                 if (xmlParcelas.length > 1) {
                     setCondicaoPagamento('PARCELADO');
                     setNumParcelas(String(xmlParcelas.length));
+                    if (xmlParcelas[0].dataVencimento) {
+                        setDataPrimeiroVencimento(xmlParcelas[0].dataVencimento);
+                    }
+                } else if (xmlParcelas.length === 1) {
+                    setCondicaoPagamento('AVISTA');
+                    if (xmlParcelas[0].dataVencimento) {
+                        setDataPrimeiroVencimento(xmlParcelas[0].dataVencimento);
+                    }
                 }
             }
 

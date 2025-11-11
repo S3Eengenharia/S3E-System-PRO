@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { type MaterialItem, MaterialCategory } from '../types';
 import { materiaisService, Material } from '../services/materiaisService';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -79,6 +80,10 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToEdit, setItemToEdit] = useState<MaterialItem | null>(null);
     const [itemToDelete, setItemToDelete] = useState<MaterialItem | null>(null);
+    const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
+    const [materialSelecionado, setMaterialSelecionado] = useState<MaterialItem | null>(null);
+    const [historicoCompras, setHistoricoCompras] = useState<any[]>([]);
+    const [loadingHistorico, setLoadingHistorico] = useState(false);
     const [formState, setFormState] = useState<MaterialFormState>({
         name: '',
         sku: '',
@@ -88,7 +93,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         stock: '0',
         minStock: '5',
         unitOfMeasure: 'un',
-        location: '',
+        location: 'Almoxarifado',
         imageUrl: undefined,
         supplierId: '',
         supplierName: '',
@@ -173,7 +178,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         const totalItems = materials.length;
         const lowStock = materials.filter(m => m.stock > 0 && m.stock <= m.minStock).length;
         const outOfStock = materials.filter(m => m.stock === 0).length;
-        const totalValue = materials.reduce((acc, m) => acc + (m.stock * m.price), 0);
+        const totalValue = materials.reduce((acc, m) => acc + (m.stock * (m.price || 0)), 0);
 
         return { totalItems, lowStock, outOfStock, totalValue };
     }, [materials]);
@@ -193,9 +198,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 unitOfMeasure: item.unitOfMeasure,
                 location: item.location || '',
                 imageUrl: item.imageUrl,
-                supplierId: item.supplier?.id || '',
-                supplierName: item.supplier?.name || '',
-                price: item.price.toString()
+                supplierId: item.supplier?.id || item.supplierId || '',
+                supplierName: item.supplier?.name || item.supplierName || '',
+                price: (item.price || 0).toString()
             });
         } else {
             setItemToEdit(null);
@@ -208,7 +213,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 stock: '0',
                 minStock: '5',
                 unitOfMeasure: 'un',
-                location: '',
+                location: 'Almoxarifado',
                 imageUrl: undefined,
                 supplierId: '',
                 supplierName: '',
@@ -270,7 +275,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         try {
             const response = await materiaisService.deleteMaterial(itemToDelete.id);
             if (response.success) {
-                toast.error('✅ Material removido com sucesso!');
+                toast.success('✅ Material removido com sucesso!');
             } else {
                 toast.error('❌ Erro ao remover material');
             }
@@ -280,6 +285,52 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         } catch (error) {
             console.error('❌ Erro ao remover material:', error);
             toast.error('❌ Erro ao remover material');
+        }
+    };
+
+    const handleAbrirHistorico = async (material: MaterialItem) => {
+        setMaterialSelecionado(material);
+        setHistoricoModalOpen(true);
+        setLoadingHistorico(true);
+        
+        try {
+            const response = await materiaisService.getHistoricoCompras(material.id);
+            setHistoricoCompras(Array.isArray(response) ? response : []);
+        } catch (error) {
+            console.error('Erro ao carregar histórico:', error);
+            toast.error('❌ Erro ao carregar histórico de compras');
+            setHistoricoCompras([]);
+        } finally {
+            setLoadingHistorico(false);
+        }
+    };
+
+    const handleFecharHistorico = () => {
+        setHistoricoModalOpen(false);
+        setMaterialSelecionado(null);
+        setHistoricoCompras([]);
+    };
+
+    const handleCorrigirNomesGenericos = async () => {
+        if (!confirm('Deseja atualizar os nomes de todos os produtos importados via XML com os nomes reais das notas fiscais? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const response = await materiaisService.corrigirNomesGenericos();
+            
+            if ((response as any)?.success) {
+                toast.success(`✅ ${(response as any).corrigidos} materiais atualizados com sucesso!`);
+                await loadMaterials(); // Recarregar lista
+            } else {
+                toast.error('❌ Erro ao atualizar nomes dos materiais');
+            }
+        } catch (error) {
+            console.error('Erro ao corrigir nomes:', error);
+            toast.error('❌ Erro ao atualizar nomes dos materiais');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -305,10 +356,10 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         switch (category) {
             case MaterialCategory.MaterialEletrico:
                 return '⚡';
-            case MaterialCategory.Ferramentas:
+            case MaterialCategory.Ferramenta:
                 return '🔧';
-            case MaterialCategory.EPI:
-                return '🦺';
+            case MaterialCategory.Insumo:
+                return '📦';
             default:
                 return '📦';
         }
@@ -316,90 +367,104 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
     if (loading) {
         return (
-            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Carregando estoque...</p>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-gray-300">Carregando estoque...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen p-4 sm:p-8">
+        <div className="min-h-screen p-4 sm:p-8 bg-gray-50 dark:bg-gray-900">
             {/* Header */}
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 animate-fade-in">
                 <div className="flex items-center gap-4">
-                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 rounded-xl hover:bg-white hover:shadow-soft">
+                    <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 dark:text-gray-300 rounded-xl hover:bg-white dark:hover:bg-gray-800 hover:shadow-soft">
                         <Bars3Icon className="w-6 h-6" />
                     </button>
                     <div>
-                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">Estoque</h1>
-                        <p className="text-sm sm:text-base text-gray-500 mt-1">Gerencie materiais e controle de estoque</p>
+                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Estoque</h1>
+                        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Gerencie materiais e controle de estoque</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
-                >
-                    <PlusIcon className="w-5 h-5" />
-                    Novo Material
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleCorrigirNomesGenericos}
+                        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-medium font-semibold"
+                        title="Atualizar nomes de produtos importados via XML"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Atualizar Nomes
+                    </button>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
+                    >
+                        <PlusIcon className="w-5 h-5" />
+                        Novo Material
+                    </button>
+                </div>
             </header>
 
             {/* Error Message */}
             {error && (
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 animate-fade-in">
-                    <p className="text-red-800 font-medium">⚠️ {error}</p>
-                </div>
+                <Alert variant="destructive" className="mb-6 animate-fade-in">
+                    <ExclamationTriangleIcon className="w-4 h-4" />
+                    <AlertTitle>Erro</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
 
             {/* Cards de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                            <CubeIcon className="w-6 h-6 text-blue-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center">
+                            <CubeIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Total de Itens</p>
-                            <p className="text-2xl font-bold text-blue-600">{stats.totalItems}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total de Itens</p>
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalItems}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
-                            <ExclamationTriangleIcon className="w-6 h-6 text-orange-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/50 dark:to-orange-800/50 flex items-center justify-center">
+                            <ExclamationTriangleIcon className="w-6 h-6 text-orange-600 dark:text-orange-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Estoque Baixo</p>
-                            <p className="text-2xl font-bold text-orange-600">{stats.lowStock}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Estoque Baixo</p>
+                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.lowStock}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center">
-                            <XMarkIcon className="w-6 h-6 text-red-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/50 dark:to-red-800/50 flex items-center justify-center">
+                            <XMarkIcon className="w-6 h-6 text-red-600 dark:text-red-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Esgotados</p>
-                            <p className="text-2xl font-bold text-red-600">{stats.outOfStock}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Esgotados</p>
+                            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.outOfStock}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/50 dark:to-green-800/50 flex items-center justify-center">
                             <span className="text-2xl">💰</span>
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Valor Total</p>
-                            <p className="text-2xl font-bold text-green-600">
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Valor Total</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                                 R$ {stats.totalValue.toLocaleString('pt-BR')}
                             </p>
                         </div>
@@ -408,17 +473,17 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
             </div>
 
             {/* Filtros */}
-            <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 mb-6">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-gray-700 mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2">
                         <div className="relative">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
                             <input
                                 type="text"
                                 placeholder="Buscar por nome, SKU ou tipo..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-400 focus:border-teal-500 dark:focus:border-teal-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             />
                         </div>
                     </div>
@@ -427,12 +492,12 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         <select
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value as MaterialCategory | 'Todos')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         >
                             <option value="Todos">Todas as Categorias</option>
                             <option value={MaterialCategory.MaterialEletrico}>Material Elétrico</option>
-                            <option value={MaterialCategory.Ferramentas}>Ferramentas</option>
-                            <option value={MaterialCategory.EPI}>EPI</option>
+                            <option value={MaterialCategory.Ferramenta}>Ferramentas</option>
+                            <option value={MaterialCategory.Insumo}>Insumo</option>
                         </select>
                     </div>
 
@@ -440,7 +505,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         <select
                             value={stockFilter}
                             onChange={(e) => setStockFilter(e.target.value as 'Todos' | 'Baixo' | 'Zerado')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         >
                             <option value="Todos">Todos os Estoques</option>
                             <option value="Baixo">Estoque Baixo</option>
@@ -450,21 +515,21 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 </div>
 
                 <div className="mt-4 flex items-center justify-between">
-                    <p className="text-sm text-gray-600">
-                        Exibindo <span className="font-bold text-gray-900">{filteredMaterials.length}</span> de <span className="font-bold text-gray-900">{materials.length}</span> materiais
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Exibindo <span className="font-bold text-gray-900 dark:text-white">{filteredMaterials.length}</span> de <span className="font-bold text-gray-900 dark:text-white">{materials.length}</span> materiais
                     </p>
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">Normal: {materials.filter(m => m.stock > m.minStock).length}</span>
+                            <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded-full"></div>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Normal: {materials.filter(m => m.stock > m.minStock).length}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">Baixo: {stats.lowStock}</span>
+                            <div className="w-3 h-3 bg-yellow-500 dark:bg-yellow-400 rounded-full"></div>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Baixo: {stats.lowStock}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">Esgotado: {stats.outOfStock}</span>
+                            <div className="w-3 h-3 bg-red-500 dark:bg-red-400 rounded-full"></div>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Esgotado: {stats.outOfStock}</span>
                         </div>
                     </div>
                 </div>
@@ -472,12 +537,12 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
             {/* Grid de Materiais */}
             {filteredMaterials.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-16 text-center">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-soft border border-gray-100 dark:border-gray-700 p-16 text-center">
+                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                         <span className="text-4xl">📦</span>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum material encontrado</h3>
-                    <p className="text-gray-500 mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Nenhum material encontrado</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6">
                         {searchTerm || categoryFilter !== 'Todos' || stockFilter !== 'Todos'
                             ? 'Tente ajustar os filtros de busca'
                             : 'Comece adicionando seus primeiros materiais'}
@@ -495,14 +560,21 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredMaterials.map((material) => (
-                        <div key={material.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-teal-300 transition-all duration-200">
+                        <div key={material.id} className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-teal-300 dark:hover:border-teal-600 transition-all duration-200">
                             {/* Header do Card */}
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-lg text-gray-900 mb-1">{material.name}</h3>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-teal-100 text-teal-800 ring-1 ring-teal-200">
+                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1 line-clamp-2" title={material.name}>
+                                        {material.name.includes('Produto importado via XML') 
+                                            ? material.description || material.name 
+                                            : material.name}
+                                    </h3>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300 ring-1 ring-teal-200 dark:ring-teal-700">
                                             {getCategoryIcon(material.category)} {material.category}
+                                        </span>
+                                        <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded font-mono">
+                                            {material.sku}
                                         </span>
                                     </div>
                                 </div>
@@ -511,63 +583,85 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                 </span>
                             </div>
 
-                            {/* Informações */}
-                            <div className="space-y-2 mb-4">
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{material.sku}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <span>📊</span>
-                                    <span className="font-bold">
-                                        {material.stock} {material.unitOfMeasure}
-                                    </span>
-                                    <span className="text-gray-400">
-                                        (mín: {material.minStock})
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <span>💰</span>
-                                    <span className="font-bold text-blue-700">
-                                        R$ {material.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </span>
-                                    <span className="text-gray-400">/{material.unitOfMeasure}</span>
-                                </div>
-                                {material.location && (
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <span>📍</span>
-                                        <span>{material.location}</span>
-                                    </div>
-                                )}
+                            {/* Informações Principais */}
+                            <div className="space-y-3 mb-4">
+                                {/* Fornecedor - Destaque */}
                                 {material.supplier && (
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <span>🏭</span>
-                                        <span className="truncate">{material.supplier.name}</span>
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2">
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span>🏭</span>
+                                            <div className="flex-1">
+                                                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Fornecedor</p>
+                                                <p className="font-bold text-blue-900 dark:text-blue-300 truncate">{material.supplier.name}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
+                                
+                                {/* Localização - Destaque */}
+                                {material.location && (
+                                    <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg p-2">
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span>📍</span>
+                                            <div className="flex-1">
+                                                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Localização</p>
+                                                <p className="font-bold text-purple-900 dark:text-purple-300">{material.location}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Grid de Métricas */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">📊 Quantidade</p>
+                                        <p className="font-bold text-gray-900 dark:text-white">
+                                            {material.stock} <span className="text-xs text-gray-500 dark:text-gray-400">{material.unitOfMeasure}</span>
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Mín: {material.minStock}</p>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">💰 Valor Unit.</p>
+                                        <p className="font-bold text-blue-700 dark:text-blue-400">
+                                            R$ {(material.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Última compra</p>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Valor Total em Estoque */}
-                            <div className="bg-gray-50 border border-gray-200 p-3 rounded-xl mb-4">
+                            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 p-3 rounded-xl mb-4">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-gray-600">Valor em Estoque:</span>
-                                    <span className="font-bold text-green-700">
-                                        R$ {(material.stock * material.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">💵 Valor Investido:</span>
+                                    <span className="font-bold text-green-700 dark:text-green-400 text-lg">
+                                        R$ {(material.stock * (material.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
                             </div>
 
                             {/* Botões de Ação */}
-                            <div className="flex gap-2 pt-4 border-t border-gray-100">
+                            <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <button
+                                    onClick={() => handleAbrirHistorico(material)}
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/70 transition-colors text-sm font-semibold"
+                                    title="Ver histórico de compras e preços"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    Histórico
+                                </button>
                                 <button
                                     onClick={() => handleOpenModal(material)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-colors text-sm font-semibold"
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg hover:bg-teal-200 dark:hover:bg-teal-900/70 transition-colors text-sm font-semibold"
                                 >
                                     <PencilIcon className="w-4 h-4" />
                                     Editar
                                 </button>
                                 <button
                                     onClick={() => setItemToDelete(material)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold"
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/70 transition-colors text-sm font-semibold"
                                 >
                                     <TrashIcon className="w-4 h-4" />
                                     Remover
@@ -660,8 +754,8 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
                                     >
                                         <option value={MaterialCategory.MaterialEletrico}>Material Elétrico</option>
-                                        <option value={MaterialCategory.Ferramentas}>Ferramentas</option>
-                                        <option value={MaterialCategory.EPI}>EPI</option>
+                                        <option value={MaterialCategory.Ferramenta}>Ferramentas</option>
+                                        <option value={MaterialCategory.Insumo}>Insumo</option>
                                     </select>
                                 </div>
 
@@ -828,6 +922,176 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                 className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold"
                             >
                                 Remover
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* MODAL DE HISTÓRICO DE COMPRAS */}
+            {historicoModalOpen && materialSelecionado && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">Histórico de Compras</h3>
+                                        <p className="text-sm text-blue-100 mt-1">{materialSelecionado.name}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleFecharHistorico}
+                                    className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-6">
+                            {/* Informações Resumidas */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                    <p className="text-sm text-blue-700 mb-1">🏭 Fornecedor Atual</p>
+                                    <p className="text-lg font-semibold text-blue-900">
+                                        {materialSelecionado.supplier?.name || materialSelecionado.supplierName || 'Não informado'}
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">📍 Localização</p>
+                                    <p className="text-lg font-semibold text-gray-900">
+                                        {materialSelecionado.location || 'Não informado'}
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl p-4">
+                                    <p className="text-sm text-gray-600 mb-1">📦 Em Estoque</p>
+                                    <p className="text-lg font-semibold text-gray-900">
+                                        {materialSelecionado.stock} {materialSelecionado.unitOfMeasure}
+                                    </p>
+                                </div>
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                    <p className="text-sm text-green-700 mb-1">💰 Valor Investido</p>
+                                    <p className="text-lg font-bold text-green-600">
+                                        R$ {(materialSelecionado.stock * (materialSelecionado.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Histórico de Compras */}
+                            <div className="border-t border-gray-200 pt-6">
+                                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Histórico de Compras e Preços
+                                </h4>
+
+                                {loadingHistorico ? (
+                                    <div className="text-center py-12">
+                                        <div className="inline-block w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                                        <p className="text-gray-500 mt-4">Carregando histórico...</p>
+                                    </div>
+                                ) : historicoCompras.length === 0 ? (
+                                    <div className="text-center py-12 bg-gray-50 rounded-xl">
+                                        <svg className="w-16 h-16 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        <p className="text-gray-500 font-medium">Nenhuma compra registrada</p>
+                                        <p className="text-sm text-gray-400 mt-1">Este material ainda não foi comprado</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50 border-b border-gray-200">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Data da Compra</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">NF</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Fornecedor</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Quantidade</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Valor Unitário</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Valor Total</th>
+                                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {historicoCompras.map((compra, index) => (
+                                                    <tr key={index} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                                            {new Date(compra.dataCompra).toLocaleDateString('pt-BR')}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">
+                                                            {compra.numeroNF}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                                            {compra.fornecedor}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                                                            {compra.quantidade}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm font-bold text-blue-600 text-right">
+                                                            R$ {parseFloat(compra.valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm font-bold text-green-600 text-right">
+                                                            R$ {parseFloat(compra.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${
+                                                                compra.status === 'Recebido' ? 'bg-green-100 text-green-700' :
+                                                                compra.status === 'Pendente' ? 'bg-yellow-100 text-yellow-700' :
+                                                                'bg-gray-100 text-gray-700'
+                                                            }`}>
+                                                                {compra.status}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Estatísticas do Histórico */}
+                                {historicoCompras.length > 0 && (
+                                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                            <p className="text-sm text-blue-700 mb-1">Última Compra</p>
+                                            <p className="text-lg font-bold text-blue-900">
+                                                {new Date(historicoCompras[0].dataCompra).toLocaleDateString('pt-BR')}
+                                            </p>
+                                        </div>
+                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                            <p className="text-sm text-green-700 mb-1">Último Preço Unitário</p>
+                                            <p className="text-lg font-bold text-green-600">
+                                                R$ {parseFloat(historicoCompras[0].valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                                            <p className="text-sm text-purple-700 mb-1">Total de Compras</p>
+                                            <p className="text-lg font-bold text-purple-900">
+                                                {historicoCompras.length} registro(s)
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 border-t border-gray-200 bg-gray-50">
+                            <button
+                                onClick={handleFecharHistorico}
+                                className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                            >
+                                Fechar
                             </button>
                         </div>
                     </div>
