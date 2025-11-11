@@ -244,6 +244,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
             tipo: 'MATERIAL',
             materialId: material.id,
             nome: material.nome,
+            descricao: material.nome, // Usar o nome como descrição
             unidadeMedida: material.unidadeMedida,
             quantidade: 1,
             custoUnit: material.preco,

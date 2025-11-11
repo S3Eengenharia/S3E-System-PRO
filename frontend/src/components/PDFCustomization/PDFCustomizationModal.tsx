@@ -26,6 +26,7 @@ const SaveIcon = (props: React.SVGProps<SVGSVGElement>) => (
 interface PDFCustomizationModalProps {
     isOpen: boolean;
     onClose: () => void;
+    orcamentoId: string;
     orcamentoData: OrcamentoPDFData;
     onGeneratePDF?: () => void;
 }
@@ -33,6 +34,7 @@ interface PDFCustomizationModalProps {
 const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
     isOpen,
     onClose,
+    orcamentoId,
     orcamentoData,
     onGeneratePDF
 }) => {
@@ -51,11 +53,85 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
     const [generating, setGenerating] = useState(false);
     const [showSaveTemplate, setShowSaveTemplate] = useState(false);
     const [templateName, setTemplateName] = useState('');
+    const [previewHTML, setPreviewHTML] = useState<string>('');
+    const [loadingPreview, setLoadingPreview] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Gerar preview HTML
+    const gerarPreviewHTML = React.useCallback(async () => {
+        if (!orcamentoId) {
+            console.error('ID do orçamento não fornecido');
+            return;
+        }
+
+        try {
+            setLoadingPreview(true);
+            console.log('🔄 Gerando preview para orçamento:', orcamentoId);
+            
+            const response = await pdfCustomizationService.generatePreview(orcamentoId, customization);
+            
+            if (response.success && response.data) {
+                console.log('✅ Preview gerado com sucesso');
+                setPreviewHTML(response.data.html || response.data);
+            } else {
+                console.error('❌ Erro ao gerar preview:', response.error);
+                toast.error('Erro ao gerar preview', {
+                    description: response.error || 'Erro desconhecido'
+                });
+            }
+        } catch (error: any) {
+            console.error('❌ Exceção ao gerar preview:', error);
+            toast.error('Erro ao gerar preview', {
+                description: error.message || 'Erro ao carregar preview'
+            });
+        } finally {
+            setLoadingPreview(false);
+        }
+    }, [orcamentoId, customization]);
+
+    // Gerar preview automaticamente quando abrir o modal na aba de preview
+    React.useEffect(() => {
+        if (isOpen && activeTab === 'preview' && !previewHTML && customization) {
+            gerarPreviewHTML();
+        }
+    }, [isOpen, activeTab, customization, previewHTML, gerarPreviewHTML]);
 
     if (!isOpen) return null;
 
-    // Upload de marca d'água
+    // Validar props necessárias
+    if (!orcamentoId) {
+        return (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-6 max-w-md">
+                    <h3 className="text-xl font-bold text-red-600 mb-4">Erro</h3>
+                    <p className="text-gray-700 dark:text-dark-text mb-4">
+                        ID do orçamento não fornecido. Por favor, feche e tente novamente.
+                    </p>
+                    <button onClick={onClose} className="btn-primary w-full">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Validar se customization foi carregado
+    if (!customization) {
+        return (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-6 max-w-md">
+                    <div className="flex items-center justify-center mb-4">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                    </div>
+                    <p className="text-center text-gray-700 dark:text-dark-text">
+                        Carregando configurações...
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    // Upload de marca d'água (logo)
     const handleWatermarkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -67,6 +143,8 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                     type: 'logo',
                     content: response.data.url
                 });
+                // Atualizar preview
+                setTimeout(() => gerarPreviewHTML(), 300);
                 return file.name;
             } else {
                 throw new Error(response.error || 'Erro ao fazer upload da imagem');
@@ -74,8 +152,8 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
         })();
 
         toast.promise(promise, {
-            loading: 'Fazendo upload da imagem...',
-            success: (fileName) => `Marca d'água carregada: ${fileName}`,
+            loading: 'Fazendo upload da logo...',
+            success: (fileName) => `Logo carregada: ${fileName}`,
             error: (err) => err.message || 'Erro ao fazer upload'
         });
     };
@@ -85,7 +163,7 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
         setGenerating(true);
         
         const promise = (async () => {
-            const result = await pdfCustomizationService.generateCustomPDF(orcamentoData, customization);
+            const result = await pdfCustomizationService.generatePersonalizedPDF(orcamentoId, customization);
             
             if (result.success) {
                 if (onGeneratePDF) onGeneratePDF();
@@ -146,7 +224,7 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-purple-600 to-indigo-600">
+                <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-[#0a1a2f] dark:bg-gradient-to-r dark:from-purple-600 dark:to-indigo-600">
                     <div className="flex justify-between items-center">
                         <div>
                             <h2 className="text-2xl font-bold text-white">🎨 Personalizar PDF</h2>
@@ -441,6 +519,45 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                                             </>
                                         )}
                                     </div>
+
+                                    {/* Upload de Folha Timbrada Personalizada */}
+                                    <div className="mb-6">
+                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">
+                                            📄 Folha Timbrada Personalizada
+                                        </label>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-3">
+                                            Faça upload de uma imagem de fundo personalizada para usar como folha timbrada (PNG ou JPG)
+                                        </p>
+                                        <input
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/jpg"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onload = () => {
+                                                        handleCornerDesignChange({ 
+                                                            enabled: true,
+                                                            design: 'custom',
+                                                            image: reader.result as string 
+                                                        });
+                                                        toast.success('Folha timbrada carregada!');
+                                                        // Atualizar preview
+                                                        if (activeTab === 'preview') {
+                                                            gerarPreviewHTML();
+                                                        }
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+                                        />
+                                        {customization.design.corners.enabled && customization.design.corners.design === 'custom' && customization.design.corners.image && (
+                                            <div className="mt-2 p-2 bg-green-50 text-green-700 rounded flex items-center gap-2">
+                                                <span>✓</span> Folha timbrada carregada
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -482,11 +599,32 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                             <div className="space-y-4">
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">👁️ Pré-visualização</h3>
                                 <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
-                                    A pré-visualização completa está ao lado. Ajuste as configurações nas outras abas para ver as mudanças em tempo real.
+                                    Preview em tempo real do PDF que será gerado. Ajuste as configurações nas outras abas e clique em "Atualizar Preview".
                                 </p>
                                 
                                 {/* Botões de Ação */}
                                 <div className="space-y-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={gerarPreviewHTML}
+                                        disabled={loadingPreview}
+                                        className="btn-primary w-full flex items-center justify-center gap-2"
+                                    >
+                                        {loadingPreview ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                Atualizando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                                Atualizar Preview
+                                            </>
+                                        )}
+                                    </button>
+
                                     <button
                                         type="button"
                                         onClick={() => setShowSaveTemplate(true)}
@@ -510,13 +648,35 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
 
                     {/* Área de Preview */}
                     <div className="flex-1 p-6 bg-gray-100 dark:bg-slate-900 overflow-y-auto">
-                        <div className="max-w-2xl mx-auto">
-                            <div className="bg-white dark:bg-dark-card rounded-lg shadow-xl p-8 min-h-[600px] relative overflow-hidden"
-                                style={{
-                                    aspectRatio: '210/297', // A4
-                                    border: `2px solid ${customization.design.colors.primary}`
-                                }}
-                            >
+                        {loadingPreview ? (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-center">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                                    <p className="text-gray-600 dark:text-gray-400">Gerando preview...</p>
+                                </div>
+                            </div>
+                        ) : previewHTML ? (
+                            <div className="max-w-[210mm] mx-auto shadow-2xl">
+                                <iframe
+                                    srcDoc={previewHTML}
+                                    className="w-full bg-white border-0"
+                                    style={{ 
+                                        height: '297mm',
+                                        minHeight: '800px',
+                                        border: 'none'
+                                    }}
+                                    sandbox="allow-same-origin allow-scripts"
+                                    title="Preview do PDF"
+                                />
+                            </div>
+                        ) : (
+                            <div className="max-w-2xl mx-auto">
+                                <div className="bg-white dark:bg-dark-card rounded-lg shadow-xl p-8 min-h-[600px] relative overflow-hidden"
+                                    style={{
+                                        aspectRatio: '210/297', // A4
+                                        border: `2px solid ${customization.design.colors.primary}`
+                                    }}
+                                >
                                 {/* Marca d'Água Preview */}
                                 {customization.watermark.type !== 'none' && (
                                     <div
@@ -551,7 +711,7 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                                 )}
 
                                 {/* Designs nos Cantos */}
-                                {customization.design.corners.enabled && customization.design.corners.design !== 'none' && (
+                                {customization.design.corners.enabled && customization.design.corners.design !== 'none' && customization.design.corners.design !== 'custom' && CORNER_DESIGNS[customization.design.corners.design] && (
                                     <>
                                         {/* Canto Superior Esquerdo */}
                                         <div
@@ -578,6 +738,20 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                                             dangerouslySetInnerHTML={{ __html: CORNER_DESIGNS[customization.design.corners.design].svg }}
                                         />
                                     </>
+                                )}
+
+                                {/* Folha Timbrada Custom (quando design === 'custom') */}
+                                {customization.design.corners.enabled && customization.design.corners.design === 'custom' && customization.design.corners.image && (
+                                    <div
+                                        className="absolute inset-0"
+                                        style={{
+                                            opacity: customization.design.corners.opacity,
+                                            backgroundImage: `url(${customization.design.corners.image})`,
+                                            backgroundSize: 'cover',
+                                            backgroundPosition: 'center',
+                                            backgroundRepeat: 'no-repeat'
+                                        }}
+                                    />
                                 )}
 
                                 {/* Conteúdo de Exemplo */}
@@ -648,6 +822,7 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                                 </div>
                             </div>
                         </div>
+                        )}
                     </div>
                 </div>
 

@@ -11,7 +11,12 @@ const prisma = new PrismaClient();
 // Configuração do multer para uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../../uploads/pdf-customization');
+        const cwd = process.cwd();
+        const isBackendFolder = cwd.endsWith('backend');
+        const uploadDir = isBackendFolder 
+            ? path.join(cwd, 'uploads', 'pdf-customization')
+            : path.join(cwd, 'backend', 'uploads', 'pdf-customization');
+        
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }

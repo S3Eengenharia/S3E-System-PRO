@@ -30,6 +30,34 @@ export interface ObraKanbanData {
 
 export class ObraService {
   /**
+   * Busca obra por ID do projeto
+   */
+  async buscarObraPorProjeto(projetoId: string) {
+    try {
+      const obra = await prisma.obra.findUnique({
+        where: { projetoId },
+        include: {
+          projeto: {
+            include: {
+              cliente: { select: { id: true, nome: true } }
+            }
+          },
+          tarefas: {
+            include: {
+              registrosAtividade: true
+            }
+          }
+        }
+      });
+
+      return obra;
+    } catch (error) {
+      console.error('Erro ao buscar obra por projeto:', error);
+      throw new Error('Erro ao buscar obra');
+    }
+  }
+
+  /**
    * Gera uma Obra a partir de um Projeto aprovado
    */
   async gerarObraAPartirDoProjeto(projetoId: string, nomeObra?: string) {

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { type PurchaseOrder, type Supplier, PurchaseStatus, type PurchaseOrderItem, type Product, CatalogItemType } from '../types';
 import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
@@ -69,6 +70,7 @@ interface ComprasProps {
 }
 
 const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
+    const navigate = useNavigate();
     const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
@@ -85,6 +87,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     // Estados para recebimento de remessa
     const [isReceivingModalOpen, setIsReceivingModalOpen] = useState(false);
     const [dataRecebimento, setDataRecebimento] = useState(new Date().toISOString().split('T')[0]);
+    const [itensRecebidos, setItensRecebidos] = useState<{[key: string]: boolean}>({});
     
     // Form state
     const [selectedSupplierId, setSelectedSupplierId] = useState('');
@@ -204,16 +207,40 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
 
     const handleOpenReceivingModal = () => {
         setDataRecebimento(new Date().toISOString().split('T')[0]);
+        // Inicializar todos os itens como recebidos por padrão
+        if (purchaseToView) {
+            const inicialRecebidos: {[key: string]: boolean} = {};
+            purchaseToView.items.forEach(item => {
+                if (item.productId) {
+                    inicialRecebidos[item.productId] = true;
+                }
+            });
+            setItensRecebidos(inicialRecebidos);
+        }
         setIsReceivingModalOpen(true);
     };
 
     const handleReceberRemessa = async () => {
         if (!purchaseToView) return;
         
+        // Verificar se pelo menos um item foi marcado
+        const itensParaReceber = Object.keys(itensRecebidos).filter(key => itensRecebidos[key]);
+        if (itensParaReceber.length === 0) {
+            toast.error('❌ Selecione pelo menos um item para receber');
+            return;
+        }
+        
         try {
             console.log('📦 Recebendo remessa:', purchaseToView.id, 'Data:', dataRecebimento);
+            console.log('📦 Itens selecionados:', itensParaReceber);
             
-            await comprasService.updateCompraStatus(purchaseToView.id, PurchaseStatus.Recebido, dataRecebimento);
+            // Enviar itens específicos para receber
+            await comprasService.receberRemessaParcial(
+                purchaseToView.id, 
+                PurchaseStatus.Recebido, 
+                dataRecebimento,
+                itensParaReceber
+            );
             
             // Recarregar lista
             const data = await comprasService.getCompras();
@@ -223,7 +250,12 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             setIsReceivingModalOpen(false);
             setPurchaseToView(null);
             
-            toast.error('✅ Remessa recebida com sucesso! O estoque foi atualizado.');
+            const todosRecebidos = itensParaReceber.length === purchaseToView.items.length;
+            if (todosRecebidos) {
+                toast.success('✅ Remessa recebida com sucesso! O estoque foi atualizado.');
+            } else {
+                toast.success(`✅ ${itensParaReceber.length} de ${purchaseToView.items.length} itens recebidos! O estoque foi atualizado.`);
+            }
         } catch (error) {
             console.error('❌ Erro ao receber remessa:', error);
             toast.error('❌ Erro ao receber remessa');
@@ -526,7 +558,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                         Importar XML
                     </button>
                     <button
-                        onClick={() => handleOpenModal()}
+                        onClick={() => navigate('/compras/nova')}
                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
                     >
                         <PlusIcon className="w-5 h-5" />
@@ -600,7 +632,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                     </p>
                     {!searchTerm && filter === 'Todos' && (
                         <button
-                            onClick={() => handleOpenModal()}
+                            onClick={() => navigate('/compras/nova')}
                             className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-600 transition-all shadow-medium font-semibold"
                         >
                             <PlusIcon className="w-5 h-5 inline mr-2" />
@@ -1593,7 +1625,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
             {/* MODAL DE RECEBIMENTO DE REMESSA */}
             {isReceivingModalOpen && purchaseToView && (
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-200 max-h-[90vh] overflow-y-auto">
                         {/* Header */}
                         <div className="p-6 bg-gradient-to-r from-green-600 to-green-700">
                             <div className="flex items-center gap-3 text-white">
@@ -1632,6 +1664,62 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                 </div>
                             </div>
 
+                            {/* Lista de Itens para Marcar */}
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                    📦 Itens da Compra - Marque os recebidos
+                                </h4>
+                                <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-xl p-3 bg-gray-50">
+                                    {purchaseToView.items.map((item, index) => (
+                                        <label
+                                            key={item.productId || index}
+                                            className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-all"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={itensRecebidos[item.productId || ''] || false}
+                                                onChange={(e) => {
+                                                    setItensRecebidos(prev => ({
+                                                        ...prev,
+                                                        [item.productId || '']: e.target.checked
+                                                    }));
+                                                }}
+                                                className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-gray-900 text-sm">{item.productName}</p>
+                                                <div className="flex gap-4 mt-1 text-xs text-gray-600">
+                                                    <span>Qtd: {item.quantity}</span>
+                                                    <span>Valor: R$ {item.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="mt-2 flex justify-between text-xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const todosTrue: {[key: string]: boolean} = {};
+                                            purchaseToView.items.forEach(item => {
+                                                if (item.productId) todosTrue[item.productId] = true;
+                                            });
+                                            setItensRecebidos(todosTrue);
+                                        }}
+                                        className="text-green-600 hover:text-green-700 font-semibold"
+                                    >
+                                        ✓ Marcar Todos
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setItensRecebidos({})}
+                                        className="text-red-600 hover:text-red-700 font-semibold"
+                                    >
+                                        ✗ Desmarcar Todos
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Data de Recebimento */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1658,7 +1746,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                                     <div>
                                         <p className="text-sm font-semibold text-yellow-800 mb-1">⚠️ Atenção</p>
                                         <p className="text-xs text-yellow-700">
-                                            Ao confirmar o recebimento, os seguintes itens vinculados ao catálogo serão automaticamente adicionados ao estoque.
+                                            Apenas os itens marcados serão adicionados ao estoque. Itens não marcados permanecem pendentes.
                                         </p>
                                     </div>
                                 </div>

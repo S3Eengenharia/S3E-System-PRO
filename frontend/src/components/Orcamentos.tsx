@@ -7,7 +7,7 @@ import { ENDPOINTS } from '../config/api';
 import JoditEditorComponent from './JoditEditor';
 import { generateOrcamentoPDF, type OrcamentoPDFData as OrcamentoPDFDataOld } from '../utils/pdfGenerator';
 import NovoOrcamentoPage from '../pages/NovoOrcamentoPage';
-import PDFCustomizationModal from './PDFCustomization/PDFCustomizationModal';
+import PDFCustomizationModal from './PDFCustomization/PDFCustomizationModalWrapper';
 import { OrcamentoPDFData } from '../types/pdfCustomization';
 
 // ==================== ICONS ====================
@@ -372,6 +372,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             tipo: 'MATERIAL',
             materialId: material.id,
             nome: material.nome,
+            descricao: material.nome, // Usar o nome como descrição
             unidadeMedida: material.unidadeMedida,
             quantidade: 1,
             custoUnit: material.preco,
@@ -643,6 +644,47 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const handlePersonalizarPDF = (orcamento: Orcamento) => {
         setOrcamentoForPDF(orcamento);
         setShowPDFCustomization(true);
+    };
+
+    // Gerar PDF profissional com marca d'água
+    const handleGerarPDFProfissional = async (orcamento: Orcamento) => {
+        try {
+            console.log('📄 Gerando PDF profissional:', orcamento.id);
+            toast.info('Gerando PDF...');
+            
+            // Buscar HTML via API autenticada
+            const response = await axiosApiService.get(`/api/orcamentos/${orcamento.id}/pdf/preview?opacidade=0.08`);
+            
+            if (response.success && response.data?.html) {
+                // Criar blob com o HTML
+                const blob = new Blob([response.data.html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                
+                console.log('✅ PDF gerado, abrindo em nova janela...');
+                
+                // Abrir em nova janela
+                const win = window.open(url, '_blank');
+                
+                if (win) {
+                    // Aguardar carregar e disparar impressão automaticamente
+                    win.addEventListener('load', () => {
+                        setTimeout(() => {
+                            win.print();
+                            // Limpar blob URL após uso
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        }, 500);
+                    });
+                    toast.success('PDF aberto em nova janela!');
+                } else {
+                    toast.error('Popup bloqueado! Permita popups neste site.');
+                }
+            } else {
+                toast.error('Erro ao gerar PDF');
+            }
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            toast.error('Erro ao gerar PDF do orçamento');
+        }
     };
 
     // Gerar PDF do orçamento (função antiga mantida para compatibilidade)
@@ -959,7 +1001,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
                     <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong max-w-6xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header */}
-                        <div className="relative p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-purple-600 to-purple-700">
+                        <div className="relative p-6 border-b border-gray-200 dark:border-dark-border bg-[#0a1a2f] dark:bg-gradient-to-r dark:from-purple-600 dark:to-purple-700">
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-medium">
                                     {orcamentoToEdit ? <PencilIcon className="w-7 h-7 text-white" /> : <PlusIcon className="w-7 h-7 text-white" />}
@@ -1418,7 +1460,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
+                                        className="px-8 py-3 bg-[#0a1a2f] hover:bg-[#0d2240] dark:bg-gradient-to-r dark:from-purple-600 dark:to-purple-500 text-white rounded-xl dark:hover:from-purple-700 dark:hover:to-purple-600 transition-all shadow-medium font-semibold"
                                     >
                                         {orcamentoToEdit ? 'Atualizar' : 'Criar'} Orçamento
                                     </button>
@@ -1598,14 +1640,25 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             {/* Ações do Orçamento */}
                             <div className="flex gap-3 pt-6 border-t border-gray-100">
                                 <button
+                                    onClick={() => handleGerarPDFProfissional(orcamentoToView)}
+                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#0a1a2f] hover:bg-[#0d2240] dark:bg-gradient-to-r dark:from-purple-600 dark:to-indigo-600 text-white rounded-xl dark:hover:from-purple-700 dark:hover:to-indigo-700 transition-all shadow-medium font-semibold"
+                                    title="Gerar PDF com marca d'água padrão S3E"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                    </svg>
+                                    📄 Gerar PDF Rápido
+                                </button>
+                                <button
                                     onClick={() => {
                                         setOrcamentoToView(null);
                                         handlePersonalizarPDF(orcamentoToView);
                                     }}
-                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-medium font-semibold"
+                                    className="btn-success flex items-center gap-2"
+                                    title="Personalizar PDF com logo e folha timbrada"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
                                     </svg>
                                     🎨 Personalizar PDF
                                 </button>
@@ -1645,9 +1698,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         setShowPDFCustomization(false);
                         setOrcamentoForPDF(null);
                     }}
+                    orcamentoId={orcamentoForPDF.id}
                     orcamentoData={prepararDadosParaPDF(orcamentoForPDF)}
                     onGeneratePDF={() => {
                         console.log('✅ PDF gerado com sucesso!');
+                        toast.success('PDF personalizado gerado com sucesso!');
                         // Fechar modal após gerar (opcional)
                         setShowPDFCustomization(false);
                         setOrcamentoForPDF(null);

@@ -146,10 +146,16 @@ class FinanceiroService {
     try {
       console.log('📤 Carregando contas a pagar...', filters);
       
-      const response = await axiosApiService.get<ContaPagar[]>('/api/contas-pagar', filters);
+      const response = await axiosApiService.get<any>('/api/contas-pagar', filters);
       
       if (response.success && response.data) {
-        const contas = Array.isArray(response.data) ? response.data : [];
+        // O backend retorna { contas, pagination }, então precisamos acessar response.data.contas
+        const contas = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.contas && Array.isArray(response.data.contas) 
+            ? response.data.contas 
+            : []);
+        
         console.log(`✅ ${contas.length} contas a pagar carregadas`);
         return { success: true, data: contas };
       } else {

@@ -5,7 +5,8 @@ import {
     WatermarkConfig,
     DesignConfig,
     ContentConfig,
-    CornerDesignConfig
+    CornerDesignConfig,
+    TypographyConfig
 } from '../types/pdfCustomization';
 
 const STORAGE_KEY = 'pdf_customization_temp';
@@ -17,6 +18,14 @@ export const usePDFCustomization = () => {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
+                
+                // Validar se corners.design é um valor válido
+                if (parsed.design?.corners?.design && 
+                    !['geometric', 'curves', 'lines', 'custom', 'none'].includes(parsed.design.corners.design)) {
+                    console.warn('Design de canto inválido detectado, resetando para padrão');
+                    parsed.design.corners.design = 'none';
+                }
+                
                 // Converter strings de data para Date
                 if (parsed.metadata?.createdAt) {
                     parsed.metadata.createdAt = new Date(parsed.metadata.createdAt);
@@ -28,6 +37,8 @@ export const usePDFCustomization = () => {
             }
         } catch (error) {
             console.warn('Erro ao carregar customização do localStorage:', error);
+            // Se der erro, limpar localStorage e usar padrão
+            localStorage.removeItem(STORAGE_KEY);
         }
         return DEFAULT_PDF_CUSTOMIZATION;
     });

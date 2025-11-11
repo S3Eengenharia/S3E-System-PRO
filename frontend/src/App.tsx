@@ -32,8 +32,10 @@ import Configuracoes from './components/Configuracoes';
 import ComparacaoPrecos from './components/ComparacaoPrecos';
 import Vendas from './components/Vendas';
 import ObrasKanban from './pages/ObrasKanban';
+import NovaCompraPage from './pages/NovaCompraPage';
 // import SettingsModal from './components/SettingsModal'; // DESCONTINUADO - Substituído por página Configuracoes.tsx
 import GestaoObras from './components/GestaoObras';
+import GerenciamentoEmpresarial from './components/GerenciamentoEmpresarial';
 import { type Project } from './types';
 import { Toaster } from './components/ui/sonner';
 
@@ -110,6 +112,8 @@ const MainApp: React.FC = () => {
         return <Servicos toggleSidebar={toggleSidebar} />;
       case 'Configurações':
         return <Configuracoes toggleSidebar={toggleSidebar} />;
+      case 'Gerenciamento Empresarial':
+        return <GerenciamentoEmpresarial toggleSidebar={toggleSidebar} />;
       default:
         return <DashboardAPI toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
     }
@@ -143,6 +147,66 @@ const MainApp: React.FC = () => {
   );
 };
 
+// Componente wrapper para páginas standalone com Sidebar
+const StandalonePageWrapper: React.FC<{ children: React.ReactNode; activeView?: string }> = ({ children, activeView = 'Compras' }) => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handleNavigate = (view: string) => {
+    // Mapear views para rotas
+    const routeMap: Record<string, string> = {
+      'Dashboard': '/',
+      'Orçamentos': '/',
+      'Catálogo': '/',
+      'Movimentações': '/',
+      'Histórico': '/',
+      'Compras': '/compras',
+      'Materiais': '/',
+      'Estoque': '/',
+      'Comparação de Preços': '/',
+      'Fornecedores': '/',
+      'Clientes': '/',
+      'Projetos': '/',
+      'Obras': '/',
+      'Gestão de Obras': '/',
+      'Financeiro': '/',
+      'Vendas': '/',
+      'Emissão NF-e': '/',
+      'Serviços': '/',
+      'Configurações': '/',
+      'Gerenciamento Empresarial': '/'
+    };
+
+    const route = routeMap[view] || '/';
+    window.location.href = route;
+  };
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-brand-gray-50 dark:bg-dark-bg font-sans">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        toggleSidebar={toggleSidebar}
+        activeView={activeView}
+        onNavigate={handleNavigate}
+        onOpenSettings={() => handleNavigate('Configurações')}
+      />
+      {isSidebarOpen && (
+        <div 
+          onClick={toggleSidebar} 
+          className="fixed inset-0 z-30 bg-black opacity-50 lg:hidden"
+          aria-hidden="true"
+        ></div>
+      )}
+      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg">
+        {React.cloneElement(children as React.ReactElement, { toggleSidebar })}
+      </main>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <Router>
@@ -150,6 +214,20 @@ const App: React.FC = () => {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/compras" element={
+              <ProtectedRoute>
+                <StandalonePageWrapper>
+                  <Compras toggleSidebar={() => {}} />
+                </StandalonePageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/compras/nova" element={
+              <ProtectedRoute>
+                <StandalonePageWrapper>
+                  <NovaCompraPage toggleSidebar={() => {}} />
+                </StandalonePageWrapper>
+              </ProtectedRoute>
+            } />
             <Route
               path="/*"
               element={

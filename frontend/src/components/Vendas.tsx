@@ -64,11 +64,22 @@ interface VendaForm {
     condicoesEspeciaisPagamento?: string;
 }
 
-type TabType = 'nova' | 'lista' | 'dashboard';
+type TabType = 'nova' | 'lista' | 'dashboard' | 'config' | 'ajuda';
 
 const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     const { user } = useContext(AuthContext)!;
     const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+    
+    // Estado para meta mensal (salvo no localStorage)
+    const [metaMensal, setMetaMensal] = useState<number>(() => {
+        const saved = localStorage.getItem('vendas_meta_mensal');
+        return saved ? parseFloat(saved) : 100000;
+    });
+
+    // Salvar meta no localStorage quando mudar
+    useEffect(() => {
+        localStorage.setItem('vendas_meta_mensal', metaMensal.toString());
+    }, [metaMensal]);
 
     // Estados para nova venda
     const [vendaForm, setVendaForm] = useState<VendaForm>({
@@ -172,29 +183,25 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
         };
     }, [orcamentoSelecionado, vendaForm.valorEntrada, vendaForm.parcelas]);
 
-    // Estatísticas calculadas
+    // Estatísticas calculadas em TEMPO REAL
     const estatisticasVendas = useMemo(() => {
-        if (dashboardData) {
-            return {
-                totalVendas: dashboardData.receitaMes || 0,
-                vendasMes: dashboardData.vendasMes || 0,
-                ticketMedio: dashboardData.ticketMedio || 0,
-                metaMes: 100000
-            };
-        }
-        
-        // Fallback para dados locais
+        // Calcular do zero baseado nas vendas reais
         const totalVendas = vendas.reduce((acc, venda) => acc + (venda.valorTotal || 0), 0);
         const vendasMesCount = vendas.length;
         const ticketMedio = vendasMesCount > 0 ? totalVendas / vendasMesCount : 0;
         
+        // Se tiver dados do dashboard, usar como referência mas sempre calcular
+        const receitaReal = dashboardData?.receitaMes || totalVendas;
+        const vendasReal = dashboardData?.vendasMes || vendasMesCount;
+        
         return {
-            totalVendas: totalVendas,
-            vendasMes: vendasMesCount,
-            ticketMedio: ticketMedio,
-            metaMes: 100000
+            totalVendas: receitaReal,
+            vendasMes: vendasReal,
+            ticketMedio: vendasReal > 0 ? receitaReal / vendasReal : ticketMedio,
+            metaMes: metaMensal, // Usa meta configurável
+            percentualMeta: metaMensal > 0 ? (receitaReal / metaMensal) * 100 : 0
         };
-    }, [dashboardData, vendas]);
+    }, [dashboardData, vendas, metaMensal]);
 
     const formasPagamento = [
         'À vista',
@@ -334,20 +341,31 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
             <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Progresso da Meta Mensal</h3>
-                    <span className="text-sm font-medium text-gray-600">
-                        {estatisticasVendas.metaMes > 0 ? Math.round(((estatisticasVendas.totalVendas || 0) / estatisticasVendas.metaMes) * 100) : 0}%
+                    <span className={`text-lg font-bold ${estatisticasVendas.percentualMeta >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+                        {estatisticasVendas.percentualMeta.toFixed(1)}%
                     </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
                     <div 
-                        className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all duration-500"
-                        style={{ width: `${estatisticasVendas.metaMes > 0 ? Math.min(((estatisticasVendas.totalVendas || 0) / estatisticasVendas.metaMes) * 100, 100) : 0}%` }}
+                        className={`h-4 rounded-full transition-all duration-500 ${
+                            estatisticasVendas.percentualMeta >= 100 
+                                ? 'bg-gradient-to-r from-green-500 to-green-600' 
+                                : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                        }`}
+                        style={{ width: `${Math.min(estatisticasVendas.percentualMeta, 100)}%` }}
                     />
                 </div>
                 <div className="flex justify-between mt-2 text-sm text-gray-600">
-                    <span>R$ {(estatisticasVendas.totalVendas || 0).toLocaleString('pt-BR')}</span>
-                    <span>R$ {(estatisticasVendas.metaMes || 100000).toLocaleString('pt-BR')}</span>
+                    <span>R$ {estatisticasVendas.totalVendas.toLocaleString('pt-BR')}</span>
+                    <span>R$ {estatisticasVendas.metaMes.toLocaleString('pt-BR')}</span>
                 </div>
+                {estatisticasVendas.percentualMeta >= 100 && (
+                    <div className="mt-4 bg-green-100 border border-green-300 p-3 rounded-lg">
+                        <p className="text-sm text-green-800 font-semibold text-center">
+                            🎉 Parabéns! Meta do mês alcançada!
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* Vendas Recentes */}
@@ -364,7 +382,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                 </div>
                                 <div className="text-right">
                                     <p className="font-bold text-green-600">
-                                        R$ {venda.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        R$ {(venda.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </p>
                                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                                         venda.status === 'Finalizada' 
@@ -853,10 +871,10 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">Valor Total</p>
                                     <p className="text-lg font-bold text-green-600">
-                                        R$ {venda.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        R$ {(venda.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        Pago: R$ {venda.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        Pago: R$ {(venda.valorPago || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </p>
                                 </div>
                                 <div>
@@ -883,6 +901,271 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                     ))}
                 </div>
             )}
+        </div>
+    );
+
+    // Renderizar página de configurações
+    const renderConfig = () => (
+        <div className="space-y-6">
+            <div className="bg-white p-8 rounded-2xl shadow-soft border border-gray-100">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <span className="text-2xl">⚙️</span>
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Configurações de Vendas</h2>
+                        <p className="text-gray-600">Defina metas e parâmetros para o módulo de vendas</p>
+                    </div>
+                </div>
+
+                {/* Configuração de Meta Mensal */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 p-6 rounded-xl">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="text-3xl">🎯</span>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Meta Mensal de Vendas</h3>
+                            <p className="text-sm text-gray-600">Defina o objetivo de faturamento mensal da equipe</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Valor da Meta (R$)
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-semibold">
+                                    R$
+                                </span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="1000"
+                                    value={metaMensal}
+                                    onChange={(e) => setMetaMensal(parseFloat(e.target.value) || 0)}
+                                    className="w-full pl-12 pr-4 py-4 text-2xl font-bold border-2 border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-lg border border-blue-200">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="text-sm text-gray-600">Meta Atual:</p>
+                                    <p className="text-3xl font-bold text-blue-600">
+                                        R$ {metaMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm text-gray-600">Faturado no Mês:</p>
+                                    <p className="text-2xl font-bold text-green-600">
+                                        R$ {estatisticasVendas.totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                    <p className="text-sm font-semibold text-gray-700 mt-1">
+                                        {estatisticasVendas.percentualMeta.toFixed(1)}% da meta
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <div className="w-full bg-gray-200 rounded-full h-3">
+                                    <div
+                                        className={`h-3 rounded-full transition-all ${
+                                            estatisticasVendas.percentualMeta >= 100 ? 'bg-green-500' : 'bg-blue-500'
+                                        }`}
+                                        style={{ width: `${Math.min(estatisticasVendas.percentualMeta, 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setMetaMensal(100000);
+                                    toast.success('Meta resetada para R$ 100.000,00');
+                                }}
+                                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold"
+                            >
+                                Resetar para R$ 100.000
+                            </button>
+                            <button
+                                onClick={() => {
+                                    toast.success('Meta salva com sucesso!', {
+                                        description: `Nova meta: R$ ${metaMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                    });
+                                }}
+                                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 font-semibold"
+                            >
+                                💾 Salvar Configurações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Informações sobre permissões */}
+                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
+                    <div className="flex items-start gap-3">
+                        <span className="text-yellow-600 text-xl">⚠️</span>
+                        <div>
+                            <p className="font-semibold text-yellow-900">Apenas Administradores e Gerentes</p>
+                            <p className="text-sm text-yellow-800 mt-1">
+                                Somente usuários com perfil de Administrador ou Gerente podem alterar as metas mensais.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // Renderizar página de ajuda (Como funcionam as métricas)
+    const renderAjuda = () => (
+        <div className="space-y-6">
+            <div className="bg-white p-8 rounded-2xl shadow-soft border border-gray-100">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                        <span className="text-2xl">📚</span>
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Como Funcionam as Métricas de Vendas</h2>
+                        <p className="text-gray-600">Entenda cada indicador e como são calculados</p>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Total em Vendas */}
+                    <div className="border-l-4 border-green-500 bg-green-50 p-6 rounded-r-xl">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                                <CurrencyDollarIcon className="w-6 h-6 text-green-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-green-900">💰 Total em Vendas</h3>
+                        </div>
+                        <p className="text-gray-700 mb-3">
+                            <strong>O que é:</strong> Soma de TODOS os valores de vendas realizadas no mês atual.
+                        </p>
+                        <p className="text-gray-700 mb-3">
+                            <strong>Como é calculado:</strong>
+                        </p>
+                        <div className="bg-white p-4 rounded-lg border border-green-200 font-mono text-sm">
+                            Total = Venda₁ + Venda₂ + Venda₃ + ... + Vendaₙ
+                        </div>
+                        <p className="text-gray-700 mt-3">
+                            <strong>Exemplo:</strong> Se você fez 3 vendas de R$ 5.000, R$ 3.200 e R$ 1.800, o total será R$ 10.000.
+                        </p>
+                        <div className="mt-4 bg-green-100 p-3 rounded-lg">
+                            <p className="text-sm text-green-800">
+                                ✅ <strong>Atualização:</strong> Essa métrica atualiza automaticamente em tempo real sempre que uma nova venda é registrada!
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Vendas no Mês */}
+                    <div className="border-l-4 border-blue-500 bg-blue-50 p-6 rounded-r-xl">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                                <ChartBarIcon className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-blue-900">📊 Vendas no Mês</h3>
+                        </div>
+                        <p className="text-gray-700 mb-3">
+                            <strong>O que é:</strong> Quantidade total de vendas fechadas no mês atual.
+                        </p>
+                        <p className="text-gray-700 mb-3">
+                            <strong>Como é calculado:</strong>
+                        </p>
+                        <div className="bg-white p-4 rounded-lg border border-blue-200 font-mono text-sm">
+                            Vendas no Mês = Contagem de todas as vendas registradas
+                        </div>
+                        <p className="text-gray-700 mt-3">
+                            <strong>Exemplo:</strong> Se você registrou 15 vendas este mês, o valor será 15.
+                        </p>
+                    </div>
+
+                    {/* Ticket Médio */}
+                    <div className="border-l-4 border-purple-500 bg-purple-50 p-6 rounded-r-xl">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                                <DocumentTextIcon className="w-6 h-6 text-purple-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-purple-900">🎫 Ticket Médio</h3>
+                        </div>
+                        <p className="text-gray-700 mb-3">
+                            <strong>O que é:</strong> Valor médio de cada venda realizada no mês.
+                        </p>
+                        <p className="text-gray-700 mb-3">
+                            <strong>Como é calculado:</strong>
+                        </p>
+                        <div className="bg-white p-4 rounded-lg border border-purple-200 font-mono text-sm">
+                            Ticket Médio = Total em Vendas ÷ Vendas no Mês
+                        </div>
+                        <p className="text-gray-700 mt-3">
+                            <strong>Exemplo:</strong> Se você faturou R$ 10.000 em 5 vendas, o ticket médio é R$ 2.000.
+                        </p>
+                        <div className="mt-4 bg-purple-100 p-3 rounded-lg">
+                            <p className="text-sm text-purple-800">
+                                💡 <strong>Dica:</strong> Um ticket médio alto indica vendas de maior valor. Use isso para estratégias comerciais!
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Meta do Mês */}
+                    <div className="border-l-4 border-orange-500 bg-orange-50 p-6 rounded-r-xl">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                                <span className="text-2xl">🎯</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-orange-900">🎯 Meta do Mês</h3>
+                        </div>
+                        <p className="text-gray-700 mb-3">
+                            <strong>O que é:</strong> Objetivo de faturamento definido para o mês atual.
+                        </p>
+                        <p className="text-gray-700 mb-3">
+                            <strong>Como é definida:</strong>
+                        </p>
+                        <div className="bg-white p-4 rounded-lg border border-orange-200">
+                            <p className="text-gray-700">
+                                A meta é configurada manualmente por Administradores ou Gerentes na aba <strong>"⚙️ Configurações"</strong>.
+                                O valor padrão é R$ 100.000,00, mas pode ser ajustado conforme a estratégia da empresa.
+                            </p>
+                        </div>
+                        <p className="text-gray-700 mt-3">
+                            <strong>Progresso:</strong>
+                        </p>
+                        <div className="bg-white p-4 rounded-lg border border-orange-200 font-mono text-sm">
+                            Percentual = (Total em Vendas ÷ Meta do Mês) × 100%
+                        </div>
+                        <div className="mt-4 bg-orange-100 p-3 rounded-lg">
+                            <p className="text-sm text-orange-800">
+                                🔥 <strong>Meta Alcançada:</strong> Quando você atingir 100% da meta, a barra de progresso ficará verde!
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Resumo Rápido */}
+                    <div className="bg-gradient-to-r from-gray-50 to-slate-50 border-2 border-gray-200 p-6 rounded-xl">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">📋 Resumo das Fórmulas</h3>
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
+                                <span className="text-green-600 font-bold min-w-[160px]">Total em Vendas:</span>
+                                <code className="text-sm text-gray-700">Σ (valor de cada venda)</code>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
+                                <span className="text-blue-600 font-bold min-w-[160px]">Vendas no Mês:</span>
+                                <code className="text-sm text-gray-700">COUNT(vendas)</code>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
+                                <span className="text-purple-600 font-bold min-w-[160px]">Ticket Médio:</span>
+                                <code className="text-sm text-gray-700">Total ÷ Vendas no Mês</code>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
+                                <span className="text-orange-600 font-bold min-w-[160px]">Progresso da Meta:</span>
+                                <code className="text-sm text-gray-700">(Total ÷ Meta) × 100%</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 
@@ -968,6 +1251,28 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 >
                     📋 Lista de Vendas
                 </button>
+                {(user?.role === 'admin' || user?.role === 'gerente') && (
+                    <button
+                        onClick={() => setActiveTab('config')}
+                        className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                            activeTab === 'config'
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                        }`}
+                    >
+                        ⚙️ Configurações
+                    </button>
+                )}
+                <button
+                    onClick={() => setActiveTab('ajuda')}
+                    className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                        activeTab === 'ajuda'
+                            ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-medium'
+                            : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                    }`}
+                >
+                    ❓ Como Funcionam as Métricas
+                </button>
             </div>
 
             {/* Conteúdo das Abas */}
@@ -975,6 +1280,8 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 {activeTab === 'dashboard' && renderDashboard()}
                 {activeTab === 'nova' && renderNovaVenda()}
                 {activeTab === 'lista' && renderListaVendas()}
+                {activeTab === 'config' && renderConfig()}
+                {activeTab === 'ajuda' && renderAjuda()}
             </div>
         </div>
     );

@@ -332,8 +332,8 @@ export const updateProjetoStatus = async (req: Request, res: Response): Promise<
     const { id } = req.params;
     const { status } = req.body as { status: ProjetoStatus };
 
-    if (!['PROPOSTA','APROVADO','EXECUCAO','CONCLUIDO'].includes(String(status))) {
-      res.status(400).json({ success: false, error: 'Status inválido. Use: PROPOSTA, APROVADO, EXECUCAO, CONCLUIDO' });
+    if (!['PROPOSTA','VALIDADO','APROVADO','EXECUCAO','CONCLUIDO'].includes(String(status))) {
+      res.status(400).json({ success: false, error: 'Status inválido. Use: PROPOSTA, VALIDADO, APROVADO, EXECUCAO, CONCLUIDO' });
       return;
     }
 
