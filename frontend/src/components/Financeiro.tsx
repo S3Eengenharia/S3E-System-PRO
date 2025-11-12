@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import FinanceiroDashboard from './FinanceiroDashboard';
 import ContasAReceber from './ContasAReceber';
 import ContasAPagar from './ContasAPagar';
+import ExportarRelatorioFinanceiro from './ExportarRelatorioFinanceiro';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -14,7 +15,7 @@ interface FinanceiroProps {
     toggleSidebar: () => void;
 }
 
-type AbaType = 'dashboard' | 'receber' | 'pagar' | 'ajuda';
+type AbaType = 'dashboard' | 'receber' | 'pagar' | 'ajuda' | 'exportar';
 
 const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
     const [abaAtiva, setAbaAtiva] = useState<AbaType>('dashboard');
@@ -39,6 +40,17 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
                         <p className="text-xs text-gray-500 font-medium">Última atualização</p>
                         <p className="text-sm font-semibold text-gray-700 mt-0.5">{new Date().toLocaleString('pt-BR')}</p>
                     </div>
+                    {abaAtiva === 'dashboard' && (
+                        <button
+                            onClick={() => setAbaAtiva('exportar' as AbaType)}
+                            className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-md font-semibold flex items-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="hidden sm:inline">Exportar Relatório</span>
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -88,6 +100,10 @@ const Financeiro: React.FC<FinanceiroProps> = ({ toggleSidebar }) => {
 
     if (abaAtiva === 'pagar') {
         return <ContasAPagar setAbaAtiva={setAbaAtiva} toggleSidebar={toggleSidebar} />;
+    }
+
+    if (abaAtiva === 'exportar') {
+        return <ExportarRelatorioFinanceiro setAbaAtiva={setAbaAtiva} toggleSidebar={toggleSidebar} />;
     }
 
     if (abaAtiva === 'ajuda') {

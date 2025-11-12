@@ -78,6 +78,11 @@ class ProjetosService {
   async desativar(id: string) {
     return axiosApiService.delete<Projeto>(`${ENDPOINTS.PROJETOS}/${id}`);
   }
+
+  async excluirPermanentemente(id: string) {
+    // ⚠️ ATENÇÃO: Exclusão permanente do banco de dados (apenas para desenvolvimento)
+    return axiosApiService.delete<Projeto>(`${ENDPOINTS.PROJETOS}/${id}?permanent=true`);
+  }
 }
 
 export const projetosService = new ProjetosService();

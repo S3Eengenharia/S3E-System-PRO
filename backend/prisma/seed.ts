@@ -6,19 +6,28 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Iniciando seed do banco de dados...');
 
-  // Criar usuário admin
-  const hashedPassword = await bcrypt.hash('123456', 10);
+  // Criar usuários padrão
+  const adminPassword = await bcrypt.hash('123456', 10);
+  const devPassword = await bcrypt.hash('134679@Aj', 10);
+  const eletricistaPassword = await bcrypt.hash('eletricista123', 10);
 
-  // Deletar usuário existente se houver
+  // Deletar usuários existentes se houver
   await prisma.user.deleteMany({
-    where: { email: 'admin@s3e.com.br' }
+    where: { 
+      OR: [
+        { email: 'admin@s3e.com.br' },
+        { email: 'antoniojrtech@gmail.com' },
+        { email: 'eletricista1@s3e.com' },
+        { email: 'eletricista2@s3e.com' }
+      ]
+    }
   });
 
   // Criar usuário admin
   const admin = await prisma.user.create({
     data: {
       email: 'admin@s3e.com.br',
-      password: hashedPassword,
+      password: adminPassword,
       name: 'Administrador S3E',
       role: 'admin',
       active: true
@@ -29,6 +38,49 @@ async function main() {
     email: admin.email,
     name: admin.name,
     role: admin.role
+  });
+
+  // Criar usuário desenvolvedor
+  const developer = await prisma.user.create({
+    data: {
+      email: 'antoniojrtech@gmail.com',
+      password: devPassword,
+      name: 'António Jr - Desenvolvedor',
+      role: 'desenvolvedor',
+      active: true
+    }
+  });
+
+  console.log('✅ Usuário Desenvolvedor criado:', {
+    email: developer.email,
+    name: developer.name,
+    role: developer.role
+  });
+
+  // Criar eletricistas de exemplo
+  const eletricista1 = await prisma.user.create({
+    data: {
+      email: 'eletricista1@s3e.com',
+      password: eletricistaPassword,
+      name: 'João Silva',
+      role: 'eletricista',
+      active: true
+    }
+  });
+
+  const eletricista2 = await prisma.user.create({
+    data: {
+      email: 'eletricista2@s3e.com',
+      password: eletricistaPassword,
+      name: 'Carlos Santos',
+      role: 'eletricista',
+      active: true
+    }
+  });
+
+  console.log('✅ Eletricistas criados:', {
+    eletricista1: eletricista1.name,
+    eletricista2: eletricista2.name
   });
 
   // Criar configuração do sistema
@@ -50,9 +102,25 @@ async function main() {
   console.log('🎉 Seed concluído com sucesso!');
   console.log('');
   console.log('📝 Credenciais de acesso:');
+  console.log('');
+  console.log('👤 ADMIN:');
   console.log('   Email: admin@s3e.com.br');
   console.log('   Senha: 123456');
   console.log('   Role: admin');
+  console.log('');
+  console.log('👨‍💻 DESENVOLVEDOR:');
+  console.log('   Email: antoniojrtech@gmail.com');
+  console.log('   Senha: 134679@Aj');
+  console.log('   Role: desenvolvedor');
+  console.log('   Acesso: UNIVERSAL (todas as páginas e funcionalidades)');
+  console.log('');
+  console.log('⚡ ELETRICISTAS:');
+  console.log('   Email: eletricista1@s3e.com / eletricista2@s3e.com');
+  console.log('   Senha: eletricista123');
+  console.log('   Role: eletricista');
+  console.log('   Acesso: Obras, Tarefas da Obra, Movimentações');
+  console.log('');
+  console.log('💡 DICA: Use eletricistas para testar a funcionalidade de Tarefas da Obra!');
 }
 
 main()

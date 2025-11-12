@@ -43,6 +43,13 @@ export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const userRole = (req as AuthRequest).user?.role;
     
+    // DESENVOLVEDOR tem acesso UNIVERSAL a tudo
+    if (userRole?.toLowerCase() === 'desenvolvedor') {
+      console.log('🔓 Desenvolvedor detectado - Acesso universal concedido');
+      next();
+      return;
+    }
+    
     if (!userRole || !roles.includes(userRole)) {
       res.status(403).json({ error: 'Acesso negado' });
       return;

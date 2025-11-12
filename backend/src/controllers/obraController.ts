@@ -95,6 +95,43 @@ export class ObraController {
   }
 
   /**
+   * GET /api/obras/:id
+   * Busca uma obra específica por ID
+   */
+  static async getObraPorId(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        res.status(400).json({ 
+          success: false, 
+          message: 'ID da obra é obrigatório' 
+        });
+        return;
+      }
+
+      const obra = await obraService.buscarObraPorId(id);
+
+      if (!obra) {
+        res.status(404).json({ 
+          success: false, 
+          message: 'Obra não encontrada' 
+        });
+        return;
+      }
+
+      res.status(200).json({ success: true, data: obra });
+    } catch (error: any) {
+      console.error('Erro ao buscar obra:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar obra', 
+        error: error.message 
+      });
+    }
+  }
+
+  /**
    * PUT /api/obras/:id/status
    * Atualiza status da obra (move no Kanban)
    */

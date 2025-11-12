@@ -927,70 +927,70 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                         ) : vendaDetalhada ? (
                             <>
                                 {/* Header */}
-                                <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50">
+                                <div className="modal-header bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-gray-900">Detalhes da Venda</h2>
-                                        <p className="text-sm text-gray-600 mt-1">Venda {vendaDetalhada.numeroVenda}</p>
+                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Detalhes da Venda</h2>
+                                        <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Venda {vendaDetalhada.numeroVenda}</p>
                                     </div>
                                     <button
                                         onClick={handleCloseVisualizarModal}
-                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                        className="p-2 text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text hover:bg-white/80 dark:hover:bg-white/10 rounded-xl"
                                     >
                                         <XMarkIcon className="w-6 h-6" />
                                     </button>
                                 </div>
 
                                 {/* Body */}
-                                <div className="p-6 space-y-6">
+                                <div className="modal-body space-y-6">
                                     {/* Informações da Venda */}
-                                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                                        <h3 className="font-semibold text-blue-900 mb-3">Informações da Venda</h3>
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                        <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-3">Informações da Venda</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                             <div>
-                                                <span className="text-blue-700 font-medium">Número:</span>
-                                                <p className="text-blue-900 font-semibold">{vendaDetalhada.numeroVenda}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Número:</span>
+                                                <p className="text-blue-900 dark:text-blue-300 font-semibold">{vendaDetalhada.numeroVenda}</p>
                                             </div>
                                             <div>
-                                                <span className="text-blue-700 font-medium">Data:</span>
-                                                <p className="text-blue-900">{new Date(vendaDetalhada.dataVenda).toLocaleDateString('pt-BR')}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Data:</span>
+                                                <p className="text-blue-900 dark:text-blue-300">{new Date(vendaDetalhada.dataVenda).toLocaleDateString('pt-BR')}</p>
                                             </div>
                                             <div>
-                                                <span className="text-blue-700 font-medium">Forma de Pagamento:</span>
-                                                <p className="text-blue-900">{vendaDetalhada.formaPagamento}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Forma de Pagamento:</span>
+                                                <p className="text-blue-900 dark:text-blue-300">{vendaDetalhada.formaPagamento}</p>
                                             </div>
                                             <div>
-                                                <span className="text-blue-700 font-medium">Parcelas:</span>
-                                                <p className="text-blue-900">{vendaDetalhada.parcelas}x</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Parcelas:</span>
+                                                <p className="text-blue-900 dark:text-blue-300">{vendaDetalhada.parcelas}x</p>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Informações do Cliente */}
-                                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                                        <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                                    <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl p-4">
+                                        <h3 className="font-semibold text-green-900 dark:text-green-300 mb-3 flex items-center gap-2">
                                             👤 Dados do Cliente
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                             <div>
-                                                <span className="text-green-700 font-medium">Nome:</span>
-                                                <p className="text-green-900 font-semibold">{vendaDetalhada.cliente.nome}</p>
+                                                <span className="text-green-700 dark:text-green-400 font-medium">Nome:</span>
+                                                <p className="text-green-900 dark:text-green-300 font-semibold">{vendaDetalhada.cliente.nome}</p>
                                             </div>
                                             {vendaDetalhada.cliente.telefone && (
                                                 <div>
-                                                    <span className="text-green-700 font-medium">Telefone:</span>
-                                                    <p className="text-green-900">{vendaDetalhada.cliente.telefone}</p>
+                                                    <span className="text-green-700 dark:text-green-400 font-medium">Telefone:</span>
+                                                    <p className="text-green-900 dark:text-green-300">{vendaDetalhada.cliente.telefone}</p>
                                                 </div>
                                             )}
                                             {vendaDetalhada.cliente.email && (
                                                 <div>
-                                                    <span className="text-green-700 font-medium">Email:</span>
-                                                    <p className="text-green-900">{vendaDetalhada.cliente.email}</p>
+                                                    <span className="text-green-700 dark:text-green-400 font-medium">Email:</span>
+                                                    <p className="text-green-900 dark:text-green-300">{vendaDetalhada.cliente.email}</p>
                                                 </div>
                                             )}
                                             {vendaDetalhada.cliente.endereco && (
                                                 <div className="md:col-span-2">
-                                                    <span className="text-green-700 font-medium">Endereço:</span>
-                                                    <p className="text-green-900">
+                                                    <span className="text-green-700 dark:text-green-400 font-medium">Endereço:</span>
+                                                    <p className="text-green-900 dark:text-green-300">
                                                         {vendaDetalhada.cliente.endereco}
                                                         {vendaDetalhada.cliente.cidade && `, ${vendaDetalhada.cliente.cidade}`}
                                                         {vendaDetalhada.cliente.estado && ` - ${vendaDetalhada.cliente.estado}`}
@@ -1003,17 +1003,17 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
 
                                     {/* Informações da Obra */}
                                     {vendaDetalhada.obra && (
-                                        <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
-                                            <h3 className="font-semibold text-orange-900 mb-3 flex items-center gap-2">
+                                        <div className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-200 dark:border-orange-800 rounded-xl p-4">
+                                            <h3 className="font-semibold text-orange-900 dark:text-orange-300 mb-3 flex items-center gap-2">
                                                 🏗️ Status da Obra
                                             </h3>
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                                 <div>
-                                                    <span className="text-orange-700 font-medium">Nome da Obra:</span>
-                                                    <p className="text-orange-900 font-semibold">{vendaDetalhada.obra.nomeObra}</p>
+                                                    <span className="text-orange-700 dark:text-orange-400 font-medium">Nome da Obra:</span>
+                                                    <p className="text-orange-900 dark:text-orange-300 font-semibold">{vendaDetalhada.obra.nomeObra}</p>
                                                 </div>
                                                 <div>
-                                                    <span className="text-orange-700 font-medium">Status:</span>
+                                                    <span className="text-orange-700 dark:text-orange-400 font-medium">Status:</span>
                                                     <div className="mt-1">
                                                         {(() => {
                                                             const statusObra = getStatusObraDisplay(vendaDetalhada.obra.status);

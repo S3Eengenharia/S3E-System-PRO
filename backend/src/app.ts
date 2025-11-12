@@ -42,6 +42,9 @@ import veiculosRoutes from './routes/veiculos.routes.js';
 import gastosVeiculoRoutes from './routes/gastosVeiculo.routes.js';
 import planosRoutes from './routes/planos.routes.js';
 import despesasFixasRoutes from './routes/despesasFixas.routes.js';
+import logsRoutes from './routes/logs.js';
+import tarefasObraRoutes from './routes/tarefasObra.js';
+import { healthCheck } from './controllers/logsController.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -85,7 +88,8 @@ app.use('/uploads', express.static(uploadsPath));
 const uploadRoutes = [
   '/api/comparacao-precos/upload-csv',
   '/api/comparacao-precos/validate-csv',
-  '/api/configuracoes/upload-logo'
+  '/api/configuracoes/upload-logo',
+  '/api/obras/tarefas/resumo' // Rota de upload de fotos de tarefas
 ];
 
 // Body parsers COM EXCEÇÃO para rotas de upload
@@ -112,9 +116,7 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+app.get('/api/health', healthCheck);
 
 // API routes
 app.get('/api', (_req, res) => {
@@ -152,7 +154,9 @@ app.get('/api', (_req, res) => {
       veiculos: '/api/veiculos',
       gastosVeiculo: '/api/gastos-veiculo',
       planos: '/api/planos',
-      despesasFixas: '/api/despesas-fixas'
+      despesasFixas: '/api/despesas-fixas',
+      logs: '/api/logs',
+      tarefasObra: '/api/obras/tarefas'
     }
   });
 });
@@ -183,6 +187,7 @@ app.use('/api/empresas', empresasRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/quadros', quadrosRoutes);
 app.use('/api/configuracoes', configuracaoRoutes);
+app.use('/api/obras', tarefasObraRoutes); // Rotas de tarefas (prefixo /api/obras) - DEVE VIR ANTES!
 app.use('/api/obras', obraRoutes);
 app.use('/api/pdf-customization', pdfCustomizationRoutes);
 app.use('/api/funcionarios', funcionariosRoutes);
@@ -191,6 +196,7 @@ app.use('/api/veiculos', veiculosRoutes);
 app.use('/api/gastos-veiculo', gastosVeiculoRoutes);
 app.use('/api/planos', planosRoutes);
 app.use('/api/despesas-fixas', despesasFixasRoutes);
+app.use('/api/logs', logsRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

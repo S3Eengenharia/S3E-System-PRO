@@ -1021,146 +1021,146 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     // Renderizar página de ajuda (Como funcionam as métricas)
     const renderAjuda = () => (
         <div className="space-y-6">
-            <div className="bg-white p-8 rounded-2xl shadow-soft border border-gray-100">
+            <div className="card-primary p-8 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
                         <span className="text-2xl">📚</span>
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Como Funcionam as Métricas de Vendas</h2>
-                        <p className="text-gray-600">Entenda cada indicador e como são calculados</p>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Como Funcionam as Métricas de Vendas</h2>
+                        <p className="text-gray-600 dark:text-dark-text-secondary">Entenda cada indicador e como são calculados</p>
                     </div>
                 </div>
 
                 <div className="space-y-6">
                     {/* Total em Vendas */}
-                    <div className="border-l-4 border-green-500 bg-green-50 p-6 rounded-r-xl">
+                    <div className="border-l-4 border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-900/20 p-6 rounded-r-xl">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                                <CurrencyDollarIcon className="w-6 h-6 text-green-600" />
+                            <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                                <CurrencyDollarIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
                             </div>
-                            <h3 className="text-xl font-bold text-green-900">💰 Total em Vendas</h3>
+                            <h3 className="text-xl font-bold text-green-900 dark:text-green-300">💰 Total em Vendas</h3>
                         </div>
-                        <p className="text-gray-700 mb-3">
-                            <strong>O que é:</strong> Soma de TODOS os valores de vendas realizadas no mês atual.
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-green-300">O que é:</strong> Soma de TODOS os valores de vendas realizadas no mês atual.
                         </p>
-                        <p className="text-gray-700 mb-3">
-                            <strong>Como é calculado:</strong>
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-green-300">Como é calculado:</strong>
                         </p>
-                        <div className="bg-white p-4 rounded-lg border border-green-200 font-mono text-sm">
-                            Total = Venda₁ + Venda₂ + Venda₃ + ... + Vendaₙ
+                        <div className="card-secondary p-4 rounded-lg border border-green-200 dark:border-green-800 font-mono text-sm">
+                            <code className="text-gray-900 dark:text-dark-text">Total = Venda₁ + Venda₂ + Venda₃ + ... + Vendaₙ</code>
                         </div>
-                        <p className="text-gray-700 mt-3">
-                            <strong>Exemplo:</strong> Se você fez 3 vendas de R$ 5.000, R$ 3.200 e R$ 1.800, o total será R$ 10.000.
+                        <p className="text-gray-700 dark:text-dark-text mt-3">
+                            <strong className="dark:text-green-300">Exemplo:</strong> Se você fez 3 vendas de R$ 5.000, R$ 3.200 e R$ 1.800, o total será R$ 10.000.
                         </p>
-                        <div className="mt-4 bg-green-100 p-3 rounded-lg">
-                            <p className="text-sm text-green-800">
+                        <div className="mt-4 bg-green-100 dark:bg-green-900/30 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                            <p className="text-sm text-green-800 dark:text-green-300">
                                 ✅ <strong>Atualização:</strong> Essa métrica atualiza automaticamente em tempo real sempre que uma nova venda é registrada!
                             </p>
                         </div>
                     </div>
 
                     {/* Vendas no Mês */}
-                    <div className="border-l-4 border-blue-500 bg-blue-50 p-6 rounded-r-xl">
+                    <div className="border-l-4 border-blue-500 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 p-6 rounded-r-xl">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                                <ChartBarIcon className="w-6 h-6 text-blue-600" />
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                                <ChartBarIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <h3 className="text-xl font-bold text-blue-900">📊 Vendas no Mês</h3>
+                            <h3 className="text-xl font-bold text-blue-900 dark:text-blue-300">📊 Vendas no Mês</h3>
                         </div>
-                        <p className="text-gray-700 mb-3">
-                            <strong>O que é:</strong> Quantidade total de vendas fechadas no mês atual.
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-blue-300">O que é:</strong> Quantidade total de vendas fechadas no mês atual.
                         </p>
-                        <p className="text-gray-700 mb-3">
-                            <strong>Como é calculado:</strong>
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-blue-300">Como é calculado:</strong>
                         </p>
-                        <div className="bg-white p-4 rounded-lg border border-blue-200 font-mono text-sm">
-                            Vendas no Mês = Contagem de todas as vendas registradas
+                        <div className="card-secondary p-4 rounded-lg border border-blue-200 dark:border-blue-800 font-mono text-sm">
+                            <code className="text-gray-900 dark:text-dark-text">Vendas no Mês = Contagem de todas as vendas registradas</code>
                         </div>
-                        <p className="text-gray-700 mt-3">
-                            <strong>Exemplo:</strong> Se você registrou 15 vendas este mês, o valor será 15.
+                        <p className="text-gray-700 dark:text-dark-text mt-3">
+                            <strong className="dark:text-blue-300">Exemplo:</strong> Se você registrou 15 vendas este mês, o valor será 15.
                         </p>
                     </div>
 
                     {/* Ticket Médio */}
-                    <div className="border-l-4 border-purple-500 bg-purple-50 p-6 rounded-r-xl">
+                    <div className="border-l-4 border-purple-500 dark:border-purple-600 bg-purple-50 dark:bg-purple-900/20 p-6 rounded-r-xl">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                                <DocumentTextIcon className="w-6 h-6 text-purple-600" />
+                            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center">
+                                <DocumentTextIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                             </div>
-                            <h3 className="text-xl font-bold text-purple-900">🎫 Ticket Médio</h3>
+                            <h3 className="text-xl font-bold text-purple-900 dark:text-purple-300">🎫 Ticket Médio</h3>
                         </div>
-                        <p className="text-gray-700 mb-3">
-                            <strong>O que é:</strong> Valor médio de cada venda realizada no mês.
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-purple-300">O que é:</strong> Valor médio de cada venda realizada no mês.
                         </p>
-                        <p className="text-gray-700 mb-3">
-                            <strong>Como é calculado:</strong>
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-purple-300">Como é calculado:</strong>
                         </p>
-                        <div className="bg-white p-4 rounded-lg border border-purple-200 font-mono text-sm">
-                            Ticket Médio = Total em Vendas ÷ Vendas no Mês
+                        <div className="card-secondary p-4 rounded-lg border border-purple-200 dark:border-purple-800 font-mono text-sm">
+                            <code className="text-gray-900 dark:text-dark-text">Ticket Médio = Total em Vendas ÷ Vendas no Mês</code>
                         </div>
-                        <p className="text-gray-700 mt-3">
-                            <strong>Exemplo:</strong> Se você faturou R$ 10.000 em 5 vendas, o ticket médio é R$ 2.000.
+                        <p className="text-gray-700 dark:text-dark-text mt-3">
+                            <strong className="dark:text-purple-300">Exemplo:</strong> Se você faturou R$ 10.000 em 5 vendas, o ticket médio é R$ 2.000.
                         </p>
-                        <div className="mt-4 bg-purple-100 p-3 rounded-lg">
-                            <p className="text-sm text-purple-800">
+                        <div className="mt-4 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <p className="text-sm text-purple-800 dark:text-purple-300">
                                 💡 <strong>Dica:</strong> Um ticket médio alto indica vendas de maior valor. Use isso para estratégias comerciais!
                             </p>
                         </div>
                     </div>
 
                     {/* Meta do Mês */}
-                    <div className="border-l-4 border-orange-500 bg-orange-50 p-6 rounded-r-xl">
+                    <div className="border-l-4 border-orange-500 dark:border-orange-600 bg-orange-50 dark:bg-orange-900/20 p-6 rounded-r-xl">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
                                 <span className="text-2xl">🎯</span>
                             </div>
-                            <h3 className="text-xl font-bold text-orange-900">🎯 Meta do Mês</h3>
+                            <h3 className="text-xl font-bold text-orange-900 dark:text-orange-300">🎯 Meta do Mês</h3>
                         </div>
-                        <p className="text-gray-700 mb-3">
-                            <strong>O que é:</strong> Objetivo de faturamento definido para o mês atual.
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-orange-300">O que é:</strong> Objetivo de faturamento definido para o mês atual.
                         </p>
-                        <p className="text-gray-700 mb-3">
-                            <strong>Como é definida:</strong>
+                        <p className="text-gray-700 dark:text-dark-text mb-3">
+                            <strong className="dark:text-orange-300">Como é definida:</strong>
                         </p>
-                        <div className="bg-white p-4 rounded-lg border border-orange-200">
-                            <p className="text-gray-700">
-                                A meta é configurada manualmente por Administradores ou Gerentes na aba <strong>"⚙️ Configurações"</strong>.
+                        <div className="card-secondary p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <p className="text-gray-700 dark:text-dark-text">
+                                A meta é configurada manualmente por Administradores ou Gerentes na aba <strong className="dark:text-orange-300">"⚙️ Configurações"</strong>.
                                 O valor padrão é R$ 100.000,00, mas pode ser ajustado conforme a estratégia da empresa.
                             </p>
                         </div>
-                        <p className="text-gray-700 mt-3">
-                            <strong>Progresso:</strong>
+                        <p className="text-gray-700 dark:text-dark-text mt-3">
+                            <strong className="dark:text-orange-300">Progresso:</strong>
                         </p>
-                        <div className="bg-white p-4 rounded-lg border border-orange-200 font-mono text-sm">
-                            Percentual = (Total em Vendas ÷ Meta do Mês) × 100%
+                        <div className="card-secondary p-4 rounded-lg border border-orange-200 dark:border-orange-800 font-mono text-sm">
+                            <code className="text-gray-900 dark:text-dark-text">Percentual = (Total em Vendas ÷ Meta do Mês) × 100%</code>
                         </div>
-                        <div className="mt-4 bg-orange-100 p-3 rounded-lg">
-                            <p className="text-sm text-orange-800">
+                        <div className="mt-4 bg-orange-100 dark:bg-orange-900/30 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <p className="text-sm text-orange-800 dark:text-orange-300">
                                 🔥 <strong>Meta Alcançada:</strong> Quando você atingir 100% da meta, a barra de progresso ficará verde!
                             </p>
                         </div>
                     </div>
 
                     {/* Resumo Rápido */}
-                    <div className="bg-gradient-to-r from-gray-50 to-slate-50 border-2 border-gray-200 p-6 rounded-xl">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">📋 Resumo das Fórmulas</h3>
+                    <div className="bg-gradient-to-r from-gray-50 to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-gray-200 dark:border-dark-border p-6 rounded-xl">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">📋 Resumo das Fórmulas</h3>
                         <div className="space-y-3">
-                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
-                                <span className="text-green-600 font-bold min-w-[160px]">Total em Vendas:</span>
-                                <code className="text-sm text-gray-700">Σ (valor de cada venda)</code>
+                            <div className="flex items-center gap-3 card-primary p-3 rounded-lg border border-gray-200 dark:border-dark-border">
+                                <span className="text-green-600 dark:text-green-400 font-bold min-w-[160px]">Total em Vendas:</span>
+                                <code className="text-sm text-gray-700 dark:text-dark-text">Σ (valor de cada venda)</code>
                             </div>
-                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
-                                <span className="text-blue-600 font-bold min-w-[160px]">Vendas no Mês:</span>
-                                <code className="text-sm text-gray-700">COUNT(vendas)</code>
+                            <div className="flex items-center gap-3 card-primary p-3 rounded-lg border border-gray-200 dark:border-dark-border">
+                                <span className="text-blue-600 dark:text-blue-400 font-bold min-w-[160px]">Vendas no Mês:</span>
+                                <code className="text-sm text-gray-700 dark:text-dark-text">COUNT(vendas)</code>
                             </div>
-                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
-                                <span className="text-purple-600 font-bold min-w-[160px]">Ticket Médio:</span>
-                                <code className="text-sm text-gray-700">Total ÷ Vendas no Mês</code>
+                            <div className="flex items-center gap-3 card-primary p-3 rounded-lg border border-gray-200 dark:border-dark-border">
+                                <span className="text-purple-600 dark:text-purple-400 font-bold min-w-[160px]">Ticket Médio:</span>
+                                <code className="text-sm text-gray-700 dark:text-dark-text">Total ÷ Vendas no Mês</code>
                             </div>
-                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg">
-                                <span className="text-orange-600 font-bold min-w-[160px]">Progresso da Meta:</span>
-                                <code className="text-sm text-gray-700">(Total ÷ Meta) × 100%</code>
+                            <div className="flex items-center gap-3 card-primary p-3 rounded-lg border border-gray-200 dark:border-dark-border">
+                                <span className="text-orange-600 dark:text-orange-400 font-bold min-w-[160px]">Progresso da Meta:</span>
+                                <code className="text-sm text-gray-700 dark:text-dark-text">(Total ÷ Meta) × 100%</code>
                             </div>
                         </div>
                     </div>

@@ -51,5 +51,21 @@ router.get(
     RelatoriosController.getTopClientes
 );
 
+// Obter dados do relatório financeiro em JSON (admin, gerente, desenvolvedor)
+router.get(
+    '/financeiro/dados',
+    authenticate,
+    authorize('admin', 'gerente', 'desenvolvedor'),
+    RelatoriosController.getDadosRelatorioFinanceiro
+);
+
+// Exportar relatório financeiro em PDF ou Excel (admin, gerente, desenvolvedor)
+router.get(
+    '/financeiro/exportar',
+    authenticate,
+    authorize('admin', 'gerente', 'desenvolvedor'),
+    RelatoriosController.exportarRelatorioFinanceiro
+);
+
 export default router;
 

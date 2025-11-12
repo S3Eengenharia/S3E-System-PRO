@@ -150,12 +150,18 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
     const carregarProjetosValidados = async () => {
         try {
-            const response = await projetosService.listar({ status: 'VALIDADO' });
+            // Buscar TODOS os projetos (exceto concluídos e cancelados)
+            const response = await projetosService.listar();
             if (response.success && response.data) {
-                setProjetosValidados(Array.isArray(response.data) ? response.data : []);
+                const projetosArray = Array.isArray(response.data) ? response.data : [];
+                // Filtrar projetos concluídos e cancelados (todos os outros podem gerar obras)
+                const projetosDisponiveis = projetosArray.filter((p: Projeto) => 
+                    p.status !== 'CONCLUIDO' && p.status !== 'CANCELADO'
+                );
+                setProjetosValidados(projetosDisponiveis);
             }
         } catch (error) {
-            console.error('Erro ao carregar projetos validados:', error);
+            console.error('Erro ao carregar projetos disponíveis:', error);
             setProjetosValidados([]);
         }
     };
@@ -452,74 +458,74 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
             {/* Cards de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center">
-                            <BuildingOffice2Icon className="w-6 h-6 text-amber-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/40 flex items-center justify-center">
+                            <BuildingOffice2Icon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Total de Obras</p>
-                            <p className="text-2xl font-bold text-amber-600">{stats.total}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Total de Obras</p>
+                            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.total}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/40 dark:to-blue-800/40 flex items-center justify-center">
                             <span className="text-2xl">📋</span>
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Planejamento</p>
-                            <p className="text-2xl font-bold text-blue-600">{stats.planejamento}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Planejamento</p>
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.planejamento}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-100 to-yellow-200 flex items-center justify-center">
-                            <Cog6ToothIcon className="w-6 h-6 text-yellow-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/40 flex items-center justify-center">
+                            <Cog6ToothIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Em Execução</p>
-                            <p className="text-2xl font-bold text-yellow-600">{stats.execucao}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Em Execução</p>
+                            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.execucao}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
-                            <CheckBadgeIcon className="w-6 h-6 text-purple-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/40 dark:to-purple-800/40 flex items-center justify-center">
+                            <CheckBadgeIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Controle Qualidade</p>
-                            <p className="text-2xl font-bold text-purple-600">{stats.controleQualidade}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Controle Qualidade</p>
+                            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.controleQualidade}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
-                            <CheckCircleIcon className="w-6 h-6 text-green-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/40 dark:to-green-800/40 flex items-center justify-center">
+                            <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Concluídas</p>
-                            <p className="text-2xl font-bold text-green-600">{stats.concluidos}</p>
+                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Concluídas</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.concluidos}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
+                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40 flex items-center justify-center">
                             <span className="text-2xl">💰</span>
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Valor Total</p>
-                            <p className="text-2xl font-bold text-emerald-600">
+                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Valor Total</p>
+                            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                                 R$ {(stats.valorTotal / 1000).toFixed(0)}K
                             </p>
                         </div>
@@ -528,17 +534,17 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
             </div>
 
             {/* Filtros */}
-            <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 mb-6">
+            <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2">
                         <div className="relative">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
                             <input
                                 type="text"
                                 placeholder="Buscar por título, cliente ou endereço..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                className="input-field w-full pl-10"
                             />
                         </div>
                     </div>
@@ -547,7 +553,7 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as ProjectStatus | 'Todos')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                            className="select-field w-full"
                         >
                             <option value="Todos">Todos os Status</option>
                             <option value={ProjectStatus.Planejamento}>Planejamento</option>
@@ -559,25 +565,25 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                 </div>
 
                 <div className="mt-4 flex items-center justify-between">
-                    <p className="text-sm text-gray-600">
-                        Exibindo <span className="font-bold text-gray-900">{filteredProjects.length}</span> de <span className="font-bold text-gray-900">{projects.length}</span> obras
+                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                        Exibindo <span className="font-bold text-gray-900 dark:text-dark-text">{filteredProjects.length}</span> de <span className="font-bold text-gray-900 dark:text-dark-text">{projects.length}</span> obras
                     </p>
                 </div>
             </div>
 
             {/* Grid de Obras */}
             {loading ? (
-                <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-16 text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-amber-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Carregando obras...</p>
+                <div className="card-primary rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border p-16 text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-amber-600 dark:border-amber-400 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-dark-text-secondary">Carregando obras...</p>
                 </div>
             ) : filteredProjects.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-16 text-center">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="card-primary rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border p-16 text-center">
+                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                         <span className="text-4xl">🏗️</span>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra encontrada</h3>
-                    <p className="text-gray-500 mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-2">Nenhuma obra encontrada</h3>
+                    <p className="text-gray-500 dark:text-dark-text-secondary mb-6">
                         {searchTerm || statusFilter !== 'Todos'
                             ? 'Tente ajustar os filtros de busca'
                             : 'Comece criando sua primeira obra'}
@@ -585,7 +591,7 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                     {!searchTerm && statusFilter === 'Todos' && (
                         <button
                             onClick={() => handleOpenModal()}
-                            className="bg-gradient-to-r from-amber-600 to-amber-500 text-white px-6 py-3 rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold"
+                            className="bg-gradient-to-r from-amber-600 to-amber-500 dark:from-amber-700 dark:to-amber-600 text-white px-6 py-3 rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold"
                         >
                             <PlusIcon className="w-5 h-5 inline mr-2" />
                             Criar Primeira Obra
@@ -595,16 +601,16 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredProjects.map((project) => (
-                        <div key={project.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-amber-300 transition-all duration-200">
+                        <div key={project.id} className="card-primary border border-gray-200 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-amber-300 dark:hover:border-amber-600 transition-all duration-200">
                             {/* Header do Card */}
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-lg text-gray-900 mb-1 line-clamp-2">{project.titulo}</h3>
+                                    <h3 className="font-bold text-lg text-gray-900 dark:text-dark-text mb-1 line-clamp-2">{project.titulo}</h3>
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className={`px-3 py-1 text-xs font-bold rounded-lg ${getStatusClass(project.status)}`}>
                                             {getStatusIcon(project.status)} {project.status}
                                         </span>
-                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-gray-100 text-gray-800 ring-1 ring-gray-200">
+                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 ring-1 ring-gray-200 dark:ring-gray-700">
                                             {getTypeIcon(project.tipo)} {project.tipo}
                                         </span>
                                     </div>
@@ -613,19 +619,19 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
                             {/* Informações */}
                             <div className="space-y-2 mb-4">
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-dark-text-secondary">
                                     <span>👤</span>
                                     <span className="truncate">{project.cliente.nome}</span>
                                 </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-dark-text-secondary">
                                     <span>📍</span>
                                     <span className="truncate">{project.endereco}</span>
                                 </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-dark-text-secondary">
                                     <span>👷</span>
                                     <span className="truncate">{project.responsavel.nome}</span>
                                 </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-dark-text-secondary">
                                     <UserGroupIcon className="w-4 h-4" />
                                     <span>{project.equipe.length} pessoas na equipe</span>
                                 </div>
@@ -634,10 +640,10 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                             {/* Progresso */}
                             <div className="mb-4">
                                 <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-medium text-gray-600">Progresso</span>
-                                    <span className="text-sm font-bold text-gray-900">{project.progresso}%</span>
+                                    <span className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Progresso</span>
+                                    <span className="text-sm font-bold text-gray-900 dark:text-dark-text">{project.progresso}%</span>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                     <div 
                                         className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(project.progresso)}`}
                                         style={{ width: `${project.progresso}%` }}
@@ -647,39 +653,39 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
                             {/* Valor e Prazo */}
                             <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div className="bg-gray-50 p-3 rounded-xl">
-                                    <p className="text-xs text-gray-600 mb-1">Orçamento</p>
-                                    <p className="font-bold text-amber-700">
+                                <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <p className="text-xs text-gray-600 dark:text-dark-text-secondary mb-1">Orçamento</p>
+                                    <p className="font-bold text-amber-700 dark:text-amber-400">
                                         R$ {project.orcamento.toLocaleString('pt-BR')}
                                     </p>
                                 </div>
-                                <div className="bg-gray-50 p-3 rounded-xl">
-                                    <p className="text-xs text-gray-600 mb-1">Prazo</p>
-                                    <p className="font-bold text-gray-900">
+                                <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <p className="text-xs text-gray-600 dark:text-dark-text-secondary mb-1">Prazo</p>
+                                    <p className="font-bold text-gray-900 dark:text-dark-text">
                                         {new Date(project.dataFim).toLocaleDateString('pt-BR')}
                                     </p>
                                 </div>
                             </div>
 
                             {/* Botões de Ação */}
-                            <div className="flex gap-2 pt-4 border-t border-gray-100">
+                            <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-dark-border">
                                 <button
                                     onClick={() => setSelectedProject(project)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-semibold"
                                 >
                                     <EyeIcon className="w-4 h-4" />
                                     Ver
                                 </button>
                                 <button
                                     onClick={() => handleOpenModal(project)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-semibold"
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors text-sm font-semibold"
                                 >
                                     <PencilIcon className="w-4 h-4" />
                                     Editar
                                 </button>
                                 <button
                                     onClick={() => { setProjetoSelecionadoId(project.id); setIsAlocacaoModalOpen(true); }}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-semibold"
+                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-sm font-semibold"
                                 >
                                     📅 Alocar Equipe
                                 </button>
@@ -692,61 +698,63 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
             {/* MODAL DE VISUALIZAÇÃO */}
             {selectedProject && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-amber-50">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900">Detalhes da Obra</h2>
-                                <p className="text-sm text-gray-600 mt-1">{selectedProject.titulo}</p>
+                    <div className="modal-content max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="modal-header bg-gradient-to-r from-gray-50 to-amber-50 dark:from-gray-800 dark:to-amber-900/30">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Detalhes da Obra</h2>
+                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">{selectedProject.titulo}</p>
+                                </div>
+                                <button onClick={() => setSelectedProject(null)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white/80 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
                             </div>
-                            <button onClick={() => setSelectedProject(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
-                                <XMarkIcon className="w-6 h-6" />
-                            </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        <div className="modal-body space-y-6">
                             {/* Informações Básicas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Cliente</h3>
-                                    <p className="text-gray-900 font-medium">{selectedProject.cliente.nome}</p>
+                                <div className="card-secondary p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Cliente</h3>
+                                    <p className="text-gray-900 dark:text-dark-text font-medium">{selectedProject.cliente.nome}</p>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Status</h3>
+                                <div className="card-secondary p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Status</h3>
                                     <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getStatusClass(selectedProject.status)}`}>
                                         {getStatusIcon(selectedProject.status)} {selectedProject.status}
                                     </span>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Tipo</h3>
-                                    <span className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-100 text-gray-800 ring-1 ring-gray-200">
+                                <div className="card-secondary p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Tipo</h3>
+                                    <span className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 ring-1 ring-gray-200 dark:ring-gray-700">
                                         {getTypeIcon(selectedProject.tipo)} {selectedProject.tipo}
                                     </span>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Responsável</h3>
-                                    <p className="text-gray-900 font-medium">{selectedProject.responsavel.nome}</p>
+                                <div className="card-secondary p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Responsável</h3>
+                                    <p className="text-gray-900 dark:text-dark-text font-medium">{selectedProject.responsavel.nome}</p>
                                 </div>
                             </div>
 
                             {/* Progresso e Orçamento */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Progresso</h3>
+                                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Progresso</h3>
                                     <div className="flex items-center gap-4">
                                         <div className="flex-1">
-                                            <div className="w-full bg-gray-200 rounded-full h-3">
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                                                 <div 
                                                     className={`h-3 rounded-full ${getProgressColor(selectedProject.progresso)}`}
                                                     style={{ width: `${selectedProject.progresso}%` }}
                                                 />
                                             </div>
                                         </div>
-                                        <span className="text-2xl font-bold text-amber-700">{selectedProject.progresso}%</span>
+                                        <span className="text-2xl font-bold text-amber-700 dark:text-amber-400">{selectedProject.progresso}%</span>
                                     </div>
                                 </div>
-                                <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Orçamento</h3>
-                                    <p className="text-3xl font-bold text-green-700">
+                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Orçamento</h3>
+                                    <p className="text-3xl font-bold text-green-700 dark:text-green-400">
                                         R$ {selectedProject.orcamento.toLocaleString('pt-BR')}
                                     </p>
                                 </div>
@@ -754,42 +762,41 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
                             {/* Descrição e Endereço */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Descrição</h3>
-                                    <p className="text-gray-700">{selectedProject.descricao}</p>
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Descrição</h3>
+                                    <p className="text-gray-700 dark:text-dark-text-secondary">{selectedProject.descricao}</p>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Endereço</h3>
-                                    <p className="text-gray-700">{selectedProject.endereco}</p>
+                                <div className="card-secondary p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Endereço</h3>
+                                    <p className="text-gray-700 dark:text-dark-text-secondary">{selectedProject.endereco}</p>
                                 </div>
                             </div>
 
                             {/* Equipe */}
-                            <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl">
-                                <h3 className="font-semibold text-gray-800 mb-3">Equipe do Projeto</h3>
+                            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 p-4 rounded-xl">
+                                <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-3">Equipe do Projeto</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {selectedProject.equipe.map((member) => (
-                                        <div key={member.id} className="flex items-center gap-3 bg-white p-3 rounded-lg">
-                                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                                                <span className="text-purple-600 font-bold text-sm">
+                                        <div key={member.id} className="flex items-center gap-3 card-primary p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center">
+                                                <span className="text-purple-600 dark:text-purple-400 font-bold text-sm">
                                                     {member.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                                                 </span>
                                             </div>
                                             <div>
-                                                <p className="font-medium text-gray-900">{member.name}</p>
-                                                <p className="text-sm text-gray-600">{member.role}</p>
+                                                <p className="font-medium text-gray-900 dark:text-dark-text">{member.name}</p>
+                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary">{member.role}</p>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Timeline/Gantt de Alocações */
-                            }
-                            <div className="bg-white border border-gray-200 p-4 rounded-xl">
-                                <h3 className="font-semibold text-gray-800 mb-3">Cronograma de Alocações</h3>
+                            {/* Timeline/Gantt de Alocações */}
+                            <div className="card-primary border border-gray-200 dark:border-dark-border p-4 rounded-xl">
+                                <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-3">Cronograma de Alocações</h3>
                                 {ganttItems.length === 0 || !ganttRange ? (
-                                    <p className="text-sm text-gray-500">Sem alocações para este projeto.</p>
+                                    <p className="text-sm text-gray-500 dark:text-dark-text-secondary">Sem alocações para este projeto.</p>
                                 ) : (
                                     <GanttChart
                                         items={ganttItems}
@@ -804,9 +811,9 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
                             {/* Observações */}
                             {selectedProject.observacoes && (
-                                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Observações</h3>
-                                    <p className="text-gray-700">{selectedProject.observacoes}</p>
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-dark-text mb-2">Observações</h3>
+                                    <p className="text-gray-700 dark:text-dark-text-secondary">{selectedProject.observacoes}</p>
                                 </div>
                             )}
                         </div>
@@ -817,57 +824,59 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
             {/* MODAL DE CRIAÇÃO/EDIÇÃO DE OBRA */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
+                    <div className="modal-content max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-slide-in-up">
                         {/* Header do Modal */}
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-amber-600 to-amber-500">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                    <BuildingOffice2Icon className="w-7 h-7 text-white" />
+                        <div className="modal-header bg-gradient-to-r from-amber-600 to-amber-500 dark:from-amber-700 dark:to-amber-600">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                        <BuildingOffice2Icon className="w-7 h-7 text-white" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-white">
+                                            Gerar Nova Obra
+                                        </h2>
+                                        <p className="text-sm text-white/80 mt-1">
+                                            Gere uma obra de campo a partir de um projeto validado
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h2 className="text-2xl font-bold text-white">
-                                        Gerar Nova Obra
-                                    </h2>
-                                    <p className="text-sm text-white/80 mt-1">
-                                        Gere uma obra de campo a partir de um projeto validado
-                                    </p>
-                                </div>
+                                <button
+                                    onClick={handleCloseModal}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
                             </div>
-                            <button
-                                onClick={handleCloseModal}
-                                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
-                            >
-                                <XMarkIcon className="w-6 h-6" />
-                            </button>
                         </div>
 
                         {/* Formulário */}
-                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                        <form onSubmit={handleSubmit} className="modal-body space-y-6">
                             {/* Alerta informativo sobre o fluxo */}
-                            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl p-4">
                                 <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0 mt-0.5">
-                                        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
                                     <div className="flex-1">
-                                        <h4 className="text-sm font-semibold text-amber-900 mb-1">📋 Fluxo do Sistema</h4>
-                                        <p className="text-sm text-amber-800">
+                                        <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-300 mb-1">📋 Fluxo do Sistema</h4>
+                                        <p className="text-sm text-amber-800 dark:text-amber-300">
                                             <strong>Orçamento</strong> → <strong>Projeto</strong> → <strong>Obra (Produção de Campo)</strong>
                                         </p>
-                                        <p className="text-xs text-amber-700 mt-2">
-                                            Obras só podem ser criadas a partir de projetos validados. O projeto representa a parte administrativa/documental, e a obra é a execução no campo.
+                                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                                            Obras são criadas a partir de projetos. O projeto representa a parte administrativa/documental, e a obra é a execução no campo. Apenas projetos concluídos não aparecem nesta lista.
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="space-y-4">
-                                {/* Projeto Validado - OBRIGATÓRIO */}
+                                {/* Projeto - OBRIGATÓRIO */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Projeto Validado * <span className="text-red-500">(Obrigatório)</span>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                        Projeto * <span className="text-red-500 dark:text-red-400">(Obrigatório)</span>
                                     </label>
                                     <select
                                         value={formState.projetoId || ''}
@@ -885,22 +894,22 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                             }
                                         }}
                                         required
-                                        className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        className="select-field border-2 border-amber-300 dark:border-amber-700"
                                     >
-                                        <option value="">Selecione um projeto validado</option>
+                                        <option value="">Selecione um projeto</option>
                                         {projetosValidados.map(projeto => (
                                             <option key={projeto.id} value={projeto.id}>
-                                                {projeto.titulo} - Cliente: {projeto.cliente?.nome}
+                                                {projeto.titulo} - Cliente: {projeto.cliente?.nome} ({projeto.status})
                                             </option>
                                         ))}
                                     </select>
                                     {projetosValidados.length === 0 && (
-                                        <p className="text-xs text-red-600 mt-2 font-semibold">
-                                            ❌ Nenhum projeto validado encontrado. Você precisa criar e validar um projeto antes de gerar uma obra.
+                                        <p className="text-xs text-red-600 dark:text-red-400 mt-2 font-semibold">
+                                            ❌ Nenhum projeto disponível. Crie um projeto primeiro ou verifique se todos os projetos já foram transformados em obras.
                                         </p>
                                     )}
                                     {formState.projetoId && (
-                                        <p className="text-xs text-green-600 mt-2 font-semibold">
+                                        <p className="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
                                             ✅ A obra será gerada a partir deste projeto e adicionada ao Kanban de Obras.
                                         </p>
                                     )}
@@ -908,33 +917,33 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
 
                                 {/* Nome da Obra - OPCIONAL */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Nome da Obra (Opcional)
                                     </label>
                                     <input
                                         type="text"
                                         value={formState.nomeObra || ''}
                                         onChange={(e) => setFormState({...formState, nomeObra: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                        className="input-field"
                                         placeholder="Deixe em branco para usar o título do projeto"
                                     />
-                                    <p className="text-xs text-gray-500 mt-1">
+                                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
                                         Se deixar em branco, o nome será o mesmo do projeto selecionado.
                                     </p>
                                 </div>
                             </div>
 
                             {/* Informação Adicional */}
-                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
                                 <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0 mt-0.5">
-                                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
                                     <div className="flex-1">
-                                        <h4 className="text-sm font-semibold text-blue-900 mb-1">💡 Próximos Passos</h4>
-                                        <p className="text-sm text-blue-800">
+                                        <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">💡 Próximos Passos</h4>
+                                        <p className="text-sm text-blue-800 dark:text-blue-300">
                                             Após criar a obra, você poderá alocar equipes de eletricistas, gerenciar materiais e acompanhar o progresso através do Kanban de Obras.
                                         </p>
                                     </div>
@@ -942,18 +951,18 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                             </div>
 
                             {/* Botões de Ação */}
-                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                            <div className="modal-footer">
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
-                                    className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                                    className="btn-secondary"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={!formState.projetoId || projetosValidados.length === 0}
-                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 dark:from-amber-700 dark:to-amber-600 text-white rounded-xl hover:from-amber-700 hover:to-amber-600 transition-all shadow-medium font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <PlusIcon className="w-5 h-5" />
                                     Gerar Obra do Projeto

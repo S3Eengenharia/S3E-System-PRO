@@ -163,14 +163,18 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
         setGenerating(true);
         
         const promise = (async () => {
-            const result = await pdfCustomizationService.generatePersonalizedPDF(orcamentoId, customization);
-            
-            if (result.success) {
-                if (onGeneratePDF) onGeneratePDF();
-                setTimeout(() => onClose(), 1000);
-                return result.fileName || 'Orçamento.pdf';
-            } else {
-                throw new Error(result.error || 'Erro ao gerar PDF');
+            try {
+                const result = await pdfCustomizationService.generatePersonalizedPDF(orcamentoId, customization);
+                
+                if (result.success) {
+                    if (onGeneratePDF) onGeneratePDF();
+                    setTimeout(() => onClose(), 1000);
+                    return result.fileName || 'Orçamento.pdf';
+                } else {
+                    throw new Error(result.error || 'Erro ao gerar PDF');
+                }
+            } finally {
+                setGenerating(false);
             }
         })();
 
@@ -184,8 +188,6 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                 title: 'Erro ao gerar PDF',
                 description: err.message
             })
-        }).finally(() => {
-            setGenerating(false);
         });
     };
 

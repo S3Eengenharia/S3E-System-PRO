@@ -12,7 +12,7 @@ import DashboardAPI from './components/DashboardAPI';
 import Orcamentos from './components/Orcamentos';
 import Catalogo from './components/Catalogo';
 import Movimentacoes from './components/Movimentacoes';
-import Historico from './components/Historico';
+import Logs from './components/Logs';
 import Compras from './components/Compras';
 import Materiais from './components/Materiais';
 import Fornecedores from './components/Fornecedores';
@@ -35,6 +35,7 @@ import ObrasKanban from './pages/ObrasKanban';
 import NovaCompraPage from './pages/NovaCompraPage';
 // import SettingsModal from './components/SettingsModal'; // DESCONTINUADO - Substituído por página Configuracoes.tsx
 import GestaoObras from './components/GestaoObras';
+import TarefasObra from './components/TarefasObra';
 import GerenciamentoEmpresarial from './components/GerenciamentoEmpresarial';
 import { type Project } from './types';
 import { Toaster } from './components/ui/sonner';
@@ -79,8 +80,9 @@ const MainApp: React.FC = () => {
         return <Catalogo toggleSidebar={toggleSidebar} />;
       case 'Movimentações':
         return <Movimentacoes toggleSidebar={toggleSidebar} />;
-      case 'Histórico':
-        return <Historico toggleSidebar={toggleSidebar} />;
+      case 'Logs':
+      case 'Histórico': // Compatibilidade
+        return <Logs toggleSidebar={toggleSidebar} />;
       case 'Compras':
         return <Compras toggleSidebar={toggleSidebar} />;
       case 'Estoque':
@@ -100,6 +102,8 @@ const MainApp: React.FC = () => {
                />;
       case 'Obras':
         return <ObrasKanban toggleSidebar={toggleSidebar} />;
+      case 'Tarefas da Obra':
+        return <TarefasObra toggleSidebar={toggleSidebar} />;
       case 'Gestão de Obras':
         return <GestaoObras toggleSidebar={toggleSidebar} />;
       case 'Financeiro':
@@ -162,7 +166,7 @@ const StandalonePageWrapper: React.FC<{ children: React.ReactNode; activeView?: 
       'Orçamentos': '/',
       'Catálogo': '/',
       'Movimentações': '/',
-      'Histórico': '/',
+      'Logs': '/',
       'Compras': '/compras',
       'Materiais': '/',
       'Estoque': '/',
@@ -171,6 +175,7 @@ const StandalonePageWrapper: React.FC<{ children: React.ReactNode; activeView?: 
       'Clientes': '/',
       'Projetos': '/',
       'Obras': '/',
+      'Tarefas da Obra': '/',
       'Gestão de Obras': '/',
       'Financeiro': '/',
       'Vendas': '/',

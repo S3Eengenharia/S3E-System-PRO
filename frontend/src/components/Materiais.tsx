@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { type MaterialItem, MaterialCategory } from '../types';
 import { materiaisService, Material } from '../services/materiaisService';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -84,6 +86,12 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     const [materialSelecionado, setMaterialSelecionado] = useState<MaterialItem | null>(null);
     const [historicoCompras, setHistoricoCompras] = useState<any[]>([]);
     const [loadingHistorico, setLoadingHistorico] = useState(false);
+    
+    // Estados para exportação/importação
+    const [menuExportarOpen, setMenuExportarOpen] = useState(false);
+    const [modalImportarOpen, setModalImportarOpen] = useState(false);
+    const [arquivoImportar, setArquivoImportar] = useState<File | null>(null);
+    const [processandoImportacao, setProcessandoImportacao] = useState(false);
     const [formState, setFormState] = useState<MaterialFormState>({
         name: '',
         sku: '',
@@ -334,6 +342,209 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         }
     };
 
+    // Exportar materiais críticos
+    // Gerar PDF com jsPDF
+    const gerarPDFMateriaisCriticos = async () => {
+        try {
+            // Buscar materiais críticos (estoque zerado ou abaixo do mínimo)
+            const materiaisCriticos = materials.filter(m => 
+                m.stock === 0 || m.stock <= m.minStock
+            );
+
+            if (materiaisCriticos.length === 0) {
+                toast.error('Não há materiais críticos para exportar');
+                return;
+            }
+
+            // Criar documento PDF
+            const doc = new jsPDF('landscape');
+            
+            // Configurar fonte
+            doc.setFontSize(18);
+            doc.setTextColor(16, 185, 129); // Verde
+            doc.text('S3E ENGENHARIA - MATERIAIS CRÍTICOS', 14, 15);
+            
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 22);
+            doc.text('Solicitação de Cotação - Atualizar coluna "Preço Unit." com valores do fornecedor', 14, 28);
+            
+            // Preparar dados da tabela
+            const tableData = materiaisCriticos.map(material => [
+                material.sku || '',
+                material.name || '',
+                material.type || material.category || '',
+                material.unitOfMeasure || 'UN',
+                material.stock.toString(),
+                material.minStock.toString(),
+                `R$ ${(material.price || 0).toFixed(2)}`,
+                material.supplierName || material.supplier?.name || 'N/A'
+            ]);
+
+            // Gerar tabela
+            autoTable(doc, {
+                startY: 35,
+                head: [[
+                    'SKU',
+                    'Material',
+                    'Categoria',
+                    'Un.',
+                    'Estoque',
+                    'Mín.',
+                    'Preço Unit.',
+                    'Fornecedor'
+                ]],
+                body: tableData,
+                theme: 'grid',
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 3,
+                    overflow: 'linebreak',
+                    halign: 'left'
+                },
+                headStyles: {
+                    fillColor: [16, 185, 129],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                columnStyles: {
+                    0: { cellWidth: 25 },  // SKU
+                    1: { cellWidth: 60 },  // Material
+                    2: { cellWidth: 35 },  // Categoria
+                    3: { cellWidth: 15 },  // Un.
+                    4: { cellWidth: 20, halign: 'center' },  // Estoque
+                    5: { cellWidth: 15, halign: 'center' },  // Mín.
+                    6: { cellWidth: 25, halign: 'right' },   // Preço
+                    7: { cellWidth: 50 }   // Fornecedor
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 247, 250]
+                },
+                didDrawPage: (data) => {
+                    // Footer
+                    doc.setFontSize(8);
+                    doc.setTextColor(150);
+                    doc.text(
+                        `Página ${data.pageNumber} de ${doc.getNumberOfPages()}`,
+                        data.settings.margin.left,
+                        doc.internal.pageSize.height - 10
+                    );
+                }
+            });
+
+            // Footer final
+            const finalY = (doc as any).lastAutoTable.finalY || 35;
+            doc.setFontSize(9);
+            doc.setTextColor(100);
+            doc.text('⚠️ INSTRUÇÕES:', 14, finalY + 10);
+            doc.setFontSize(8);
+            doc.text('1. Preencha a coluna "Preço Unit." com os valores atualizados do fornecedor', 14, finalY + 16);
+            doc.text('2. Salve o arquivo e importe novamente no sistema para atualizar os preços', 14, finalY + 21);
+            doc.text('3. Apenas a coluna "Preço Unit." será atualizada, os demais dados permanecerão inalterados', 14, finalY + 26);
+
+            // Salvar PDF
+            doc.save(`materiais-criticos-${new Date().toISOString().split('T')[0]}.pdf`);
+            toast.success('✅ PDF gerado com sucesso!');
+
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            toast.error('❌ Erro ao gerar PDF');
+        }
+    };
+
+    const handleExportar = async (formato: 'xlsx' | 'csv' | 'pdf') => {
+        try {
+            setMenuExportarOpen(false);
+            
+            // Se for PDF, usar jsPDF no frontend
+            if (formato === 'pdf') {
+                await gerarPDFMateriaisCriticos();
+                return;
+            }
+
+            // Para XLSX e CSV, continuar usando o backend
+            toast.promise(
+                materiaisService.exportarMateriaisCriticos(formato),
+                {
+                    loading: `📊 Gerando arquivo ${formato.toUpperCase()}...`,
+                    success: (response) => {
+                        const blob = new Blob([response.data], {
+                            type: formato === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
+                                  'text/csv'
+                        });
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `materiais-criticos-${new Date().toISOString().split('T')[0]}.${formato}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                        
+                        return `✅ Arquivo ${formato.toUpperCase()} exportado com sucesso!`;
+                    },
+                    error: (err) => {
+                        console.error('Erro ao exportar:', err);
+                        return '❌ Erro ao exportar arquivo';
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Erro ao exportar:', error);
+        }
+    };
+
+    // Importar preços atualizados
+    const handleImportar = async () => {
+        if (!arquivoImportar) {
+            toast.error('Selecione um arquivo para importar');
+            return;
+        }
+
+        const extensao = arquivoImportar.name.split('.').pop()?.toLowerCase();
+        if (!['xlsx', 'csv'].includes(extensao || '')) {
+            toast.error('Apenas arquivos XLSX ou CSV são permitidos');
+            return;
+        }
+
+        try {
+            setProcessandoImportacao(true);
+            
+            const formData = new FormData();
+            formData.append('arquivo', arquivoImportar);
+
+            const response = await materiaisService.importarPrecos(formData);
+            
+            console.log('📥 Resposta da importação:', response);
+            
+            if (response.success) {
+                const atualizados = response.data?.atualizados || 0;
+                const erros = response.data?.erros || 0;
+                const total = response.data?.total || 0;
+                
+                if (atualizados > 0) {
+                    toast.success(
+                        `✅ ${atualizados} de ${total} preços atualizados com sucesso! ${erros > 0 ? `\n⚠️ ${erros} erros encontrados` : ''}`,
+                        { duration: 5000 }
+                    );
+                    await loadMaterials(); // Recarregar lista
+                    setModalImportarOpen(false);
+                    setArquivoImportar(null);
+                } else {
+                    toast.warning(`⚠️ Nenhum preço foi atualizado. ${erros} erros encontrados.`, { duration: 5000 });
+                }
+            } else {
+                toast.error(response.error || '❌ Erro ao importar arquivo');
+            }
+        } catch (error: any) {
+            console.error('Erro ao importar preços:', error);
+            toast.error('❌ Erro ao processar arquivo');
+        } finally {
+            setProcessandoImportacao(false);
+        }
+    };
+
     const getStockStatusClass = (material: MaterialItem) => {
         if (material.stock === 0) {
             return 'bg-red-100 text-red-800 ring-1 ring-red-200';
@@ -389,7 +600,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Gerencie materiais e controle de estoque</p>
                     </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                     <button
                         onClick={handleCorrigirNomesGenericos}
                         className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-medium font-semibold"
@@ -400,6 +611,75 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         </svg>
                         Atualizar Nomes
                     </button>
+                    
+                    {/* Botões de Exportação */}
+                    <div className="relative group">
+                        <button
+                            onClick={() => setMenuExportarOpen(!menuExportarOpen)}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Exportar
+                        </button>
+                        
+                        {/* Menu Dropdown */}
+                        {menuExportarOpen && (
+                            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-200 dark:border-dark-border z-50 py-2 animate-fade-in">
+                                <button
+                                    onClick={() => handleExportar('xlsx')}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                                >
+                                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">Excel (.xlsx)</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Cotação fornecedor</p>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => handleExportar('csv')}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                                >
+                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">CSV (.csv)</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Compatível universal</p>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => handleExportar('pdf')}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                                >
+                                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">PDF (.pdf)</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Visualização impressa</p>
+                                    </div>
+                                </button>
+                                <div className="border-t border-gray-200 dark:border-dark-border my-2"></div>
+                                <button
+                                    onClick={() => setModalImportarOpen(true)}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                                >
+                                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">Importar Preços</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Atualizar valores</p>
+                                    </div>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    
                     <button
                         onClick={() => handleOpenModal()}
                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
@@ -1093,6 +1373,156 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             >
                                 Fechar
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE IMPORTAÇÃO DE PREÇOS */}
+            {modalImportarOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-orange-600 to-orange-500">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">Importar Preços Atualizados</h3>
+                                        <p className="text-sm text-orange-100 mt-1">Atualização em massa de preços unitários</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setModalImportarOpen(false);
+                                        setArquivoImportar(null);
+                                    }}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-6">
+                            {/* Instruções */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-3">📋 Como funciona:</h4>
+                                <ol className="space-y-2 text-sm text-blue-800 dark:text-blue-300">
+                                    <li className="flex gap-2">
+                                        <span className="font-bold">1.</span>
+                                        <span>Clique em "Exportar" e escolha XLSX ou CSV para gerar o arquivo de cotação</span>
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <span className="font-bold">2.</span>
+                                        <span>Envie o arquivo para o fornecedor preencher os preços na coluna "Preço Fornecedor"</span>
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <span className="font-bold">3.</span>
+                                        <span>Após receber o arquivo preenchido, importe-o aqui para atualizar os preços automaticamente</span>
+                                    </li>
+                                </ol>
+                            </div>
+
+                            {/* Upload de Arquivo */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">
+                                    Selecionar Arquivo
+                                </label>
+                                <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center hover:border-orange-400 dark:hover:border-orange-600 transition-colors">
+                                    <input
+                                        type="file"
+                                        id="arquivo-importar"
+                                        accept=".xlsx,.csv"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                setArquivoImportar(file);
+                                            }
+                                        }}
+                                        className="hidden"
+                                    />
+                                    <label htmlFor="arquivo-importar" className="cursor-pointer">
+                                        <svg className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                        {arquivoImportar ? (
+                                            <div>
+                                                <p className="text-lg font-semibold text-gray-900 dark:text-dark-text">{arquivoImportar.name}</p>
+                                                <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
+                                                    {(arquivoImportar.size / 1024).toFixed(2)} KB
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setArquivoImportar(null);
+                                                    }}
+                                                    className="mt-2 text-red-600 hover:text-red-700 font-medium text-sm"
+                                                >
+                                                    Remover arquivo
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <p className="text-lg font-semibold text-gray-700 dark:text-dark-text">
+                                                    Clique para selecionar o arquivo
+                                                </p>
+                                                <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
+                                                    Arquivos XLSX ou CSV até 10MB
+                                                </p>
+                                            </div>
+                                        )}
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Avisos Importantes */}
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                                <h4 className="font-semibold text-amber-900 dark:text-amber-300 mb-2 flex items-center gap-2">
+                                    <ExclamationTriangleIcon className="w-5 h-5" />
+                                    Avisos Importantes
+                                </h4>
+                                <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300">
+                                    <li>⚠️ O sistema identificará os materiais pelo código (SKU)</li>
+                                    <li>⚠️ Apenas preços válidos serão atualizados (números maiores que zero)</li>
+                                    <li>⚠️ Materiais não encontrados serão ignorados</li>
+                                    <li>⚠️ Esta ação não pode ser desfeita. Faça backup se necessário</li>
+                                </ul>
+                            </div>
+
+                            {/* Botões de Ação */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleImportar}
+                                    disabled={!arquivoImportar || processandoImportacao}
+                                    className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {processandoImportacao ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white inline-block mr-2"></div>
+                                            Processando...
+                                        </>
+                                    ) : (
+                                        <>🔄 Importar e Atualizar Preços</>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setModalImportarOpen(false);
+                                        setArquivoImportar(null);
+                                    }}
+                                    disabled={processandoImportacao}
+                                    className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
