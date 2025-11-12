@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { S3ELogoIcon } from '../constants';
+import { DEFAULT_LOGO_URL, COMPANY_NAME, SYSTEM_NAME } from '../config/constants';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -42,12 +42,34 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a1a2f] via-[#0d2847] to-[#0a1a2f] px-4">
       <div className="max-w-md w-full">
         {/* Logo e Título */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl shadow-2xl mb-4">
-            <S3ELogoIcon className="w-12 h-12 text-[#0a1a2f]" />
+        <div className="text-center mb-8 animate-fade-in">
+          {/* Logo da Empresa */}
+          <div className="inline-flex items-center justify-center mb-[2px]">
+            <img 
+              src={DEFAULT_LOGO_URL}
+              alt={COMPANY_NAME}
+              className="h-40 w-auto object-contain drop-shadow-2xl"
+              crossOrigin="anonymous"
+              onLoad={() => console.log('✅ Logo carregada com sucesso')}
+              onError={(e) => {
+                console.error('❌ Erro ao carregar logo:', DEFAULT_LOGO_URL);
+                console.log('Tentando URL alternativa...');
+                // Tentar URL direta com porta correta
+                const target = e.currentTarget;
+                if (!target.src.includes('3001')) {
+                  target.src = 'http://localhost:3001/uploads/logos/logo-branca.png';
+                } else {
+                  // Se ainda falhar, mostrar fallback
+                  target.style.display = 'none';
+                  const fallback = document.createElement('div');
+                  fallback.className = 'text-white text-5xl font-bold tracking-wider drop-shadow-lg';
+                  fallback.textContent = 'S3E ENGENHARIA';
+                  target.parentElement!.appendChild(fallback);
+                }
+              }}
+            />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">S3E Engenharia</h1>
-          <p className="text-blue-200">Sistema de Gestão Empresarial Elétrica</p>
+          <p className="text-blue-200 text-lg font-medium tracking-wide">{SYSTEM_NAME}</p>
         </div>
 
         {/* Card de Login */}
@@ -124,7 +146,7 @@ const Login: React.FC = () => {
 
         {/* Footer */}
         <div className="mt-8 text-center text-blue-200 text-sm">
-          <p>© 2025 S3E Engenharia. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} {COMPANY_NAME}. Todos os direitos reservados.</p>
         </div>
       </div>
     </div>

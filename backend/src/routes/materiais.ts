@@ -9,7 +9,10 @@ import {
   getMovimentacoes,
   getHistoricoCompras,
   corrigirNomesGenericos,
-  buscarMateriaisSimilares
+  buscarMateriaisSimilares,
+  exportarMateriaisCriticos,
+  importarPrecos,
+  uploadImportFile
 } from '../controllers/materiaisController.js';
 import { authenticate } from '../middlewares/auth.js';
 
@@ -21,6 +24,11 @@ router.get('/', getMateriais);
 router.get('/movimentacoes/historico', getMovimentacoes);
 router.post('/corrigir-nomes', corrigirNomesGenericos); // Rota de correção
 router.post('/buscar-similares', buscarMateriaisSimilares); // Nova rota para verificação de duplicatas
+
+// Rotas de exportação/importação (antes das rotas com :id)
+router.get('/exportar-criticos', exportarMateriaisCriticos);
+router.post('/importar-precos', uploadImportFile, importarPrecos);
+
 router.get('/:id/historico-compras', getHistoricoCompras); // Rota específica antes da genérica
 router.get('/:id', getMaterialById);
 router.post('/', createMaterial);

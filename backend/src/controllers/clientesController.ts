@@ -246,7 +246,7 @@ export const deleteCliente = async (req: Request, res: Response): Promise<void> 
     const projetosAtivos = await prisma.projeto.count({
       where: { 
         clienteId: id,
-        status: { not: 'Cancelado' }
+        status: { not: 'CANCELADO' }
       }
     });
 

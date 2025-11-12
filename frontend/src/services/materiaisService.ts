@@ -358,6 +358,26 @@ class MateriaisService {
       };
     }
   }
+
+  /**
+   * Exportar materiais críticos (estoque baixo/zerado) para cotação
+   */
+  async exportarMateriaisCriticos(formato: 'xlsx' | 'csv' | 'pdf') {
+    return axiosApiService.get(`${ENDPOINTS.MATERIAIS}/exportar-criticos?formato=${formato}`, {}, {
+      responseType: 'blob'
+    });
+  }
+
+  /**
+   * Importar preços atualizados do fornecedor
+   */
+  async importarPrecos(formData: FormData) {
+    return axiosApiService.post(`${ENDPOINTS.MATERIAIS}/importar-precos`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  }
 }
 
 export const materiaisService = new MateriaisService();

@@ -63,5 +63,12 @@ router.post('/usuarios/criar', authorize('admin'), ConfiguracaoController.criarU
  */
 router.delete('/usuarios/:id', authorize('admin'), ConfiguracaoController.excluirUsuario);
 
+/**
+ * @route PUT /api/configuracoes/usuarios/:id/perfil
+ * @desc Atualiza o perfil do próprio usuário (nome e senha)
+ * @access Authenticated (próprio usuário ou desenvolvedor)
+ */
+router.put('/usuarios/:id/perfil', ConfiguracaoController.atualizarPerfil);
+
 export default router;
 

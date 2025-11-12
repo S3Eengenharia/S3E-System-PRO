@@ -361,6 +361,32 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         if (alertaValidacao) setAlertaValidacao(null);
     };
 
+    // Função para sugerir nome automático baseado no tipo
+    const sugerirNomeAutomatico = () => {
+        const tipo = formState.tipo || 'CAMPO';
+        const prefixo = tipo === 'MONTAGEM' ? 'Equipe Montagem' : 
+                       tipo === 'CAMPO' ? 'Equipe Campo' : 
+                       'Equipe Distinta';
+        
+        // Verificar quais números já existem
+        const equipesDoTipo = equipes.filter(e => 
+            e.nome.startsWith(prefixo)
+        );
+        
+        let numero = 1;
+        let nomeDisponivel = '';
+        
+        while (true) {
+            nomeDisponivel = `${prefixo} ${numero}`;
+            const existe = equipesDoTipo.some(e => e.nome === nomeDisponivel);
+            if (!existe) break;
+            numero++;
+        }
+        
+        setFormState(prev => ({ ...prev, nome: nomeDisponivel }));
+        toast.success(`✨ Nome sugerido: ${nomeDisponivel}`);
+    };
+
     // Verificar se um eletricista já está em outra equipe
     const isEletricistaEmOutraEquipe = (eletricistaId: string): { emOutraEquipe: boolean; nomeEquipe?: string } => {
         // Se estiver editando uma equipe, ignorar os membros dessa equipe atual
@@ -579,7 +605,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 <div className="space-y-6">
                     {/* Estatísticas rápidas */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                        <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 hover:border-gray-200 card-hover">
+                        <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border hover:border-gray-200 dark:hover:border-gray-600 card-hover">
                             <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm ring-1 ring-blue-200/50">
                                     <UsersIcon className="w-6 h-6 text-blue-600" />
@@ -591,7 +617,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
 
-                        <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 hover:border-gray-200 card-hover">
+                        <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border hover:border-gray-200 dark:hover:border-gray-600 card-hover">
                             <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center shadow-sm ring-1 ring-green-200/50">
                                     <UsersIcon className="w-6 h-6 text-green-600" />
@@ -605,7 +631,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
 
-                        <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 hover:border-gray-200 card-hover">
+                        <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border hover:border-gray-200 dark:hover:border-gray-600 card-hover">
                             <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shadow-sm ring-1 ring-purple-200/50">
                                     <UsersIcon className="w-6 h-6 text-purple-600" />
@@ -619,7 +645,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
 
-                        <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100 hover:border-gray-200 card-hover">
+                        <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border hover:border-gray-200 dark:hover:border-gray-600 card-hover">
                             <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shadow-sm ring-1 ring-orange-200/50">
                                     <CalendarIcon className="w-6 h-6 text-orange-600" />
@@ -720,7 +746,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 return (
                 <div className="space-y-6" key="calendario">
                     {/* Header com Controles */}
-                    <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100">
+                    <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900">Calendário de Alocações</h2>
@@ -818,43 +844,43 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                         {/* Sidebar com Informações */}
                         <div className="space-y-4">
                             {/* Legenda */}
-                            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-soft">
-                                <h3 className="font-bold text-gray-900 mb-3 text-sm">Legenda</h3>
+                            <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-4 shadow-soft">
+                                <h3 className="font-bold text-gray-900 dark:text-dark-text mb-3 text-sm">Legenda</h3>
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Alocação Planejada</span>
+                                        <span className="text-xs text-gray-600 dark:text-dark-text-secondary">Alocação Planejada</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Alocação Em Andamento</span>
+                                        <span className="text-xs text-gray-600 dark:text-dark-text-secondary">Alocação Em Andamento</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Alocação Concluída</span>
+                                        <span className="text-xs text-gray-600 dark:text-dark-text-secondary">Alocação Concluída</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600">Alocação Cancelada</span>
+                                        <span className="text-xs text-gray-600 dark:text-dark-text-secondary">Alocação Cancelada</span>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+                                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
                                         <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                                        <span className="text-xs text-gray-600 font-semibold">Obra em Andamento</span>
+                                        <span className="text-xs text-gray-600 dark:text-dark-text-secondary font-semibold">Obra em Andamento</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Equipes Ativas */}
-                            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-soft">
-                                <h3 className="font-bold text-gray-900 mb-3 text-sm">Equipes Ativas</h3>
+                            <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-4 shadow-soft">
+                                <h3 className="font-bold text-gray-900 dark:text-dark-text mb-3 text-sm">Equipes Ativas</h3>
                                 <div className="space-y-2">
                                     {equipes.filter(e => e.ativa).slice(0, 5).map(equipe => (
-                                        <div key={equipe.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                        <div key={equipe.id} className="flex items-center justify-between p-2 card-secondary rounded-lg">
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-semibold text-gray-800 truncate">{equipe.nome}</p>
-                                                <p className="text-xs text-gray-500">{equipe.tipo}</p>
+                                                <p className="text-xs font-semibold text-gray-800 dark:text-dark-text truncate">{equipe.nome}</p>
+                                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary">{equipe.tipo}</p>
                                             </div>
-                                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold ml-2">
+                                            <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded-full font-semibold ml-2">
                                                 {equipe.membros?.length || 0}
                                             </span>
                                         </div>
@@ -866,7 +892,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
                             
                             {/* Próximas Alocações */}
-                            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-soft">
+                            <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-4 shadow-soft">
                                 <h3 className="font-bold text-gray-900 mb-3 text-sm">Próximas Alocações</h3>
                                 <div className="space-y-2">
                                     {alocacoes.filter(a => a.status !== 'Cancelada').slice(0, 3).map((alocacao) => (
@@ -895,7 +921,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
 
                             {/* Obras em Andamento */}
-                            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-soft">
+                            <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-4 shadow-soft">
                                 <h3 className="font-bold text-gray-900 mb-3 text-sm">Obras em Andamento</h3>
                                 <div className="space-y-2">
                                     {obras.slice(0, 5).map((obra) => (
@@ -927,7 +953,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             {activeTab === 'gantt' && (
                 <div className="space-y-6">
                     {/* Header */}
-                    <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100">
+                    <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900">Timeline Gantt</h2>
@@ -948,7 +974,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                     </div>
 
                     {/* Filtros de Data */}
-                    <div className="bg-white p-6 rounded-2xl shadow-soft border border-gray-100">
+                    <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Filtros de Período</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
@@ -1231,22 +1257,35 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             )}
 
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Nome da Equipe *
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                    Nome da Equipe * <span className="text-xs text-gray-500 dark:text-dark-text-secondary font-normal">(deve ser único)</span>
                                 </label>
-                                <input
-                                    type="text"
-                                    name="nome"
-                                    value={formState.nome}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                                    placeholder="Ex: Equipe Elétrica Alpha"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        name="nome"
+                                        value={formState.nome}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="input-field flex-1"
+                                        placeholder="Ex: Equipe Elétrica A, Equipe Campo 1, etc."
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={sugerirNomeAutomatico}
+                                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-md font-semibold whitespace-nowrap"
+                                        title="Sugerir nome automático"
+                                    >
+                                        ✨ Sugerir
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+                                    💡 Dica: Use nomes descritivos e únicos. Clique em "Sugerir" para gerar um nome automático.
+                                </p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                     Tipo de Equipe *
                                 </label>
                                 <select
@@ -1254,7 +1293,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                     value={formState.tipo}
                                     onChange={handleInputChange}
                                     required
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="select-field"
                                 >
                                     <option value="">Selecione o tipo</option>
                                     <option value="MONTAGEM">Montagem</option>

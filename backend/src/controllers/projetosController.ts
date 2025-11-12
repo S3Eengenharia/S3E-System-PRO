@@ -332,8 +332,8 @@ export const updateProjetoStatus = async (req: Request, res: Response): Promise<
     const { id } = req.params;
     const { status } = req.body as { status: ProjetoStatus };
 
-    if (!['PROPOSTA','VALIDADO','APROVADO','EXECUCAO','CONCLUIDO'].includes(String(status))) {
-      res.status(400).json({ success: false, error: 'Status inválido. Use: PROPOSTA, VALIDADO, APROVADO, EXECUCAO, CONCLUIDO' });
+    if (!['PROPOSTA','VALIDADO','APROVADO','EXECUCAO','CONCLUIDO','CANCELADO'].includes(String(status))) {
+      res.status(400).json({ success: false, error: 'Status inválido. Use: PROPOSTA, VALIDADO, APROVADO, EXECUCAO, CONCLUIDO, CANCELADO' });
       return;
     }
 
@@ -353,10 +353,17 @@ export const updateProjetoStatus = async (req: Request, res: Response): Promise<
 export const deleteProjeto = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const { permanent } = req.query; // ?permanent=true para exclusão permanente
+    const userRole = (req as any).user?.role; // Role do usuário autenticado
+    const userId = (req as any).user?.userId; // ID do usuário autenticado
 
     // Verificar se projeto existe
     const projeto = await prisma.projeto.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        cliente: { select: { nome: true } },
+        orcamento: { select: { titulo: true } }
+      }
     });
 
     if (!projeto) {
@@ -367,6 +374,75 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // EXCLUSÃO PERMANENTE (apenas Admin e Desenvolvedor)
+    if (permanent === 'true') {
+      // Verificar permissões: apenas Admin e Desenvolvedor podem excluir permanentemente
+      if (!['admin', 'desenvolvedor'].includes(userRole?.toLowerCase())) {
+        res.status(403).json({
+          success: false,
+          error: '🚫 Acesso negado. Apenas Administradores e Desenvolvedores podem excluir projetos permanentemente.'
+        });
+        return;
+      }
+
+      // Log de auditoria antes de excluir
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('⚠️  EXCLUSÃO PERMANENTE DE PROJETO');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log(`📋 Projeto: ${projeto.titulo} (ID: ${projeto.id})`);
+      console.log(`👤 Cliente: ${projeto.cliente?.nome || 'N/A'}`);
+      console.log(`💰 Valor: R$ ${projeto.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      console.log(`📅 Criado em: ${projeto.createdAt.toLocaleString('pt-BR')}`);
+      console.log(`🔑 Usuário: ${userId} (Role: ${userRole})`);
+      console.log(`⏰ Data/Hora: ${new Date().toLocaleString('pt-BR')}`);
+      console.log('═══════════════════════════════════════════════════════════');
+
+      // ⚠️ ATENÇÃO: Isso vai excluir permanentemente o projeto e todas as relações em cascata
+      await prisma.projeto.delete({
+        where: { id }
+      });
+
+      // Registrar no audit log
+      try {
+        await prisma.auditLog.create({
+          data: {
+            userId,
+            userName: (req as any).user?.name,
+            userRole,
+            action: 'DELETE_PERMANENT',
+            entity: 'Projeto',
+            entityId: id,
+            description: `Excluiu permanentemente o projeto "${projeto.titulo}"`,
+            ipAddress: req.ip || req.socket.remoteAddress,
+            userAgent: req.headers['user-agent'],
+            metadata: {
+              projectTitle: projeto.titulo,
+              clientName: projeto.cliente?.nome,
+              valorTotal: projeto.valorTotal,
+              status: projeto.status
+            }
+          }
+        });
+      } catch (logError) {
+        console.error('Erro ao registrar audit log:', logError);
+      }
+
+      res.json({
+        success: true,
+        message: '⚠️ Projeto excluído PERMANENTEMENTE do banco de dados',
+        audit: {
+          action: 'DELETE_PERMANENT',
+          projectId: id,
+          projectTitle: projeto.titulo,
+          deletedBy: userId,
+          deletedByRole: userRole,
+          timestamp: new Date().toISOString()
+        }
+      });
+      return;
+    }
+
+    // SOFT DELETE (comportamento padrão)
     // Verificar se projeto tem alocações ativas
     const alocacoesAtivas = await prisma.alocacaoObra.count({
       where: { 
@@ -387,10 +463,34 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
     await prisma.projeto.update({
       where: { id },
       data: { 
-        status: 'Cancelado',
+        status: 'CANCELADO',
         dataFim: new Date()
       }
     });
+
+    // Registrar no audit log
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          userName: (req as any).user?.name,
+          userRole,
+          action: 'UPDATE',
+          entity: 'Projeto',
+          entityId: id,
+          description: `Cancelou o projeto "${projeto.titulo}"`,
+          ipAddress: req.ip || req.socket.remoteAddress,
+          userAgent: req.headers['user-agent'],
+          metadata: {
+            projectTitle: projeto.titulo,
+            oldStatus: projeto.status,
+            newStatus: 'CANCELADO'
+          }
+        }
+      });
+    } catch (logError) {
+      console.error('Erro ao registrar audit log:', logError);
+    }
 
     res.json({
       success: true,

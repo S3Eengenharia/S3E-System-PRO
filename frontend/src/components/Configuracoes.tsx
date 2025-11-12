@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { configuracoesService, type ConfiguracaoSistema, type Usuario } from '../services/configuracoesService';
 import { ThemeContext } from '../contexts/ThemeContext';
+import { AuthContext } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { API_CONFIG } from '../config/api';
 import {
@@ -95,19 +96,27 @@ interface ConfiguracoesProps {
     toggleSidebar: () => void;
 }
 
-type TabType = 'aparencia' | 'usuarios' | 'empresa' | 'fiscal';
+type TabType = 'perfil' | 'usuarios' | 'empresa' | 'fiscal';
 
 const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
     const themeContext = useContext(ThemeContext);
-    const [abaAtiva, setAbaAtiva] = useState<TabType>('aparencia');
+    const authContext = useContext(AuthContext);
+    const user = authContext?.user;
+    const isEletricista = user?.role?.toLowerCase() === 'eletricista';
+    
+    const [abaAtiva, setAbaAtiva] = useState<TabType>('perfil');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     
-    // Estados de Configuração
+    // Estados para alteração de perfil (nome e senha)
+    const [perfilNome, setPerfilNome] = useState(user?.name || '');
+    const [perfilSenhaAtual, setPerfilSenhaAtual] = useState('');
+    const [perfilSenhaNova, setPerfilSenhaNova] = useState('');
+    const [perfilSenhaConfirma, setPerfilSenhaConfirma] = useState('');
+    
+    // Estados de Configuração da Empresa
     const [config, setConfig] = useState<ConfiguracaoSistema | null>(null);
     const [formConfig, setFormConfig] = useState({
-        temaPreferido: 'light' as 'light' | 'dark' | 'system',
-        logoUrl: '',
         nomeEmpresa: 'S3E Engenharia',
         emailContato: '',
         telefoneContato: ''
@@ -143,11 +152,17 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
     const [excluindoUsuario, setExcluindoUsuario] = useState(false);
 
     useEffect(() => {
-        loadConfiguracoes();
+        // Apenas carregar configurações se não for eletricista
+        if (!isEletricista) {
+            loadConfiguracoes();
+        } else {
+            setLoading(false);
+        }
+        
         if (abaAtiva === 'usuarios') {
             loadUsuarios();
         }
-    }, [abaAtiva]);
+    }, [abaAtiva, isEletricista]);
 
     const loadConfiguracoes = async () => {
         try {
@@ -157,18 +172,12 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             if (response.success && response.data) {
                 setConfig(response.data);
                 setFormConfig({
-                    temaPreferido: response.data.temaPreferido as 'light' | 'dark' | 'system',
-                    logoUrl: response.data.logoUrl || '',
                     nomeEmpresa: response.data.nomeEmpresa,
                     emailContato: response.data.emailContato || '',
                     telefoneContato: response.data.telefoneContato || ''
                 });
-                // Aplicar tema salvo
-                if (themeContext) {
-                    themeContext.setTheme(response.data.temaPreferido as any);
-                }
-                // Setar preview da logo
-                setLogoPreview(response.data.logoUrl || '');
+                // NÃO aplicar tema ao carregar - deixar o tema atual do usuário
+                // O tema é controlado apenas pelo botão na sidebar
             }
         } catch (error) {
             console.error('Erro ao carregar configurações:', error);
@@ -216,39 +225,10 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         try {
             setSaving(true);
             
-            // Se houver um novo arquivo de logo, fazer upload primeiro
-            if (logoFile) {
-                const uploadResponse = await configuracoesService.uploadLogo(logoFile);
-                if (uploadResponse.success && uploadResponse.data) {
-                    // Atualizar formConfig com a nova URL
-                    formConfig.logoUrl = uploadResponse.data.logoUrl;
-                    
-                    // IMPORTANTE: Usar API_CONFIG para garantir a porta correta (3001)
-                    const logoUrlCompleta = `${API_CONFIG.BASE_URL}${uploadResponse.data.logoUrl}`;
-                    
-                    console.log('🔍 Base URL (API_CONFIG):', API_CONFIG.BASE_URL);
-                    console.log('🔍 Logo path:', uploadResponse.data.logoUrl);
-                    console.log('🔍 URL completa:', logoUrlCompleta);
-                    
-                    // Atualizar localStorage para que Sidebar pegue imediatamente
-                    localStorage.setItem('companyLogo', logoUrlCompleta);
-                    
-                    // Disparar evento para Sidebar atualizar
-                    window.dispatchEvent(new Event('storage'));
-                    
-                    console.log('✅ Logo atualizada no localStorage:', logoUrlCompleta);
-                }
-            }
-            
             const response = await configuracoesService.salvarConfiguracoes(formConfig);
             
             if (response.success) {
-                // Aplicar tema imediatamente
-                if (themeContext) {
-                    themeContext.setTheme(formConfig.temaPreferido);
-                }
                 toast.success('✅ Configurações salvas com sucesso!');
-                setLogoFile(null); // Limpar arquivo após salvar
                 await loadConfiguracoes();
             } else {
                 toast.error(`❌ ${response.error || 'Erro ao salvar configurações'}`);
@@ -418,12 +398,246 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         return labels[role] || role;
     };
 
+    // Função para atualizar perfil (nome e senha) - ADMIN e ELETRICISTA
+    const handleAtualizarPerfil = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!perfilNome.trim()) {
+            toast.error('Por favor, preencha seu nome');
+            return;
+        }
+        
+        // Se estiver alterando senha, validar
+        if (perfilSenhaNova) {
+            if (!perfilSenhaAtual) {
+                toast.error('Por favor, informe sua senha atual');
+                return;
+            }
+            if (perfilSenhaNova.length < 6) {
+                toast.error('A nova senha deve ter pelo menos 6 caracteres');
+                return;
+            }
+            if (perfilSenhaNova !== perfilSenhaConfirma) {
+                toast.error('As senhas não coincidem');
+                return;
+            }
+        }
+        
+        try {
+            setSaving(true);
+            
+            const dadosAtualizacao: any = {
+                name: perfilNome
+            };
+            
+            if (perfilSenhaNova) {
+                dadosAtualizacao.senhaAtual = perfilSenhaAtual;
+                dadosAtualizacao.senhaNova = perfilSenhaNova;
+            }
+            
+            const response = await configuracoesService.atualizarPerfil(user!.id, dadosAtualizacao);
+            
+            if (response.success) {
+                toast.success('✅ Dados atualizados com sucesso!');
+                // Limpar campos de senha
+                setPerfilSenhaAtual('');
+                setPerfilSenhaNova('');
+                setPerfilSenhaConfirma('');
+                
+                // Atualizar contexto se necessário
+                if (authContext?.updateUser) {
+                    authContext.updateUser({ ...user!, name: perfilNome });
+                }
+            }
+        } catch (error: any) {
+            console.error('Erro ao atualizar perfil:', error);
+            toast.error(error?.response?.data?.error || 'Erro ao atualizar dados');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (loading) {
         return (
-            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+            <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Carregando configurações...</p>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-dark-text-secondary">Carregando configurações...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Versão simplificada para ELETRICISTA
+    if (isEletricista) {
+        return (
+            <div className="min-h-screen p-4 sm:p-8 bg-gray-50 dark:bg-dark-bg">
+                {/* Header */}
+                <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                    <div className="flex items-center gap-4">
+                        <button onClick={toggleSidebar} className="lg:hidden p-2 text-gray-600 dark:text-dark-text-secondary rounded-xl hover:bg-white dark:hover:bg-dark-card hover:shadow-md transition-all">
+                            <Bars3Icon className="w-6 h-6" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 dark:text-dark-text tracking-tight">⚙️ Meu Perfil</h1>
+                            <p className="text-sm sm:text-base text-gray-500 dark:text-dark-text-secondary mt-1">Atualize seus dados pessoais</p>
+                        </div>
+                    </div>
+                </header>
+
+                {/* Card de Perfil do Eletricista */}
+                <div className="max-w-2xl mx-auto">
+                    <div className="card-primary rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border p-8">
+                        {/* Info do Usuário */}
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 bg-blue-600 dark:bg-blue-700 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                                    {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'EL'}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">{user?.name}</h3>
+                                    <p className="text-sm text-blue-700 dark:text-blue-400 font-semibold">⚡ Eletricista</p>
+                                    <p className="text-xs text-gray-600 dark:text-dark-text-secondary mt-1">
+                                        Email: <span className="font-mono">{user?.email}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Formulário */}
+                        <form onSubmit={handleAtualizarPerfil} className="space-y-6">
+                            {/* Nome */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                    Nome Completo *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={perfilNome}
+                                    onChange={(e) => setPerfilNome(e.target.value)}
+                                    className="input-field"
+                                    placeholder="Seu nome completo"
+                                    required
+                                />
+                            </div>
+
+                            {/* Email (readonly) */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                    Email (não pode ser alterado)
+                                </label>
+                                <input
+                                    type="email"
+                                    value={user?.email || ''}
+                                    disabled
+                                    className="input-field opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-800"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+                                    ℹ️ O email é seu identificador único no sistema
+                                </p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">🔒 Alterar Senha</h3>
+                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-4">
+                                    Deixe em branco se não quiser alterar a senha
+                                </p>
+                            </div>
+
+                            {/* Senha Atual */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                    Senha Atual
+                                </label>
+                                <input
+                                    type="password"
+                                    value={perfilSenhaAtual}
+                                    onChange={(e) => setPerfilSenhaAtual(e.target.value)}
+                                    className="input-field"
+                                    placeholder="Digite sua senha atual"
+                                />
+                            </div>
+
+                            {/* Nova Senha */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                    Nova Senha
+                                </label>
+                                <input
+                                    type="password"
+                                    value={perfilSenhaNova}
+                                    onChange={(e) => setPerfilSenhaNova(e.target.value)}
+                                    className="input-field"
+                                    placeholder="Digite a nova senha (mínimo 6 caracteres)"
+                                    minLength={6}
+                                />
+                            </div>
+
+                            {/* Confirmar Nova Senha */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                    Confirmar Nova Senha
+                                </label>
+                                <input
+                                    type="password"
+                                    value={perfilSenhaConfirma}
+                                    onChange={(e) => setPerfilSenhaConfirma(e.target.value)}
+                                    className="input-field"
+                                    placeholder="Confirme a nova senha"
+                                />
+                            </div>
+
+                            {/* Botões */}
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setPerfilNome(user?.name || '');
+                                        setPerfilSenhaAtual('');
+                                        setPerfilSenhaNova('');
+                                        setPerfilSenhaConfirma('');
+                                    }}
+                                    className="btn-secondary flex-1"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Salvando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckIcon className="w-5 h-5" />
+                                            Salvar Alterações
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+
+                        {/* Informações Adicionais */}
+                        <div className="mt-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4">
+                            <div className="flex items-start gap-3">
+                                <span className="text-orange-600 dark:text-orange-400 text-xl">⚠️</span>
+                                <div>
+                                    <p className="text-sm font-semibold text-orange-900 dark:text-orange-300">Segurança</p>
+                                    <p className="text-xs text-orange-800 dark:text-orange-400 mt-1">
+                                        Use uma senha forte com pelo menos 6 caracteres. Não compartilhe sua senha com outras pessoas.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -448,15 +662,17 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             <div className="bg-white dark:bg-dark-card rounded-2xl shadow-md border border-gray-200 dark:border-dark-border mb-6">
                 <div className="flex border-b border-gray-200 dark:border-dark-border">
                     <button
-                        onClick={() => setAbaAtiva('aparencia')}
+                        onClick={() => setAbaAtiva('perfil')}
                         className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all ${
-                            abaAtiva === 'aparencia'
+                            abaAtiva === 'perfil'
                                 ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
                                 : 'text-gray-600 dark:text-dark-text-secondary hover:text-gray-900 dark:hover:text-dark-text hover:bg-gray-50 dark:hover:bg-dark-bg'
                         }`}
                     >
-                        <PaintBrushIcon className="w-5 h-5" />
-                        Aparência e Tema
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Meu Perfil
                     </button>
                     <button
                         onClick={() => setAbaAtiva('usuarios')}
@@ -497,196 +713,166 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
 
                 {/* Conteúdo das Abas */}
                 <div className="p-8">
-                    {/* ABA 1: APARÊNCIA E TEMA */}
-                    {abaAtiva === 'aparencia' && (
+                    {/* ABA 1: MEU PERFIL (ALTERAR NOME E SENHA) */}
+                    {abaAtiva === 'perfil' && (
                         <div className="space-y-8 animate-fade-in">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">Personalização Visual</h2>
-                                <p className="text-gray-600 dark:text-dark-text-secondary">Escolha o tema e personalize a aparência do sistema</p>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">Meu Perfil</h2>
+                                <p className="text-gray-600 dark:text-dark-text-secondary">Atualize suas informações pessoais e senha</p>
                             </div>
 
-                            {/* Seleção de Tema */}
-                            <div className="bg-gray-50 dark:bg-dark-bg p-6 rounded-xl border border-gray-200 dark:border-dark-border">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-dark-text mb-4">
-                                    Tema do Sistema
-                                </label>
-                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-6">
-                                    Escolha entre tema claro, escuro ou automático (segue preferência do sistema)
-                                </p>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {/* Light Theme */}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFormConfig({...formConfig, temaPreferido: 'light'});
-                                            if (themeContext) {
-                                                themeContext.setTheme('light');
-                                            }
-                                        }}
-                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
-                                            formConfig.temaPreferido === 'light'
-                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
-                                        }`}
-                                    >
-                                        {formConfig.temaPreferido === 'light' && (
-                                            <div className="absolute top-2 right-2">
-                                                <CheckIcon className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                        )}
-                                        <div className="w-16 h-16 mb-3 bg-white rounded-full flex items-center justify-center shadow-md">
-                                            <SunIcon className="w-8 h-8 text-yellow-500" />
-                                        </div>
-                                        <span className="font-bold text-gray-900 dark:text-dark-text">Claro</span>
-                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Tema padrão</span>
-                                    </button>
-
-                                    {/* Dark Theme */}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFormConfig({...formConfig, temaPreferido: 'dark'});
-                                            if (themeContext) {
-                                                themeContext.setTheme('dark');
-                                            }
-                                        }}
-                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
-                                            formConfig.temaPreferido === 'dark'
-                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
-                                        }`}
-                                    >
-                                        {formConfig.temaPreferido === 'dark' && (
-                                            <div className="absolute top-2 right-2">
-                                                <CheckIcon className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                        )}
-                                        <div className="w-16 h-16 mb-3 bg-slate-900 rounded-full flex items-center justify-center shadow-md">
-                                            <MoonIcon className="w-8 h-8 text-indigo-300" />
-                                        </div>
-                                        <span className="font-bold text-gray-900 dark:text-dark-text">Escuro</span>
-                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Fundo #0F172A</span>
-                                    </button>
-
-                                    {/* System Theme */}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFormConfig({...formConfig, temaPreferido: 'system'});
-                                            if (themeContext) {
-                                                themeContext.setTheme('system');
-                                            }
-                                        }}
-                                        className={`relative flex flex-col items-center p-6 rounded-xl border-2 transition-all ${
-                                            formConfig.temaPreferido === 'system'
-                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                                                : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-500 bg-white dark:bg-dark-card'
-                                        }`}
-                                    >
-                                        {formConfig.temaPreferido === 'system' && (
-                                            <div className="absolute top-2 right-2">
-                                                <CheckIcon className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                        )}
-                                        <div className="w-16 h-16 mb-3 bg-gradient-to-br from-white to-slate-900 rounded-full flex items-center justify-center shadow-md">
-                                            <ComputerDesktopIcon className="w-8 h-8 text-gray-700" />
-                                        </div>
-                                        <span className="font-bold text-gray-900 dark:text-dark-text">Automático</span>
-                                        <span className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Segue o sistema</span>
-                                    </button>
-                                </div>
-
-                                {/* Informação sobre o tema atual */}
-                                {themeContext && (
-                                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                        <p className="text-sm text-blue-800">
-                                            <strong>Tema atual:</strong> {formConfig.temaPreferido === 'light' ? 'Claro' : formConfig.temaPreferido === 'dark' ? 'Escuro' : 'Automático'} 
-                                            {formConfig.temaPreferido === 'system' && ` (aplicando: ${themeContext.effectiveTheme === 'dark' ? 'Escuro' : 'Claro'})`}
+                            {/* Info do Usuário */}
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-6 mb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-16 bg-indigo-600 dark:bg-indigo-700 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                                        {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'AD'}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">{user?.name}</h3>
+                                        <p className="text-sm text-indigo-700 dark:text-indigo-400 font-semibold">
+                                            {user?.role === 'admin' && '👑 Administrador'}
+                                            {user?.role === 'gerente' && '📊 Gerente'}
+                                            {user?.role === 'desenvolvedor' && '💻 Desenvolvedor'}
+                                        </p>
+                                        <p className="text-xs text-gray-600 dark:text-dark-text-secondary mt-1">
+                                            Email: <span className="font-mono">{user?.email}</span>
                                         </p>
                                     </div>
-                                )}
+                                </div>
                             </div>
 
-                            {/* Logo da Empresa */}
-                            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                                <label className="block text-sm font-bold text-gray-700 mb-3">
-                                    Logo/Perfil da Empresa
-                                </label>
-                                <div className="flex items-start gap-6">
-                                    {/* Preview da Logo */}
-                                    <div className="flex-shrink-0">
-                                        {logoPreview ? (
-                                            <img 
-                                                src={logoPreview} 
-                                                alt="Logo Preview" 
-                                                className="w-32 h-32 rounded-xl object-cover border-4 border-white shadow-lg"
-                                            />
+                            {/* Formulário de Atualização */}
+                            <form onSubmit={handleAtualizarPerfil} className="space-y-6">
+                                {/* Nome */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                        Nome Completo *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={perfilNome}
+                                        onChange={(e) => setPerfilNome(e.target.value)}
+                                        className="input-field"
+                                        placeholder="Seu nome completo"
+                                        required
+                                    />
+                                </div>
+
+                                {/* Email (readonly) */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                        Email (não pode ser alterado)
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={user?.email || ''}
+                                        disabled
+                                        className="input-field opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-800"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+                                        ℹ️ O email é seu identificador único no sistema
+                                    </p>
+                                </div>
+
+                                {/* Divider */}
+                                <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">🔒 Alterar Senha</h3>
+                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-4">
+                                        Deixe em branco se não quiser alterar a senha
+                                    </p>
+                                </div>
+
+                                {/* Senha Atual */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                        Senha Atual
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={perfilSenhaAtual}
+                                        onChange={(e) => setPerfilSenhaAtual(e.target.value)}
+                                        className="input-field"
+                                        placeholder="Digite sua senha atual"
+                                    />
+                                </div>
+
+                                {/* Nova Senha */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                        Nova Senha
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={perfilSenhaNova}
+                                        onChange={(e) => setPerfilSenhaNova(e.target.value)}
+                                        className="input-field"
+                                        placeholder="Digite a nova senha (mínimo 6 caracteres)"
+                                        minLength={6}
+                                    />
+                                </div>
+
+                                {/* Confirmar Nova Senha */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                        Confirmar Nova Senha
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={perfilSenhaConfirma}
+                                        onChange={(e) => setPerfilSenhaConfirma(e.target.value)}
+                                        className="input-field"
+                                        placeholder="Confirme a nova senha"
+                                    />
+                                </div>
+
+                                {/* Botões */}
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPerfilNome(user?.name || '');
+                                            setPerfilSenhaAtual('');
+                                            setPerfilSenhaNova('');
+                                            setPerfilSenhaConfirma('');
+                                        }}
+                                        className="btn-secondary flex-1"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={saving}
+                                        className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                    >
+                                        {saving ? (
+                                            <>
+                                                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Salvando...
+                                            </>
                                         ) : (
-                                            <div className="w-32 h-32 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center border-4 border-white shadow-lg">
-                                                <PhotoIcon className="w-12 h-12 text-indigo-400" />
-                                            </div>
+                                            <>
+                                                <CheckIcon className="w-5 h-5" />
+                                                Salvar Alterações
+                                            </>
                                         )}
-                                    </div>
-                                    
-                                    {/* Input de Arquivo */}
-                                    <div className="flex-1">
-                                        <div className="relative">
-                                            <input
-                                                type="file"
-                                                id="logo-upload"
-                                                accept="image/jpeg,image/png,image/svg+xml,image/webp"
-                                                onChange={handleLogoChange}
-                                                className="hidden"
-                                            />
-                                            <label
-                                                htmlFor="logo-upload"
-                                                className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-indigo-500 cursor-pointer transition-colors bg-white"
-                                            >
-                                                <div className="text-center">
-                                                    <PhotoIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                                                    <p className="text-sm font-medium text-gray-700">
-                                                        {logoFile ? logoFile.name : 'Clique para selecionar uma imagem'}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 mt-1">
-                                                        PNG, JPG, SVG, WEBP (máx. 5MB)
-                                                    </p>
-                                                </div>
-                                            </label>
-                                        </div>
-                                        {logoFile && (
-                                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                                <p className="text-sm text-green-800">
-                                                    ✅ Arquivo selecionado: <strong>{logoFile.name}</strong> ({(logoFile.size / 1024).toFixed(2)} KB)
-                                                </p>
-                                            </div>
-                                        )}
-                                        <p className="text-xs text-blue-600 mt-2">
-                                            💡 <strong>Dica:</strong> O arquivo será enviado ao salvar as configurações
+                                    </button>
+                                </div>
+                            </form>
+
+                            {/* Alerta de Tema */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mt-6">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-blue-600 dark:text-blue-400 text-xl">💡</span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">Alteração de Tema</p>
+                                        <p className="text-xs text-blue-800 dark:text-blue-400 mt-1">
+                                            Para alterar entre tema claro e escuro, use o botão de sol/lua na sidebar inferior. A alteração é aplicada instantaneamente.
                                         </p>
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Botão de Salvar */}
-                            <div className="flex justify-end pt-6 border-t border-gray-200">
-                                <button
-                                    onClick={handleSalvarConfiguracoes}
-                                    disabled={saving}
-                                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {saving ? (
-                                        <>
-                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                            Salvando...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckIcon className="w-5 h-5 inline mr-2" />
-                                            Salvar Configurações
-                                        </>
-                                    )}
-                                </button>
                             </div>
                         </div>
                     )}

@@ -308,6 +308,108 @@ export class RelatoriosService {
     }
 
     /**
+     * Retorna dados para relatório financeiro personalizado
+     */
+    static async getDadosRelatorioFinanceiro(dataInicio: Date, dataFim: Date, tipo: string) {
+        // Buscar contas a receber do período
+        const contasReceber = await prisma.contaReceber.findMany({
+            where: {
+                dataVencimento: {
+                    gte: dataInicio,
+                    lte: dataFim
+                }
+            },
+            select: {
+                id: true,
+                descricao: true,
+                valorParcela: true,
+                dataVencimento: true,
+                dataPagamento: true,
+                status: true
+            },
+            orderBy: { dataVencimento: 'asc' }
+        });
+
+        // Buscar contas a pagar do período
+        const contasPagar = await prisma.contaPagar.findMany({
+            where: {
+                dataVencimento: {
+                    gte: dataInicio,
+                    lte: dataFim
+                }
+            },
+            select: {
+                id: true,
+                descricao: true,
+                valorParcela: true,
+                dataVencimento: true,
+                dataPagamento: true,
+                status: true
+            },
+            orderBy: { dataVencimento: 'asc' }
+        });
+
+        // Calcular totais
+        const totalReceber = contasReceber
+            .filter(c => c.status !== 'Pago')
+            .reduce((sum, c) => sum + (c.valorParcela || 0), 0);
+
+        const totalPagar = contasPagar
+            .filter(c => c.status !== 'Pago')
+            .reduce((sum, c) => sum + (c.valorParcela || 0), 0);
+
+        const totalFaturado = contasReceber
+            .filter(c => c.status === 'Pago')
+            .reduce((sum, c) => sum + (c.valorParcela || 0), 0);
+
+        const totalPago = contasPagar
+            .filter(c => c.status === 'Pago')
+            .reduce((sum, c) => sum + (c.valorParcela || 0), 0);
+
+        const saldoPrevisto = totalReceber - totalPagar;
+        const lucroLiquido = totalFaturado - totalPago;
+
+        // Filtrar por tipo de relatório
+        let contasReceberFiltradas = contasReceber;
+        let contasPagarFiltradas = contasPagar;
+
+        if (tipo === 'receber') {
+            contasPagarFiltradas = [];
+        } else if (tipo === 'pagar') {
+            contasReceberFiltradas = [];
+        }
+
+        return {
+            totalReceber,
+            totalPagar,
+            saldoPrevisto,
+            totalFaturado,
+            totalPago,
+            lucroLiquido,
+            contasReceber: contasReceberFiltradas.map(c => ({
+                id: c.id,
+                descricao: c.descricao,
+                valor: c.valorParcela,
+                dataVencimento: c.dataVencimento,
+                dataPagamento: c.dataPagamento,
+                status: c.status
+            })),
+            contasPagar: contasPagarFiltradas.map(c => ({
+                id: c.id,
+                descricao: c.descricao,
+                valor: c.valorParcela,
+                dataVencimento: c.dataVencimento,
+                dataPagamento: c.dataPagamento,
+                status: c.status
+            })),
+            periodo: {
+                inicio: dataInicio,
+                fim: dataFim
+            }
+        };
+    }
+
+    /**
      * Retorna dashboard completo
      */
     static async getDashboardCompleto() {

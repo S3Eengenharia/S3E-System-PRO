@@ -79,6 +79,13 @@ class ConfiguracoesService {
   }
 
   /**
+   * Atualiza o perfil do usuário (nome e senha)
+   */
+  async atualizarPerfil(userId: string, data: { name?: string; senhaAtual?: string; senhaNova?: string }) {
+    return axiosApiService.put(`/api/configuracoes/usuarios/${userId}/perfil`, data);
+  }
+
+  /**
    * Ativa/desativa um usuário
    */
   async toggleUsuarioStatus(userId: string, active: boolean) {

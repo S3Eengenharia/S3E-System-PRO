@@ -51,9 +51,20 @@ export class AlocacaoController {
       });
     } catch (error) {
       console.error('Erro ao criar equipe:', error);
+      
+      // Se for erro de nome duplicado, retornar 400 com mensagem clara
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      
+      if (errorMessage.includes('Já existe uma equipe')) {
+        return res.status(400).json({
+          success: false,
+          error: errorMessage
+        });
+      }
+      
       res.status(500).json({
-        error: 'Erro interno do servidor',
-        message: error instanceof Error ? error.message : 'Erro desconhecido'
+        success: false,
+        error: errorMessage
       });
     }
   }

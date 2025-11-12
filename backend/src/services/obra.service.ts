@@ -58,6 +58,56 @@ export class ObraService {
   }
 
   /**
+   * Busca obra por ID
+   */
+  async buscarObraPorId(obraId: string) {
+    try {
+      const obra = await prisma.obra.findUnique({
+        where: { id: obraId },
+        include: {
+          projeto: {
+            include: {
+              cliente: { 
+                select: { 
+                  id: true, 
+                  nome: true,
+                  email: true,
+                  telefone: true 
+                } 
+              }
+            }
+          },
+          cliente: {
+            select: { 
+              id: true, 
+              nome: true,
+              email: true,
+              telefone: true 
+            }
+          }
+        }
+      });
+
+      if (!obra) {
+        return null;
+      }
+
+      // Formatar resposta com informações do cliente
+      const clienteNome = obra.cliente?.nome || obra.projeto?.cliente?.nome || 'Cliente não informado';
+
+      return {
+        ...obra,
+        clienteNome,
+        endereco: obra.endereco || obra.projeto?.endereco || '',
+        descricao: obra.descricao || obra.projeto?.descricao || ''
+      };
+    } catch (error) {
+      console.error('Erro ao buscar obra por ID:', error);
+      throw new Error('Erro ao buscar obra');
+    }
+  }
+
+  /**
    * Gera uma Obra a partir de um Projeto aprovado
    */
   async gerarObraAPartirDoProjeto(projetoId: string, nomeObra?: string) {

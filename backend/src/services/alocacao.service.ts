@@ -40,6 +40,15 @@ export class AlocacaoService {
    * Cria uma nova equipe
    */
   async criarEquipe(data: CriarEquipeDTO) {
+    // Verificar se já existe uma equipe com o mesmo nome
+    const equipeExistente = await prisma.equipe.findUnique({
+      where: { nome: data.nome }
+    });
+
+    if (equipeExistente) {
+      throw new Error(`Já existe uma equipe com o nome "${data.nome}". Por favor, escolha outro nome.`);
+    }
+
     // Filtrar valores nulos, undefined e strings vazias dos membros
     const membrosValidos = (data.membros || []).filter(
       (id: string | null | undefined) => id != null && id !== '' && typeof id === 'string'

@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { navLinks, S3ELogoIcon } from '../constants';
 import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { ThemeToggle } from './theme-toggle';
+import { hasPermission } from '../utils/permissions';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -54,6 +55,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
         const saved = localStorage.getItem('sidebarCollapsed');
         return saved === 'true';
     });
+
+    // Filtrar links baseado nas permissões do usuário
+    const filteredNavLinks = useMemo(() => {
+        return navLinks.filter(link => {
+            // Se o link tem devOnly=true, só mostra para desenvolvedor (legado)
+            if (link.devOnly && user?.role?.toLowerCase() !== 'desenvolvedor') {
+                return false;
+            }
+            
+            // Se o link tem uma permissão específica, verifica se o usuário tem
+            if (link.requiredPermission) {
+                return hasPermission(user?.role, link.requiredPermission);
+            }
+            
+            // Links sem permissão específica são mostrados para todos
+            return true;
+        });
+    }, [user?.role]);
 
     useEffect(() => {
         // Carregar logo do localStorage
@@ -135,16 +154,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
             </div>
 
             <nav className="flex-1 px-3 py-5 overflow-y-auto">
-                {/* MÓDULOS PRINCIPAIS */}
-                <div className="mb-6">
-                    {!isCollapsed && (
-                        <>
-                            <span className="block px-2 mb-3 text-[10px] font-bold text-gray-400 dark:text-dark-text-secondary uppercase tracking-wider">Módulos Principais</span>
-                            <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-gray-500 dark:text-dark-text-secondary uppercase tracking-wider bg-gray-50 dark:bg-dark-bg rounded-lg">Geral</span>
-                        </>
-                    )}
-                    <ul className="space-y-1">
-                        {navLinks.slice(0, 1).map((link) => (
+                {/* GERAL */}
+                {filteredNavLinks.filter(link => link.name === 'Dashboard').length > 0 && (
+                    <div className="mb-6">
+                        {!isCollapsed && (
+                            <>
+                                <span className="block px-2 mb-3 text-[10px] font-bold text-gray-400 dark:text-dark-text-secondary uppercase tracking-wider">Módulos Principais</span>
+                                <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-gray-500 dark:text-dark-text-secondary uppercase tracking-wider bg-gray-50 dark:bg-dark-bg rounded-lg">Geral</span>
+                            </>
+                        )}
+                        <ul className="space-y-1">
+                            {filteredNavLinks.filter(link => link.name === 'Dashboard').map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -163,17 +183,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                     {!isCollapsed && link.name}
                                 </a>
                             </li>
-                        ))}
-                    </ul>
-                </div>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* COMERCIAL / VENDAS */}
-                <div className="mb-6">
-                    {!isCollapsed && (
-                        <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20 rounded-lg">Comercial</span>
-                    )}
-                    <ul className="space-y-1">
-                        {navLinks.slice(1, 4).map((link) => (
+                {filteredNavLinks.filter(link => ['Clientes', 'Orçamentos', 'Vendas'].includes(link.name)).length > 0 && (
+                    <div className="mb-6">
+                        {!isCollapsed && (
+                            <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20 rounded-lg">Comercial</span>
+                        )}
+                        <ul className="space-y-1">
+                            {filteredNavLinks.filter(link => ['Clientes', 'Orçamentos', 'Vendas'].includes(link.name)).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -192,17 +214,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                     {!isCollapsed && link.name}
                                 </a>
                             </li>
-                        ))}
-                    </ul>
-                </div>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* SUPRIMENTOS / ESTOQUE */}
-                <div className="mb-6">
-                    {!isCollapsed && (
-                        <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider bg-orange-50 dark:bg-orange-900/20 rounded-lg">Suprimentos</span>
-                    )}
-                    <ul className="space-y-1">
-                        {navLinks.slice(4, 10).map((link) => (
+                {filteredNavLinks.filter(link => ['Fornecedores', 'Compras', 'Estoque', 'Movimentações', 'Catálogo', 'Comparação de Preços'].includes(link.name)).length > 0 && (
+                    <div className="mb-6">
+                        {!isCollapsed && (
+                            <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider bg-orange-50 dark:bg-orange-900/20 rounded-lg">Suprimentos</span>
+                        )}
+                        <ul className="space-y-1">
+                            {filteredNavLinks.filter(link => ['Fornecedores', 'Compras', 'Estoque', 'Movimentações', 'Catálogo', 'Comparação de Preços'].includes(link.name)).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -221,17 +245,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                     {!isCollapsed && link.name}
                                 </a>
                             </li>
-                        ))}
-                    </ul>
-                </div>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* OPERACIONAL / PROJETOS */}
-                <div className="mb-6">
-                    {!isCollapsed && (
-                        <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-purple-600 uppercase tracking-wider bg-purple-50 rounded-lg">Operacional</span>
-                    )}
-                    <ul className="space-y-1">
-                        {navLinks.slice(10, 14).map((link) => (
+                {filteredNavLinks.filter(link => ['Projetos', 'Obras', 'Tarefas da Obra', 'Gestão de Obras', 'Serviços'].includes(link.name)).length > 0 && (
+                    <div className="mb-6">
+                        {!isCollapsed && (
+                            <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20 rounded-lg">Operacional</span>
+                        )}
+                        <ul className="space-y-1">
+                            {filteredNavLinks.filter(link => ['Projetos', 'Obras', 'Tarefas da Obra', 'Gestão de Obras', 'Serviços'].includes(link.name)).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -250,80 +276,101 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                                     {!isCollapsed && link.name}
                                 </a>
                             </li>
-                        ))}
-                    </ul>
-                </div>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* FINANCEIRO / CONTÁBIL */}
-                <div className="mb-6">
-                    {!isCollapsed && (
-                        <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-blue-600 uppercase tracking-wider bg-blue-50 rounded-lg">Financeiro</span>
-                    )}
-                    <ul className="space-y-1">
-                        {navLinks.slice(14, 17).map((link) => (
-                            <li key={link.name}>
-                                <a
-                                    href="#"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        onNavigate(link.name);
-                                    }}
-                                    className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
-                                        ${activeView === link.name
-                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
-                                            : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-bg hover:text-gray-900 dark:hover:text-dark-text'
-                                        }`}
-                                    title={isCollapsed ? link.name : ''}
-                                >
-                                    <link.icon className={`w-5 h-5 ${!isCollapsed && 'mr-3'}`} />
-                                    {!isCollapsed && link.name}
-                                </a>
-                            </li>
-                        ))}
+                {filteredNavLinks.filter(link => ['Financeiro', 'Emissão NF-e', 'Logs'].includes(link.name)).length > 0 && (
+                    <div className="mb-6">
+                        {!isCollapsed && (
+                            <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20 rounded-lg">Financeiro</span>
+                        )}
+                        <ul className="space-y-1">
+                            {filteredNavLinks.filter(link => ['Financeiro', 'Emissão NF-e', 'Logs'].includes(link.name)).map((link) => {
+                            // Usar tema vermelho para Logs (desenvolvedor)
+                            const isDevPage = link.name === 'Logs';
+                            const activeClass = isDevPage && activeView === link.name
+                                ? 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-medium ring-2 ring-red-300 dark:ring-red-800'
+                                : activeView === link.name
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-bg hover:text-gray-900 dark:hover:text-dark-text';
+                            
+                            return (
+                                <li key={link.name}>
+                                    <a
+                                        href="#"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            onNavigate(link.name);
+                                        }}
+                                        className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative ${activeClass}`}
+                                        title={isCollapsed ? link.name : ''}
+                                    >
+                                        <link.icon className={`w-5 h-5 ${!isCollapsed && 'mr-3'}`} />
+                                        {!isCollapsed && (
+                                            <span className="flex items-center gap-2">
+                                                {link.name}
+                                                {isDevPage && (
+                                                    <span className="px-1.5 py-0.5 bg-white/20 text-[9px] font-bold rounded">DEV</span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </a>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
+                )}
 
                 {/* GERENCIAMENTO / ADMINISTRATIVO */}
-                <div className="mb-6">
-                    {!isCollapsed && (
-                        <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-indigo-600 uppercase tracking-wider bg-indigo-50 rounded-lg">Gerenciamento</span>
-                    )}
-                    <ul className="space-y-1">
-                        {navLinks.slice(17).map((link) => (
-                            <li key={link.name}>
-                                <a
-                                    href="#"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        onNavigate(link.name);
-                                    }}
-                                    className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
-                                        ${activeView === link.name
-                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
-                                            : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-bg hover:text-gray-900 dark:hover:text-dark-text'
-                                        }`}
-                                    title={isCollapsed ? link.name : ''}
-                                >
-                                    <link.icon className={`w-5 h-5 ${!isCollapsed && 'mr-3'}`} />
-                                    {!isCollapsed && link.name}
-                                </a>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
+                {filteredNavLinks.filter(link => link.name === 'Gerenciamento Empresarial').length > 0 && (
+                    <div className="mb-6">
+                        {!isCollapsed && (
+                            <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">Gerenciamento</span>
+                        )}
+                        <ul className="space-y-1">
+                            {filteredNavLinks.filter(link => link.name === 'Gerenciamento Empresarial').map((link) => (
+                                <li key={link.name}>
+                                    <a
+                                        href="#"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            onNavigate(link.name);
+                                        }}
+                                        className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 group relative
+                                            ${activeView === link.name
+                                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-medium'
+                                                : 'text-gray-600 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-bg hover:text-gray-900 dark:hover:text-dark-text'
+                                            }`}
+                                        title={isCollapsed ? link.name : ''}
+                                    >
+                                        <link.icon className={`w-5 h-5 ${!isCollapsed && 'mr-3'}`} />
+                                        {!isCollapsed && link.name}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </nav>
 
             <div className={`p-4 border-t border-gray-100 dark:border-dark-border bg-gradient-to-r from-gray-50 to-white dark:from-dark-card dark:to-dark-bg ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
                  <div className={`flex ${isCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between'} mb-3`}>
                     <div className={`flex items-center ${isCollapsed ? 'flex-col' : 'gap-3'}`}>
-                        <div className="relative">
-                            <img className="w-11 h-11 rounded-xl object-cover shadow-medium ring-2 ring-gray-100 dark:ring-dark-border" src={user?.avatar || "https://picsum.photos/100"} alt="User Avatar" />
-                            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-dark-card rounded-full"></span>
-                        </div>
                         {!isCollapsed && (
                             <div>
                                 <p className="font-bold text-sm text-gray-900 dark:text-dark-text">{user?.name || 'Usuário'}</p>
-                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary font-medium">{user?.role || 'Admin'}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-xs text-gray-500 dark:text-dark-text-secondary font-medium">{user?.role || 'Admin'}</p>
+                                    {user?.role?.toLowerCase() === 'desenvolvedor' && (
+                                        <span className="px-2 py-0.5 bg-gradient-to-r from-red-600 to-red-500 text-white text-[10px] font-bold rounded-full animate-pulse">
+                                            DEV
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>

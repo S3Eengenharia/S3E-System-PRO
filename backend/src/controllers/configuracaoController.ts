@@ -2,7 +2,10 @@ import { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { PrismaClient } from '@prisma/client';
 import configuracaoService from '../services/configuracao.service.js';
+
+const prisma = new PrismaClient();
 
 // Configuração do multer para upload de imagem
 const storage = multer.diskStorage({
@@ -365,6 +368,115 @@ export class ConfiguracaoController {
         success: false,
         message: 'Erro ao excluir usuário',
         error: error.message
+      });
+    }
+  }
+
+  /**
+   * PUT /api/configuracoes/usuarios/:id/perfil
+   * Atualiza o perfil do próprio usuário (nome e senha)
+   */
+  static async atualizarPerfil(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { name, senhaAtual, senhaNova } = req.body;
+      const userId = (req as any).user?.userId;
+      const userRole = (req as any).user?.role?.toLowerCase();
+      
+      // Verificar se está atualizando o próprio perfil (ou se é desenvolvedor)
+      if (userRole !== 'desenvolvedor' && userId !== id) {
+        res.status(403).json({
+          success: false,
+          error: '🚫 Você só pode atualizar seu próprio perfil'
+        });
+        return;
+      }
+      
+      const usuario = await prisma.user.findUnique({
+        where: { id }
+      });
+      
+      if (!usuario) {
+        res.status(404).json({
+          success: false,
+          error: 'Usuário não encontrado'
+        });
+        return;
+      }
+      
+      const dadosAtualizacao: any = {};
+      
+      // Atualizar nome
+      if (name) {
+        dadosAtualizacao.name = name;
+      }
+      
+      // Atualizar senha (se fornecida)
+      if (senhaNova) {
+        if (!senhaAtual) {
+          res.status(400).json({
+            success: false,
+            error: 'Senha atual é obrigatória para alterar a senha'
+          });
+          return;
+        }
+        
+        // Verificar senha atual
+        const bcrypt = (await import('bcryptjs')).default;
+        const senhaValida = await bcrypt.compare(senhaAtual, usuario.password);
+        
+        if (!senhaValida) {
+          res.status(400).json({
+            success: false,
+            error: 'Senha atual incorreta'
+          });
+          return;
+        }
+        
+        // Hash da nova senha
+        dadosAtualizacao.password = await bcrypt.hash(senhaNova, 10);
+      }
+      
+      // Atualizar usuário
+      const usuarioAtualizado = await prisma.user.update({
+        where: { id },
+        data: dadosAtualizacao,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          active: true
+        }
+      });
+      
+      // Audit log
+      await prisma.auditLog.create({
+        data: {
+          userId: userId,
+          action: 'UPDATE_PROFILE',
+          entity: 'User',
+          entityId: id,
+          description: `Usuário ${name ? 'atualizou nome' : ''}${name && senhaNova ? ' e ' : ''}${senhaNova ? 'alterou senha' : ''}`,
+          metadata: {
+            nomeAlterado: !!name,
+            senhaAlterada: !!senhaNova
+          }
+        }
+      });
+      
+      console.log(`✅ Perfil atualizado: ${usuarioAtualizado.email}`);
+      
+      res.json({
+        success: true,
+        data: usuarioAtualizado,
+        message: '✅ Perfil atualizado com sucesso!'
+      });
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar perfil:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao atualizar perfil'
       });
     }
   }
