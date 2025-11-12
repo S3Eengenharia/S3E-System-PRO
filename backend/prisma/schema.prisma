@@ -19,7 +19,7 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      String   @default("user") // admin, orcamentista, compras, gerente
+  role      String   @default("user") // admin, orcamentista, compras, gerente, tecnico, desenvolvedor
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -27,8 +27,33 @@ model User {
   // Relacionamentos
   pdfTemplates       PDFTemplate[]
   projetosResponsavel Projeto[]    @relation("ProjetoResponsavel")
+  auditLogs          AuditLog[]
 
   @@map("users")
+}
+
+// Log de Auditoria do Sistema
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  userName    String?
+  userRole    String?
+  action      String   // LOGIN, LOGOUT, CREATE, UPDATE, DELETE, ACCESS, etc
+  entity      String?  // Projeto, Orcamento, Cliente, etc
+  entityId    String?
+  description String
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?    // Dados adicionais em JSON
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // Templates de Customização de PDF
@@ -271,6 +296,7 @@ enum ProjetoStatus {
   APROVADO
   EXECUCAO
   CONCLUIDO
+  CANCELADO
 }
 
 model Projeto {
@@ -691,9 +717,10 @@ model RegistroAtividade {
   id                  String    @id @default(uuid())
   tarefaId            String
   dataRegistro        DateTime  @default(now())
-  descricaoAtividade  String // O que foi feito
+  descricaoAtividade  String // O que foi feito (resumo do dia)
   horasTrabalhadas    Float     @default(0)
   observacoes         String?
+  imagens             String[]  @default([]) // URLs das imagens enviadas
   createdAt           DateTime  @default(now())
 
   tarefa TarefaObra @relation(fields: [tarefaId], references: [id], onDelete: Cascade)

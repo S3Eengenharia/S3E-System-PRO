@@ -63,12 +63,11 @@ export const MovementIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-// Ícone de Histórico (Relógio com Histórico)
-export const HistoryIcon = (props: React.SVGProps<SVGSVGElement>) => (
+// Ícone de Logs (Terminal/Console)
+export const LogsIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-        <path d="M3 3v5h5" />
-        <path d="M12 7v5l4 2" />
+        <polyline points="4 17 10 11 4 5"></polyline>
+        <line x1="12" y1="19" x2="20" y2="19"></line>
     </svg>
 );
 
@@ -274,39 +273,65 @@ export const ManagementIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+// Ícone de Tarefas/Checklist
+export const TaskListIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="5" width="18" height="14" rx="2" ry="2"/>
+        <line x1="7" y1="9" x2="11" y2="9"/>
+        <line x1="7" y1="13" x2="11" y2="13"/>
+        <line x1="7" y1="17" x2="11" y2="17"/>
+        <circle cx="15" cy="9" r="1" fill="currentColor"/>
+        <circle cx="15" cy="13" r="1" fill="currentColor"/>
+        <circle cx="15" cy="17" r="1" fill="currentColor"/>
+    </svg>
+);
+
 // ============================================
 // NAVEGAÇÃO PRINCIPAL DO SISTEMA
-// Organizada por Setores de Negócio
+// Organizada por Setores de Negócio com RBAC
 // ============================================
 
-export const navLinks = [
+import { Permission } from '../utils/permissions';
+
+export interface NavLink {
+    name: string;
+    icon: React.FC<React.SVGProps<SVGSVGElement>>;
+    devOnly?: boolean; // Legado: apenas desenvolvedor
+    requiredPermission?: Permission; // Nova: permissão específica necessária
+}
+
+export const navLinks: NavLink[] = [
     // ========== GERAL / INÍCIO ==========
+    // Dashboard não tem permissão específica - aparece para todos
     { name: 'Dashboard', icon: DashboardIcon },
     
     // ========== COMERCIAL / VENDAS ==========
-    { name: 'Clientes', icon: ClientsIcon },
-    { name: 'Orçamentos', icon: BudgetIcon },
-    { name: 'Vendas', icon: SalesIcon },
+    // Todas as páginas comerciais precisam de permissões (eletricista não vê)
+    { name: 'Clientes', icon: ClientsIcon, requiredPermission: 'view_projetos' },
+    { name: 'Orçamentos', icon: BudgetIcon, requiredPermission: 'view_projetos' },
+    { name: 'Vendas', icon: SalesIcon, requiredPermission: 'view_vendas' },
     
     // ========== SUPRIMENTOS / ESTOQUE ==========
-    { name: 'Fornecedores', icon: SupplierIcon },
-    { name: 'Compras', icon: ShoppingBagIcon },
-    { name: 'Estoque', icon: CubeIcon },
-    { name: 'Movimentações', icon: MovementIcon }, // Movido de FINANCEIRO para SUPRIMENTOS
-    { name: 'Catálogo', icon: CatalogIcon },
-    { name: 'Comparação de Preços', icon: CompareIcon },
+    // Fornecedores, Compras, Estoque, Catálogo, Comparação precisam de permissões
+    { name: 'Fornecedores', icon: SupplierIcon, requiredPermission: 'view_projetos' },
+    { name: 'Compras', icon: ShoppingBagIcon, requiredPermission: 'view_projetos' },
+    { name: 'Estoque', icon: CubeIcon, requiredPermission: 'view_catalogo' },
+    { name: 'Movimentações', icon: MovementIcon, requiredPermission: 'view_movimentacoes' },
+    { name: 'Catálogo', icon: CatalogIcon, requiredPermission: 'view_catalogo' },
+    { name: 'Comparação de Preços', icon: CompareIcon, requiredPermission: 'view_comparacao_precos' },
     
     // ========== OPERACIONAL / PROJETOS ==========
-    { name: 'Projetos', icon: BlueprintIcon },
-    { name: 'Obras', icon: ConstructionIcon },
-    { name: 'Gestão de Obras', icon: TeamCalendarIcon },
-    { name: 'Serviços', icon: ElectricalServiceIcon },
+    { name: 'Projetos', icon: BlueprintIcon, requiredPermission: 'view_projetos' },
+    { name: 'Obras', icon: ConstructionIcon, requiredPermission: 'view_obras' },
+    { name: 'Tarefas da Obra', icon: TaskListIcon, requiredPermission: 'view_tarefas_obra' },
+    { name: 'Gestão de Obras', icon: TeamCalendarIcon, requiredPermission: 'view_gestao_obras' },
+    { name: 'Serviços', icon: ElectricalServiceIcon, requiredPermission: 'view_servicos' },
     
     // ========== FINANCEIRO / CONTÁBIL ==========
-    { name: 'Financeiro', icon: FinanceIcon },
-    { name: 'Emissão NF-e', icon: InvoiceIcon },
-    { name: 'Histórico', icon: HistoryIcon },
+    { name: 'Financeiro', icon: FinanceIcon, requiredPermission: 'view_financeiro' },
+    { name: 'Emissão NF-e', icon: InvoiceIcon, requiredPermission: 'view_nfe' },
+    { name: 'Logs', icon: LogsIcon, devOnly: true, requiredPermission: 'view_logs' }, // Desenvolvedor apenas
     
     // ========== GERENCIAMENTO / ADMINISTRATIVO ==========
-    { name: 'Gerenciamento Empresarial', icon: ManagementIcon },
+    { name: 'Gerenciamento Empresarial', icon: ManagementIcon, requiredPermission: 'view_gerenciamento' },
 ];

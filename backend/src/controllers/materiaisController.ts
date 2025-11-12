@@ -1,7 +1,42 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
+import multer from 'multer';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 const prisma = new PrismaClient();
+
+// Configuração do multer para upload de arquivos
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../../uploads/temp');
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `import-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+export const uploadImportFile = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /xlsx|csv/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    
+    if (extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos XLSX ou CSV são permitidos'));
+    }
+  }
+}).single('arquivo');
 
 // Listar todos os materiais
 export const getMateriais = async (req: Request, res: Response): Promise<void> => {
@@ -326,4 +361,504 @@ export const corrigirNomesGenericos = async (req: Request, res: Response): Promi
     res.status(500).json({ error: 'Erro ao corrigir nomes genéricos' });
   }
 };
+
+/**
+ * Exportar materiais críticos (estoque baixo/zerado) para cotação com fornecedor
+ * GET /api/materiais/exportar-criticos?formato=xlsx|csv|pdf
+ */
+export const exportarMateriaisCriticos = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { formato = 'xlsx' } = req.query;
+
+    // Buscar materiais com estoque crítico
+    // Primeiro buscar todos os materiais ativos
+    const todosMateriais = await prisma.material.findMany({
+      where: {
+        ativo: true
+      },
+      include: {
+        fornecedor: {
+          select: { id: true, nome: true, email: true, telefone: true }
+        }
+      },
+      orderBy: [
+        { estoque: 'asc' },
+        { sku: 'asc' }
+      ]
+    });
+
+    // Filtrar materiais críticos (estoque zerado ou abaixo do mínimo)
+    const materiais = todosMateriais.filter(m => 
+      m.estoque === 0 || m.estoque <= m.estoqueMinimo
+    );
+
+    console.log(`📊 Exportando ${materiais.length} materiais críticos em formato ${formato}`);
+
+    if (materiais.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Nenhum material com estoque crítico encontrado'
+      });
+    }
+
+    // Gerar arquivo conforme formato solicitado
+    if (formato === 'xlsx') {
+      await gerarExcelCotacao(res, materiais);
+    } else if (formato === 'csv') {
+      await gerarCSVCotacao(res, materiais);
+    } else if (formato === 'pdf') {
+      await gerarPDFCotacao(res, materiais);
+    } else {
+      res.status(400).json({ error: 'Formato inválido. Use: xlsx, csv ou pdf' });
+    }
+
+  } catch (error) {
+    console.error('Erro ao exportar materiais críticos:', error);
+    res.status(500).json({ error: 'Erro ao exportar materiais críticos' });
+  }
+};
+
+/**
+ * Gerar arquivo Excel para cotação com fornecedor
+ */
+async function gerarExcelCotacao(res: Response, materiais: any[]) {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'S3E Engenharia';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const sheet = workbook.addWorksheet('Materiais para Cotação');
+
+    // Mesclar células do cabeçalho
+    sheet.mergeCells('A1:I1');
+    sheet.mergeCells('A2:I2');
+    sheet.mergeCells('A4:I4');
+
+    // Cabeçalho
+    sheet.getCell('A1').value = 'S3E ENGENHARIA ELÉTRICA - SOLICITAÇÃO DE COTAÇÃO';
+    sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF1a5490' } };
+    sheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3F2FD' } };
+    sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 25;
+
+    sheet.getCell('A2').value = `Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
+    sheet.getCell('A2').font = { size: 11 };
+    sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(2).height = 20;
+
+    sheet.getCell('A4').value = 'INSTRUÇÕES: Preencha a coluna "Preço Fornecedor" com os valores atualizados. Não altere as outras colunas!';
+    sheet.getCell('A4').font = { bold: true, color: { argb: 'FFF57C00' } };
+    sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3E0' } };
+    sheet.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(4).height = 30;
+
+    // Cabeçalhos das colunas (linha 6)
+    const headerRow = sheet.getRow(6);
+    headerRow.values = [
+      'Código (SKU)',
+      'Nome do Material',
+      'Unidade',
+      'Estoque Atual',
+      'Estoque Mínimo',
+      'Preço Atual',
+      'Preço Fornecedor',
+      'Fornecedor Atual',
+      'Observações'
+    ];
+
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4CAF50' } };
+    headerRow.height = 25;
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Adicionar bordas ao header
+    headerRow.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+
+    // Dados (começando da linha 7)
+    let rowIndex = 7;
+    materiais.forEach((material) => {
+      const row = sheet.getRow(rowIndex);
+      row.values = [
+        material.sku,
+        material.nome || material.descricao,
+        material.unidadeMedida,
+        material.estoque,
+        material.estoqueMinimo,
+        material.preco || 0,
+        null, // Preço Fornecedor vazio
+        material.fornecedor?.nome || 'N/A',
+        null // Observações
+      ];
+
+      // Colorir linhas de estoque zerado
+      const fillColor = material.estoque === 0 ? 'FFFFEBEE' : 'FFFFFDE7';
+      row.eachCell((cell, colNumber) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+          left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+          right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+        };
+      });
+
+      rowIndex++;
+    });
+
+    // Formatação de colunas
+    sheet.getColumn(1).width = 15; // SKU
+    sheet.getColumn(2).width = 40; // Nome
+    sheet.getColumn(3).width = 10; // Unidade
+    sheet.getColumn(4).width = 12; // Estoque Atual
+    sheet.getColumn(5).width = 15; // Estoque Mínimo
+    sheet.getColumn(6).width = 15; // Preço Atual
+    sheet.getColumn(7).width = 15; // Preço Fornecedor
+    sheet.getColumn(8).width = 25; // Fornecedor
+    sheet.getColumn(9).width = 30; // Observações
+
+    // Formato numérico
+    sheet.getColumn(4).numFmt = '0';
+    sheet.getColumn(5).numFmt = '0';
+    sheet.getColumn(6).numFmt = '"R$ "#,##0.00';
+    sheet.getColumn(7).numFmt = '"R$ "#,##0.00';
+
+    // Alinhar células de dados
+    for (let i = 7; i < rowIndex; i++) {
+      const row = sheet.getRow(i);
+      row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+      row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+    }
+
+    // Gerar buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    
+    // Enviar arquivo
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=cotacao-materiais-criticos-${new Date().toISOString().split('T')[0]}.xlsx`);
+    res.setHeader('Content-Length', buffer.length.toString());
+    
+    res.send(buffer);
+  } catch (error) {
+    console.error('❌ Erro ao gerar Excel:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gerar arquivo CSV para cotação
+ */
+async function gerarCSVCotacao(res: Response, materiais: any[]) {
+  let csv = 'Código (SKU);Nome do Material;Unidade;Estoque Atual;Estoque Mínimo;Preço Atual;Preço Fornecedor;Fornecedor Atual;Observações\n';
+
+  materiais.forEach((material) => {
+    csv += `${material.sku};`;
+    csv += `${material.nome || material.descricao};`;
+    csv += `${material.unidadeMedida};`;
+    csv += `${material.estoque};`;
+    csv += `${material.estoqueMinimo};`;
+    csv += `${(material.preco || 0).toFixed(2)};`;
+    csv += `;`; // Preço Fornecedor vazio para preenchimento
+    csv += `${material.fornecedor?.nome || 'N/A'};`;
+    csv += `\n`;
+  });
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename=cotacao-materiais-criticos-${new Date().toISOString().split('T')[0]}.csv`);
+  
+  // Adicionar BOM UTF-8 para Excel reconhecer corretamente
+  res.write('\uFEFF');
+  res.write(csv);
+  res.end();
+}
+
+/**
+ * Gerar arquivo PDF para cotação
+ */
+async function gerarPDFCotacao(res: Response, materiais: any[]) {
+  const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename=cotacao-materiais-criticos-${new Date().toISOString().split('T')[0]}.pdf`);
+
+  doc.pipe(res);
+
+  // Cabeçalho
+  doc.fontSize(16).fillColor('#000000').text('S3E ENGENHARIA ELÉTRICA', 30, 30, { align: 'center', width: 782 });
+  doc.fontSize(12).fillColor('#333333').text('Solicitação de Cotação - Materiais Críticos', 30, 50, { align: 'center', width: 782 });
+  doc.fontSize(9).fillColor('#666666').text(
+    `Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,
+    30, 70, { align: 'center', width: 782 }
+  );
+
+  // Instruções
+  doc.fontSize(8).fillColor('#FF6600').text(
+    'INSTRUÇÕES: Preencha a coluna "Novo Preço" e retorne este documento',
+    30, 90, { align: 'center', width: 782 }
+  );
+
+  let yPos = 110;
+
+  // Tabela - Header
+  doc.fontSize(8).fillColor('#FFFFFF');
+  doc.rect(30, yPos, 782, 20).fill('#4CAF50');
+
+  const headers = ['SKU', 'Material', 'Un', 'Estq', 'Mín', 'Preço Atual', 'Novo Preço', 'Fornecedor'];
+  const colX = [35, 100, 330, 370, 410, 450, 530, 610];
+  
+  headers.forEach((header, i) => {
+    doc.fontSize(8).fillColor('#FFFFFF').text(header, colX[i], yPos + 6);
+  });
+
+  yPos += 20;
+
+  // Linhas de materiais
+  materiais.forEach((material, index) => {
+    if (yPos > 540) {
+      doc.addPage({ margin: 30, size: 'A4', layout: 'landscape' });
+      yPos = 30;
+      
+      // Repetir header na nova página
+      doc.rect(30, yPos, 782, 20).fill('#4CAF50');
+      headers.forEach((header, i) => {
+        doc.fontSize(8).fillColor('#FFFFFF').text(header, colX[i], yPos + 6);
+      });
+      yPos += 20;
+    }
+
+    // Background alternado
+    const bgColor = material.estoque === 0 ? '#FFEBEE' : (index % 2 === 0 ? '#FFFFFF' : '#F5F5F5');
+    doc.rect(30, yPos, 782, 18).fill(bgColor);
+
+    // Dados
+    doc.fontSize(7).fillColor('#000000');
+    doc.text(material.sku || '', 35, yPos + 5);
+    doc.text((material.nome || material.descricao || '').substring(0, 30), 100, yPos + 5);
+    doc.text(material.unidadeMedida || '', 330, yPos + 5);
+    doc.text(material.estoque?.toString() || '0', 370, yPos + 5);
+    doc.text(material.estoqueMinimo?.toString() || '0', 410, yPos + 5);
+    doc.text(`R$ ${(material.preco || 0).toFixed(2)}`, 450, yPos + 5);
+    doc.text('_____________', 530, yPos + 5);
+    doc.text((material.fornecedor?.nome || 'N/A').substring(0, 22), 610, yPos + 5);
+
+    yPos += 18;
+  });
+
+  // Rodapé
+  doc.fontSize(7).fillColor('#999999').text(
+    `S3E Engenharia - Total de ${materiais.length} materiais críticos`,
+    30, 560, { align: 'center', width: 782 }
+  );
+
+  doc.end();
+}
+
+/**
+ * Importar preços atualizados do fornecedor
+ * POST /api/materiais/importar-precos
+ */
+export const importarPrecos = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhum arquivo foi enviado'
+      });
+    }
+
+    console.log(`📥 Importando preços do arquivo: ${file.filename}`);
+
+    const ext = path.extname(file.filename).toLowerCase();
+    let dadosImportados: any[] = [];
+
+    if (ext === '.xlsx') {
+      dadosImportados = await processarExcel(file.path);
+    } else if (ext === '.csv') {
+      dadosImportados = await processarCSV(file.path);
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Formato de arquivo inválido'
+      });
+    }
+
+    // Processar atualizações
+    let atualizados = 0;
+    let erros = 0;
+    const detalhes: any[] = [];
+
+    for (const item of dadosImportados) {
+      try {
+        const { sku, precoFornecedor } = item;
+
+        // Validar dados
+        if (!sku || !precoFornecedor || isNaN(parseFloat(precoFornecedor)) || parseFloat(precoFornecedor) <= 0) {
+          erros++;
+          detalhes.push({
+            sku,
+            erro: 'Preço inválido ou não informado'
+          });
+          continue;
+        }
+
+        // Buscar material pelo SKU
+        const material = await prisma.material.findUnique({
+          where: { sku }
+        });
+
+        if (!material) {
+          erros++;
+          detalhes.push({
+            sku,
+            erro: 'Material não encontrado'
+          });
+          continue;
+        }
+
+        // Atualizar preço
+        await prisma.material.update({
+          where: { id: material.id },
+          data: {
+            preco: parseFloat(precoFornecedor),
+            updatedAt: new Date()
+          }
+        });
+
+        atualizados++;
+        detalhes.push({
+          sku,
+          nome: material.nome,
+          precoAntigo: material.preco,
+          precoNovo: parseFloat(precoFornecedor),
+          sucesso: true
+        });
+
+        console.log(`✅ Material ${sku} atualizado: R$ ${material.preco} → R$ ${precoFornecedor}`);
+
+      } catch (error) {
+        erros++;
+        detalhes.push({
+          sku: item.sku,
+          erro: 'Erro ao atualizar'
+        });
+        console.error(`❌ Erro ao processar material ${item.sku}:`, error);
+      }
+    }
+
+    // Limpar arquivo temporário
+    try {
+      const fs = await import('fs');
+      fs.unlinkSync(file.path);
+    } catch (err) {
+      console.warn('Erro ao limpar arquivo temporário:', err);
+    }
+
+    const resultado = {
+      success: true,
+      message: `${atualizados} preços atualizados com sucesso`,
+      data: {
+        atualizados,
+        erros,
+        total: dadosImportados.length,
+        detalhes
+      }
+    };
+
+    console.log(`✅ Importação concluída: ${atualizados} atualizados, ${erros} erros`);
+    
+    res.json(resultado);
+
+  } catch (error) {
+    console.error('Erro ao importar preços:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao importar preços',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+};
+
+/**
+ * Processar arquivo Excel
+ */
+async function processarExcel(filePath: string): Promise<any[]> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+
+  const sheet = workbook.getWorksheet(1);
+  const dados: any[] = [];
+
+  if (!sheet) {
+    throw new Error('Planilha não encontrada no arquivo');
+  }
+
+  // Encontrar linha do header (linha 6 conforme template)
+  const headerRowNum = 6;
+  
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber > headerRowNum) {
+      const sku = row.getCell(1).value?.toString().trim();
+      const nome = row.getCell(2).value?.toString().trim();
+      const precoFornecedor = row.getCell(7).value;
+
+      if (sku) {
+        dados.push({
+          sku,
+          nome,
+          precoFornecedor: precoFornecedor?.toString().replace(',', '.')
+        });
+      }
+    }
+  });
+
+  console.log(`📊 ${dados.length} linhas processadas do Excel`);
+  return dados;
+}
+
+/**
+ * Processar arquivo CSV
+ */
+async function processarCSV(filePath: string): Promise<any[]> {
+  const fs = await import('fs');
+  const csv = fs.readFileSync(filePath, 'utf-8');
+  
+  const linhas = csv.split('\n');
+  const dados: any[] = [];
+
+  // Pular header (primeira linha)
+  for (let i = 1; i < linhas.length; i++) {
+    const linha = linhas[i].trim();
+    if (!linha) continue;
+
+    const colunas = linha.split(';');
+    
+    if (colunas.length >= 7) {
+      const sku = colunas[0]?.trim();
+      const nome = colunas[1]?.trim();
+      const precoFornecedor = colunas[6]?.trim();
+
+      if (sku) {
+        dados.push({
+          sku,
+          nome,
+          precoFornecedor: precoFornecedor?.replace(',', '.')
+        });
+      }
+    }
+  }
+
+  console.log(`📊 ${dados.length} linhas processadas do CSV`);
+  return dados;
+}
 

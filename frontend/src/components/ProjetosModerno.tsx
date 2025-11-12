@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
 import { toast } from 'sonner';
 import ModalVizualizacaoProjeto from './ModalVizualizacaoProjeto';
 import TeamManagerModal from './TeamManagerModal';
@@ -8,6 +8,7 @@ import { orcamentosService, type Orcamento } from '../services/orcamentosService
 import { etapasAdminService, type EtapaAdmin } from '../services/etapasAdminService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
+import { AuthContext } from '../contexts/AuthContext';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -136,6 +137,16 @@ interface ProjetosProps {
 type ViewModalTab = 'geral' | 'etapasAdmin' | 'materiais' | 'etapas' | 'qualidade';
 
 const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBudget }) => {
+    // ==================== AUTH ====================
+    const authContext = useContext(AuthContext);
+    const user = authContext?.user;
+    
+    // Verificar se usuário tem permissão para exclusão permanente
+    const canDeletePermanently = useMemo(() => {
+        const userRole = user?.role?.toLowerCase();
+        return userRole === 'admin' || userRole === 'desenvolvedor';
+    }, [user?.role]);
+    
     // ==================== ESTADOS ====================
     const [projetos, setProjetos] = useState<Projeto[]>([]);
     const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -147,6 +158,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('Todos');
     const [responsavelFilter, setResponsavelFilter] = useState<string>('Todos');
+    const [mostrarCancelados, setMostrarCancelados] = useState(false);
 
     // Modais
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -285,6 +297,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
         }
         
         return projetos.filter(projeto => {
+            // Ocultar cancelados por padrão (a menos que o usuário queira ver)
+            if (!mostrarCancelados && projeto.status === 'CANCELADO') {
+                return false;
+            }
+            
             const matchesSearch = 
                 projeto.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 projeto.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -296,7 +313,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             
             return matchesSearch && matchesStatus && matchesResponsavel;
         });
-    }, [projetos, searchTerm, statusFilter, responsavelFilter]);
+    }, [projetos, searchTerm, statusFilter, responsavelFilter, mostrarCancelados]);
 
     // ==================== HANDLERS ====================
     const handleOpenCreateModal = (projeto: Projeto | null = null) => {
@@ -472,15 +489,41 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (permanent = false) => {
         if (!projetoToDelete) return;
         
+        // Verificar permissão antes de tentar exclusão permanente
+        if (permanent && !canDeletePermanently) {
+            toast.error('🚫 Acesso negado', {
+                description: 'Apenas Administradores e Desenvolvedores podem excluir projetos permanentemente.'
+            });
+            return;
+        }
+        
         try {
-            await projetosService.desativar(projetoToDelete.id);
+            if (permanent) {
+                // Exclusão permanente do banco de dados
+                const response = await projetosService.excluirPermanentemente(projetoToDelete.id);
+                
+                toast.success('⚠️ Projeto excluído permanentemente!', {
+                    description: `"${projetoToDelete.titulo}" foi removido do banco de dados.`
+                });
+                
+                console.log('📊 Auditoria:', response.data?.audit);
+            } else {
+                // Soft delete (marca como CANCELADO)
+                await projetosService.desativar(projetoToDelete.id);
+                toast.success('Projeto cancelado', {
+                    description: `"${projetoToDelete.titulo}" foi marcado como CANCELADO.`
+                });
+            }
             setProjetos(prev => prev.filter(p => p.id !== projetoToDelete.id));
             setProjetoToDelete(null);
-        } catch (err) {
-            toast.error('Erro ao excluir projeto');
+        } catch (err: any) {
+            const errorMessage = err?.response?.data?.error || err?.message || 'Erro ao excluir projeto';
+            toast.error('Erro ao excluir projeto', {
+                description: errorMessage
+            });
         }
     };
 
@@ -668,6 +711,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             case 'CONCLUIDO':
             case 'Concluído':
                 return 'bg-purple-100 text-purple-800 ring-1 ring-purple-200 dark:bg-purple-900/30 dark:text-purple-400';
+            case 'CANCELADO':
             case 'Cancelado':
                 return 'bg-red-100 text-red-800 ring-1 ring-red-200 dark:bg-red-900/30 dark:text-red-400';
             default:
@@ -755,6 +799,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                             <option value="APROVADO">🎉 Aprovado</option>
                             <option value="EXECUCAO">🏗️ Em Execução</option>
                             <option value="CONCLUIDO">🎊 Concluído</option>
+                            <option value="CANCELADO">❌ Cancelado</option>
                         </select>
                     </div>
 
@@ -772,18 +817,31 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 </div>
 
                 {/* Resultado da Busca */}
-                <div className="mt-4 flex items-center justify-between">
+                <div className="mt-4 flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm text-gray-600">
                         Exibindo <span className="font-bold text-gray-900">{filteredProjetos.length}</span> de <span className="font-bold text-gray-900">{projetos.length}</span> projetos
                     </p>
-                    {searchTerm && (
-                        <button
-                            onClick={() => setSearchTerm('')}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                            Limpar busca
-                        </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                        {/* Toggle Mostrar Cancelados */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={mostrarCancelados}
+                                onChange={(e) => setMostrarCancelados(e.target.checked)}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-600">Mostrar cancelados</span>
+                        </label>
+                        
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                                Limpar busca
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -1789,24 +1847,76 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
             {projetoToDelete && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-md w-full p-6">
+                    <div className="bg-white rounded-2xl shadow-strong max-w-lg w-full p-6">
                         <h3 className="text-xl font-bold text-gray-900 mb-4">Confirmar Exclusão</h3>
-                        <p className="text-gray-600 mb-6">
-                            Tem certeza que deseja excluir o projeto <strong>"{projetoToDelete.titulo}"</strong>? Esta ação não pode ser desfeita.
+                        <p className="text-gray-600 mb-4">
+                            Tem certeza que deseja excluir o projeto <strong>"{projetoToDelete.titulo}"</strong>?
                         </p>
-                        <div className="flex justify-end gap-3">
+                        
+                        {/* Opções de Exclusão */}
+                        <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-3">
+                            <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <span className="text-yellow-600">⚠️</span>
+                                <div>
+                                    <p className="text-sm font-semibold text-yellow-900">Cancelar Projeto (Recomendado)</p>
+                                    <p className="text-xs text-yellow-700 mt-1">
+                                        Marca o projeto como CANCELADO. Os dados permanecem no banco.
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Mostrar opção de exclusão permanente apenas para Admin e Desenvolvedor */}
+                            {canDeletePermanently && (
+                                <div className="flex items-start gap-3 p-3 bg-red-50 border-2 border-red-300 rounded-lg">
+                                    <span className="text-red-600">🗑️</span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-red-900 flex items-center gap-2">
+                                            Excluir Permanentemente
+                                            <span className="px-2 py-0.5 bg-red-200 text-red-800 text-xs rounded-full font-bold">
+                                                Admin/Dev
+                                            </span>
+                                        </p>
+                                        <p className="text-xs text-red-700 mt-1">
+                                            Remove permanentemente do banco de dados. ⚠️ Não pode ser desfeito!
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Aviso para usuários sem permissão */}
+                            {!canDeletePermanently && (
+                                <div className="flex items-start gap-3 p-3 bg-gray-100 border border-gray-300 rounded-lg">
+                                    <span className="text-gray-500">🔒</span>
+                                    <div>
+                                        <p className="text-xs text-gray-600">
+                                            Exclusão permanente disponível apenas para Administradores e Desenvolvedores.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="flex gap-3">
                             <button
                                 onClick={() => setProjetoToDelete(null)}
-                                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-semibold"
+                                className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-semibold"
                             >
-                                Cancelar
+                                Voltar
                             </button>
                             <button
-                                onClick={handleDelete}
-                                className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold"
+                                onClick={() => handleDelete(false)}
+                                className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 font-semibold"
                             >
-                                Excluir Projeto
+                                ⚠️ Cancelar
                             </button>
+                            {canDeletePermanently && (
+                                <button
+                                    onClick={() => handleDelete(true)}
+                                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold"
+                                >
+                                    🗑️ Excluir
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1941,4 +2051,5 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 };
 
 export default ProjetosModerno;
+
 

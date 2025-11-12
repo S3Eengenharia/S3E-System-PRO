@@ -1122,74 +1122,74 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                         ) : compraDetalhada ? (
                             <>
                                 {/* Header */}
-                                <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50">
+                                <div className="modal-header bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-gray-900">Detalhes da Compra</h2>
-                                        <p className="text-sm text-gray-600 mt-1">NF {compraDetalhada.numeroNF}</p>
+                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Detalhes da Compra</h2>
+                                        <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">NF {compraDetalhada.numeroNF}</p>
                                     </div>
                                     <button
                                         onClick={handleCloseVisualizarModal}
-                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                        className="p-2 text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text hover:bg-white/80 dark:hover:bg-white/10 rounded-xl"
                                     >
                                         <XMarkIcon className="w-6 h-6" />
                                     </button>
                                 </div>
 
                                 {/* Body */}
-                                <div className="p-6 space-y-6">
+                                <div className="modal-body space-y-6">
                                     {/* Informações da Compra */}
-                                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                                        <h3 className="font-semibold text-blue-900 mb-3">Informações da Compra</h3>
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                        <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-3">Informações da Compra</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                             <div>
-                                                <span className="text-blue-700 font-medium">Nota Fiscal:</span>
-                                                <p className="text-blue-900 font-semibold">{compraDetalhada.numeroNF}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Nota Fiscal:</span>
+                                                <p className="text-blue-900 dark:text-blue-300 font-semibold">{compraDetalhada.numeroNF}</p>
                                             </div>
                                             <div>
-                                                <span className="text-blue-700 font-medium">Emissão:</span>
-                                                <p className="text-blue-900">{new Date(compraDetalhada.dataEmissaoNF).toLocaleDateString('pt-BR')}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Emissão:</span>
+                                                <p className="text-blue-900 dark:text-blue-300">{new Date(compraDetalhada.dataEmissaoNF).toLocaleDateString('pt-BR')}</p>
                                             </div>
                                             <div>
-                                                <span className="text-blue-700 font-medium">Data da Compra:</span>
-                                                <p className="text-blue-900">{new Date(compraDetalhada.dataCompra).toLocaleDateString('pt-BR')}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Data da Compra:</span>
+                                                <p className="text-blue-900 dark:text-blue-300">{new Date(compraDetalhada.dataCompra).toLocaleDateString('pt-BR')}</p>
                                             </div>
                                             <div>
-                                                <span className="text-blue-700 font-medium">Status:</span>
-                                                <p className="text-blue-900 font-semibold">{compraDetalhada.status}</p>
+                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Status:</span>
+                                                <p className="text-blue-900 dark:text-blue-300 font-semibold">{compraDetalhada.status}</p>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Informações do Fornecedor */}
-                                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                                        <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                                    <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl p-4">
+                                        <h3 className="font-semibold text-green-900 dark:text-green-300 mb-3 flex items-center gap-2">
                                             🏢 Dados do Fornecedor
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                             <div>
-                                                <span className="text-green-700 font-medium">Nome:</span>
-                                                <p className="text-green-900 font-semibold">{compraDetalhada.fornecedor.nome}</p>
+                                                <span className="text-green-700 dark:text-green-400 font-medium">Nome:</span>
+                                                <p className="text-green-900 dark:text-green-300 font-semibold">{compraDetalhada.fornecedor.nome}</p>
                                             </div>
                                             <div>
-                                                <span className="text-green-700 font-medium">CNPJ:</span>
-                                                <p className="text-green-900">{compraDetalhada.fornecedor.cnpj}</p>
+                                                <span className="text-green-700 dark:text-green-400 font-medium">CNPJ:</span>
+                                                <p className="text-green-900 dark:text-green-300">{compraDetalhada.fornecedor.cnpj}</p>
                                             </div>
                                             {compraDetalhada.fornecedor.telefone && (
                                                 <div>
-                                                    <span className="text-green-700 font-medium">Telefone:</span>
-                                                    <p className="text-green-900">{compraDetalhada.fornecedor.telefone}</p>
+                                                    <span className="text-green-700 dark:text-green-400 font-medium">Telefone:</span>
+                                                    <p className="text-green-900 dark:text-green-300">{compraDetalhada.fornecedor.telefone}</p>
                                                 </div>
                                             )}
                                             {compraDetalhada.fornecedor.email && (
                                                 <div>
-                                                    <span className="text-green-700 font-medium">Email:</span>
-                                                    <p className="text-green-900">{compraDetalhada.fornecedor.email}</p>
+                                                    <span className="text-green-700 dark:text-green-400 font-medium">Email:</span>
+                                                    <p className="text-green-900 dark:text-green-300">{compraDetalhada.fornecedor.email}</p>
                                                 </div>
                                             )}
                                             {compraDetalhada.fornecedor.endereco && (
                                                 <div className="md:col-span-2">
-                                                    <span className="text-green-700 font-medium">Endereço:</span>
-                                                    <p className="text-green-900">{compraDetalhada.fornecedor.endereco}</p>
+                                                    <span className="text-green-700 dark:text-green-400 font-medium">Endereço:</span>
+                                                    <p className="text-green-900 dark:text-green-300">{compraDetalhada.fornecedor.endereco}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -1198,32 +1198,32 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                     {/* Itens da Compra */}
                                     {compraDetalhada.items && compraDetalhada.items.length > 0 && (
                                         <div>
-                                            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                            <h3 className="font-semibold text-gray-900 dark:text-dark-text mb-3 flex items-center gap-2">
                                                 📦 Itens da Compra
                                             </h3>
-                                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                            <div className="border border-gray-200 dark:border-dark-border rounded-lg overflow-hidden">
                                                 <table className="w-full text-sm">
-                                                    <thead className="bg-gray-50 border-b border-gray-200">
+                                                    <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-dark-border">
                                                         <tr>
-                                                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Produto</th>
-                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">SKU</th>
-                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">NCM</th>
-                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">Qtd</th>
-                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Valor Unit.</th>
-                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Total</th>
+                                                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-text">Produto</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-dark-text">SKU</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-dark-text">NCM</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-dark-text">Qtd</th>
+                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-dark-text">Valor Unit.</th>
+                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-dark-text">Total</th>
                                                         </tr>
                                                     </thead>
-                                                    <tbody className="divide-y divide-gray-200">
+                                                    <tbody className="divide-y divide-gray-200 dark:divide-dark-border">
                                                         {compraDetalhada.items.map((item) => (
-                                                            <tr key={item.id} className="hover:bg-gray-50">
-                                                                <td className="px-4 py-3 text-gray-900">{item.nomeProduto}</td>
-                                                                <td className="px-4 py-3 text-center text-gray-600 text-xs">{item.sku || '-'}</td>
-                                                                <td className="px-4 py-3 text-center text-gray-600 text-xs">{item.ncm || '-'}</td>
-                                                                <td className="px-4 py-3 text-center text-gray-900">{item.quantidade}</td>
-                                                                <td className="px-4 py-3 text-right text-gray-900">
+                                                            <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
+                                                                <td className="px-4 py-3 text-gray-900 dark:text-dark-text">{item.nomeProduto}</td>
+                                                                <td className="px-4 py-3 text-center text-gray-600 dark:text-dark-text-secondary text-xs">{item.sku || '-'}</td>
+                                                                <td className="px-4 py-3 text-center text-gray-600 dark:text-dark-text-secondary text-xs">{item.ncm || '-'}</td>
+                                                                <td className="px-4 py-3 text-center text-gray-900 dark:text-dark-text">{item.quantidade}</td>
+                                                                <td className="px-4 py-3 text-right text-gray-900 dark:text-dark-text">
                                                                     R$ {item.valorUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                                 </td>
-                                                                <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                                                <td className="px-4 py-3 text-right font-semibold text-gray-900 dark:text-dark-text">
                                                                     R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                                 </td>
                                                             </tr>
@@ -1235,38 +1235,38 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                     )}
 
                                     {/* Resumo Financeiro */}
-                                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-4">
-                                        <h3 className="font-semibold text-blue-900 mb-3">Resumo Financeiro</h3>
+                                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                        <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-3">Resumo Financeiro</h3>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between">
-                                                <span className="text-blue-700">Subtotal Produtos:</span>
-                                                <span className="text-blue-900 font-semibold">
+                                                <span className="text-blue-700 dark:text-blue-400">Subtotal Produtos:</span>
+                                                <span className="text-blue-900 dark:text-blue-300 font-semibold">
                                                     R$ {(compraDetalhada.valorTotalProdutos || compraDetalhada.valorSubtotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-blue-700">Frete:</span>
-                                                <span className="text-blue-900">
+                                                <span className="text-blue-700 dark:text-blue-400">Frete:</span>
+                                                <span className="text-blue-900 dark:text-blue-300">
                                                     R$ {compraDetalhada.valorFrete.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
                                             {compraDetalhada.valorIPI !== undefined && compraDetalhada.valorIPI > 0 && (
                                                 <div className="flex justify-between">
-                                                    <span className="text-blue-700">IPI:</span>
-                                                    <span className="text-blue-900">
+                                                    <span className="text-blue-700 dark:text-blue-400">IPI:</span>
+                                                    <span className="text-blue-900 dark:text-blue-300">
                                                         R$ {compraDetalhada.valorIPI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </span>
                                                 </div>
                                             )}
                                             <div className="flex justify-between">
-                                                <span className="text-blue-700">Outras Despesas:</span>
-                                                <span className="text-blue-900">
+                                                <span className="text-blue-700 dark:text-blue-400">Outras Despesas:</span>
+                                                <span className="text-blue-900 dark:text-blue-300">
                                                     R$ {compraDetalhada.outrasDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
-                                            <div className="border-t-2 border-blue-300 pt-2 mt-2 flex justify-between">
-                                                <span className="text-blue-900 font-bold text-base">TOTAL DA NOTA:</span>
-                                                <span className="text-blue-900 font-bold text-lg">
+                                            <div className="border-t-2 border-blue-300 dark:border-blue-700 pt-2 mt-2 flex justify-between">
+                                                <span className="text-blue-900 dark:text-blue-300 font-bold text-base">TOTAL DA NOTA:</span>
+                                                <span className="text-blue-900 dark:text-blue-300 font-bold text-lg">
                                                     R$ {(compraDetalhada.valorTotalNota || compraDetalhada.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
@@ -1275,8 +1275,8 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
 
                                     {/* Condições de Pagamento */}
                                     {(compraDetalhada.condicoesPagamento || compraDetalhada.duplicatas) && (
-                                        <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-                                            <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                                        <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-xl p-4">
+                                            <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-3 flex items-center gap-2">
                                                 💳 Condições de Pagamento
                                             </h3>
                                             <div className="grid grid-cols-2 gap-4 text-sm mb-4">
@@ -1361,40 +1361,40 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="modal-content max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         {/* Header */}
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-yellow-50 to-amber-50">
+                        <div className="modal-header bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-900">Atualizar Conta a Pagar</h2>
-                                <p className="text-sm text-gray-600 mt-1">Alterar vencimento e observações</p>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Atualizar Conta a Pagar</h2>
+                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Alterar vencimento e observações</p>
                             </div>
                             <button
                                 onClick={handleCloseAtualizarModal}
-                                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl"
+                                className="p-2 text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text hover:bg-white/80 dark:hover:bg-white/10 rounded-xl"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
 
                         {/* Body */}
-                        <div className="p-6 space-y-6">
+                        <div className="modal-body space-y-6">
                             {/* Informações da Conta */}
-                            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                                <h3 className="font-semibold text-blue-900 mb-3">Informações da Conta</h3>
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-3">Informações da Conta</h3>
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
-                                        <span className="text-blue-700 font-medium">Fornecedor:</span>
-                                        <p className="text-blue-900 font-semibold">{contaSelecionada.fornecedorNome}</p>
+                                        <span className="text-blue-700 dark:text-blue-400 font-medium">Fornecedor:</span>
+                                        <p className="text-blue-900 dark:text-blue-300 font-semibold">{contaSelecionada.fornecedorNome}</p>
                                     </div>
                                     <div>
-                                        <span className="text-blue-700 font-medium">Descrição:</span>
-                                        <p className="text-blue-900">{contaSelecionada.descricao}</p>
+                                        <span className="text-blue-700 dark:text-blue-400 font-medium">Descrição:</span>
+                                        <p className="text-blue-900 dark:text-blue-300">{contaSelecionada.descricao}</p>
                                     </div>
                                     <div>
-                                        <span className="text-blue-700 font-medium">Vencimento Atual:</span>
-                                        <p className="text-blue-900">{new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR')}</p>
+                                        <span className="text-blue-700 dark:text-blue-400 font-medium">Vencimento Atual:</span>
+                                        <p className="text-blue-900 dark:text-blue-300">{new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR')}</p>
                                     </div>
                                     <div>
-                                        <span className="text-blue-700 font-medium">Valor:</span>
-                                        <p className="text-blue-900 font-bold">
+                                        <span className="text-blue-700 dark:text-blue-400 font-medium">Valor:</span>
+                                        <p className="text-blue-900 dark:text-blue-300 font-bold">
                                             R$ {contaSelecionada.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
@@ -1404,7 +1404,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                             {/* Formulário */}
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Nova Data de Vencimento *
                                     </label>
                                     <input
@@ -1412,19 +1412,19 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                                         value={novaDataVencimento}
                                         onChange={(e) => setNovaDataVencimento(e.target.value)}
                                         required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                                        className="input-field"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
                                         Observações
                                     </label>
                                     <textarea
                                         value={novasObservacoes}
                                         onChange={(e) => setNovasObservacoes(e.target.value)}
                                         rows={4}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                                        className="textarea-field"
                                         placeholder="Motivo da alteração, novos acordos, etc..."
                                     />
                                 </div>
@@ -1432,7 +1432,7 @@ const ContasAPagar: React.FC<ContasAPagarProps> = ({ toggleSidebar, setAbaAtiva 
                         </div>
 
                         {/* Footer */}
-                        <div className="flex justify-end gap-3 p-6 border-t border-gray-100">
+                        <div className="modal-footer">
                             <button
                                 onClick={handleCloseAtualizarModal}
                                 className="btn-secondary"

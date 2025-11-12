@@ -250,10 +250,10 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar }) => {
             </div>
 
             {/* Quadro Kanban */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-lg border border-gray-200 dark:border-dark-border p-6">
                 <div className="mb-6">
-                    <h2 className="text-xl font-bold text-gray-900">Quadro de Execução</h2>
-                    <p className="text-sm text-gray-500 mt-1">Arraste os cards para mover entre as etapas</p>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-dark-text">Kanban de Obras</h2>
+                    <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">Clique nos cards para gerenciar tarefas ou arraste para mover entre as etapas</p>
                 </div>
                 <ObraKanban key={refreshKey} onRefresh={handleRefresh} />
             </div>

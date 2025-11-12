@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { obrasService, type Obra, type ObraKanbanData } from '../services/obrasService';
 import { axiosApiService } from '../services/axiosApi';
+import HubTarefasObra from './HubTarefasObra';
 
 // Icons
 const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -36,6 +37,9 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
     const [loading, setLoading] = useState(true);
     const [draggedItem, setDraggedItem] = useState<Obra | null>(null);
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
+    // Hub de Tarefas da Obra
+    const [hubObraId, setHubObraId] = useState<string | null>(null);
 
     // Modal de Obra de Manutenção
     const [modalManutencaoOpen, setModalManutencaoOpen] = useState(false);
@@ -214,35 +218,36 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
             key={obra.id}
             draggable
             onDragStart={(e) => handleDragStart(e, obra)}
-            className="bg-white border-2 border-gray-200 rounded-xl p-4 mb-3 cursor-move hover:shadow-lg transition-all hover:border-blue-400"
+            onClick={() => setHubObraId(obra.id)}
+            className="bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-xl p-4 mb-3 cursor-pointer hover:shadow-lg transition-all hover:border-orange-400 dark:hover:border-orange-500 hover:scale-[1.02]"
         >
             {/* Header */}
             <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 text-sm line-clamp-2">
+                    <h4 className="font-bold text-gray-900 dark:text-dark-text text-sm line-clamp-2">
                         {obra.nomeObra}
                     </h4>
                     {/* Badge de Tipo */}
                     {obra.tipoObra === 'MANUTENCAO' && (
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-bold rounded">
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 text-xs font-bold rounded border border-orange-300 dark:border-orange-700">
                             🔧 Manutenção
                         </span>
                     )}
                 </div>
-                <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded">
+                <span className="ml-2 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-bold rounded">
                     #{obra.id.slice(0, 8)}
                 </span>
             </div>
 
             {/* Cliente */}
-            <div className="flex items-center gap-2 text-xs text-gray-600 mb-2">
+            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-dark-text-secondary mb-2">
                 <UserIcon className="w-4 h-4" />
                 <span className="truncate">{obra.clienteNome}</span>
             </div>
 
             {/* Data */}
             {obra.dataPrevistaFim && (
-                <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-dark-text-secondary mb-3">
                     <ClockIcon className="w-4 h-4" />
                     <span>{new Date(obra.dataPrevistaFim).toLocaleDateString('pt-BR')}</span>
                 </div>
@@ -251,12 +256,12 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
             {/* Progresso */}
             <div className="space-y-1">
                 <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">Progresso</span>
-                    <span className="font-bold text-gray-900">{obra.progresso}%</span>
+                    <span className="text-gray-600 dark:text-dark-text-secondary">Progresso</span>
+                    <span className="font-bold text-gray-900 dark:text-dark-text">{obra.progresso}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
-                        className="bg-gradient-to-r from-blue-600 to-blue-500 h-2 rounded-full transition-all"
+                        className="bg-gradient-to-r from-orange-600 to-orange-500 h-2 rounded-full transition-all"
                         style={{ width: `${obra.progresso}%` }}
                     />
                 </div>
@@ -264,8 +269,8 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
 
             {/* Tarefas */}
             <div className="flex items-center gap-2 mt-3 text-xs">
-                <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                <span className="text-gray-600">
+                <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <span className="text-gray-600 dark:text-dark-text-secondary">
                     {obra.tarefasConcluidas}/{obra.totalTarefas} tarefas
                 </span>
             </div>
@@ -314,8 +319,8 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
                         onDragOver={(e) => handleDragOver(e, status)}
                         onDragLeave={handleDragLeave}
                         onDrop={(e) => handleDrop(e, status)}
-                        className={`rounded-2xl border-2 transition-all ${
-                            isOver ? 'ring-4 ring-blue-300 border-blue-400' : config.borderColor
+                        className={`bg-white dark:bg-dark-card rounded-2xl border-2 dark:border-dark-border transition-all ${
+                            isOver ? 'ring-4 ring-orange-300 dark:ring-orange-500/50 border-orange-400 dark:border-orange-500' : config.borderColor
                         }`}
                     >
                         {/* Header da Coluna */}
@@ -323,13 +328,13 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
                             <h3 className={`font-bold text-sm ${config.color}`}>
                                 {config.title}
                             </h3>
-                            <p className="text-xs text-gray-500 mt-1">{obras.length} obra(s)</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{obras.length} obra(s)</p>
                         </div>
 
                         {/* Cards de Obras */}
                         <div className="p-4 min-h-[500px] max-h-[600px] overflow-y-auto">
                             {obras.length === 0 ? (
-                                <div className="text-center py-8 text-gray-400">
+                                <div className="text-center py-8 text-gray-400 dark:text-gray-500">
                                     <p className="text-sm">Nenhuma obra</p>
                                     <p className="text-xs mt-1">Arraste para cá</p>
                                 </div>
@@ -491,6 +496,17 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Hub de Tarefas da Obra */}
+            {hubObraId && (
+                <HubTarefasObra
+                    obraId={hubObraId}
+                    onClose={() => {
+                        setHubObraId(null);
+                        loadObrasKanban(); // Recarrega o kanban para atualizar progresso
+                    }}
+                />
             )}
         </div>
     );

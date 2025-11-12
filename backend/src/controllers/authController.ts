@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import * as authService from '../services/auth.service';
 import { LoginInput, RegisterInput } from '../validators/auth.validator';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 /**
  * Controllers de Autenticação
@@ -41,6 +44,23 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     // Chamar service de autenticação
     const result = await authService.authenticateUser(email, password);
 
+    // Registrar login no audit log
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: result.user.id,
+          userName: result.user.name,
+          userRole: result.user.role,
+          action: 'LOGIN',
+          description: `Usuário ${result.user.name} fez login no sistema`,
+          ipAddress: req.ip || req.socket.remoteAddress,
+          userAgent: req.headers['user-agent']
+        }
+      });
+    } catch (logError) {
+      console.error('Erro ao registrar login no audit log:', logError);
+    }
+
     // Retornar sucesso
     res.status(200).json({
       message: 'Login realizado com sucesso',
@@ -50,6 +70,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     // Tratamento de erros específicos
     const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer login';
+    
+    // Registrar tentativa de login falhada
+    try {
+      const { email } = req.body as LoginInput;
+      await prisma.auditLog.create({
+        data: {
+          action: 'LOGIN_FAILED',
+          description: `Tentativa de login falhada para ${email}: ${errorMessage}`,
+          ipAddress: req.ip || req.socket.remoteAddress,
+          userAgent: req.headers['user-agent'],
+          metadata: { email, error: errorMessage }
+        }
+      });
+    } catch (logError) {
+      console.error('Erro ao registrar falha de login:', logError);
+    }
     
     if (errorMessage === 'Credenciais inválidas') {
       res.status(401).json({ error: errorMessage });
