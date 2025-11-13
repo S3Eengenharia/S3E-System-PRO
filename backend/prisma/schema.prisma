@@ -130,6 +130,7 @@ model Fornecedor {
   materiais   Material[]
   compras     Compra[]
   contasPagar ContaPagar[]
+  cotacoes    Cotacao[]  // Novo: cotações do fornecedor
 
   @@map("fornecedores")
 }
@@ -139,29 +140,71 @@ model Fornecedor {
 // ============================================
 
 model Material {
-  id            String   @id @default(uuid())
-  nome          String
-  sku           String   @unique
-  tipo          String // Tipo do material
-  categoria     String // MaterialEletrico, Insumo, Ferramenta
-  descricao     String?
-  estoque       Float    @default(0)
-  estoqueMinimo Float    @default(5)
-  unidadeMedida String   @default("un")
-  localizacao   String?
-  preco         Float? // Preço de referência
-  fornecedorId  String?
-  ativo         Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                      String   @id @default(uuid())
+  nome                    String
+  sku                     String   @unique
+  tipo                    String // Tipo do material
+  categoria               String // MaterialEletrico, Insumo, Ferramenta
+  descricao               String?
+  estoque                 Float    @default(0)
+  estoqueMinimo           Float    @default(5)
+  unidadeMedida           String   @default("un")
+  localizacao             String?
+  preco                   Float? // Preço de referência
+  ultimaAtualizacaoPreco  DateTime? // Data da última atualização de preço
+  fornecedorId            String?
+  ativo                   Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  fornecedor     Fornecedor?           @relation(fields: [fornecedorId], references: [id])
-  kitItems       KitItem[]
-  orcamentoItems OrcamentoItem[]
-  compraItems    CompraItem[]
-  movimentacoes  MovimentacaoEstoque[]
+  fornecedor       Fornecedor?           @relation(fields: [fornecedorId], references: [id])
+  kitItems         KitItem[]
+  orcamentoItems   OrcamentoItem[]
+  compraItems      CompraItem[]
+  movimentacoes    MovimentacaoEstoque[]
+  historicoPrecos  HistoricoPreco[]
 
   @@map("materiais")
+}
+
+// Histórico de alterações de preços
+model HistoricoPreco {
+  id          String   @id @default(uuid())
+  materialId  String
+  precoAntigo Float?
+  precoNovo   Float
+  motivo      String? // Ex: "Atualização de mercado", "Importação JSON"
+  usuario     String? // Quem fez a alteração
+  createdAt   DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([createdAt])
+  @@map("historico_precos")
+}
+
+// Banco de Cotações (materiais cotados - banco frio)
+model Cotacao {
+  id                    String    @id @default(uuid())
+  nome                  String
+  ncm                   String?
+  valorUnitario         Float
+  fornecedorId          String?
+  fornecedorNome        String?   // Nome do fornecedor (redundante para performance)
+  dataAtualizacao       DateTime  @default(now()) // Data da última cotação
+  observacoes           String?
+  ativo                 Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  fornecedor            Fornecedor? @relation(fields: [fornecedorId], references: [id])
+  itensOrcamento        OrcamentoItem[] // Relação com itens de orçamento
+
+  @@index([fornecedorId])
+  @@index([dataAtualizacao])
+  @@index([ativo])
+  @@map("cotacoes")
 }
 
 model Servico {
@@ -256,9 +299,10 @@ model Orcamento {
 model OrcamentoItem {
   id          String  @id @default(uuid())
   orcamentoId String
-  tipo        String // MATERIAL, KIT, SERVICO, QUADRO_PRONTO, CUSTO_EXTRA
+  tipo        String // MATERIAL, KIT, SERVICO, QUADRO_PRONTO, CUSTO_EXTRA, COTACAO
   materialId  String?
   kitId       String?
+  cotacaoId   String? // Novo: material do banco de cotações (banco frio)
   servicoNome String? // Para serviços avulsos
   descricao   String? // Descrição adicional do item
   quantidade  Float
@@ -269,7 +313,9 @@ model OrcamentoItem {
   orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   material  Material? @relation(fields: [materialId], references: [id])
   kit       Kit?      @relation(fields: [kitId], references: [id])
+  cotacao   Cotacao?  @relation(fields: [cotacaoId], references: [id]) // Novo
 
+  @@index([cotacaoId])
   @@map("orcamento_items")
 }
 

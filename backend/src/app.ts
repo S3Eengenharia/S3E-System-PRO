@@ -19,12 +19,12 @@ import contasPagarRoutes from './routes/contasPagar.routes.js';
 import relatoriosRoutes from './routes/relatorios.routes.js';
 import protectedRoutes from './routes/protected.routes.js';
 import alocacaoRoutes from './routes/alocacao.routes.js';
-import comparacaoPrecosRoutes from './routes/comparacaoPrecos.routes.js';
 import equipesRoutes from './routes/equipes.routes.js';
 import etapasAdminRoutes from './routes/etapasAdmin.routes.js';
 import clientesRoutes from './routes/clientes.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
 import projetosRoutes from './routes/projetos.js';
+import cotacoesRoutes from './routes/cotacoes.routes.js';
 import pessoasRoutes from './routes/pessoa.routes.js';
 import servicosRoutes from './routes/servicos.js';
 import movimentacoesRoutes from './routes/movimentacoes.js';
@@ -86,8 +86,9 @@ app.use('/uploads', express.static(uploadsPath));
 // EXCEÇÃO: Não aplicar body parsers em rotas com upload de arquivos (multer)
 // Lista de rotas que usam multipart/form-data
 const uploadRoutes = [
-  '/api/comparacao-precos/upload-csv',
-  '/api/comparacao-precos/validate-csv',
+  '/api/materiais/preview-importacao',
+  '/api/materiais/importar-precos',
+  '/api/cotacoes/importar',
   '/api/configuracoes/upload-logo',
   '/api/obras/tarefas/resumo' // Rota de upload de fotos de tarefas
 ];
@@ -135,7 +136,7 @@ app.get('/api', (_req, res) => {
       relatorios: '/api/relatorios',
       configFiscal: '/api/configuracoes-fiscais',
       obras: '/api/obras',
-      comparacaoPrecos: '/api/comparacao-precos',
+      atualizacaoPrecos: '/api/materiais/template-importacao',
       equipes: '/api/equipes',
       pdfCustomization: '/api/pdf-customization',
       clientes: '/api/clientes',
@@ -172,13 +173,13 @@ app.use('/api/contas-pagar', contasPagarRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/configuracoes-fiscais', configFiscalRoutes);
 app.use('/api/obras', alocacaoRoutes);
-app.use('/api/comparacao-precos', comparacaoPrecosRoutes);
 app.use('/api/equipes', equipesRoutes);
 app.use('/api/projetos/etapas-admin', etapasAdminRoutes);
 app.use('/api/pessoas', pessoasRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/projetos', projetosRoutes);
+app.use('/api/cotacoes', cotacoesRoutes);
 app.use('/api/servicos', servicosRoutes);
 app.use('/api/movimentacoes', movimentacoesRoutes);
 app.use('/api/historico', historicoRoutes);

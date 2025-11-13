@@ -12,7 +12,10 @@ import {
   buscarMateriaisSimilares,
   exportarMateriaisCriticos,
   importarPrecos,
-  uploadImportFile
+  uploadImportFile,
+  gerarTemplateImportacao,
+  previewImportacao,
+  getHistoricoPrecos
 } from '../controllers/materiaisController.js';
 import { authenticate } from '../middlewares/auth.js';
 
@@ -27,9 +30,12 @@ router.post('/buscar-similares', buscarMateriaisSimilares); // Nova rota para ve
 
 // Rotas de exportação/importação (antes das rotas com :id)
 router.get('/exportar-criticos', exportarMateriaisCriticos);
+router.get('/template-importacao', gerarTemplateImportacao); // Gerar template JSON/PDF
+router.post('/preview-importacao', uploadImportFile, previewImportacao); // Preview antes de importar
 router.post('/importar-precos', uploadImportFile, importarPrecos);
 
 router.get('/:id/historico-compras', getHistoricoCompras); // Rota específica antes da genérica
+router.get('/:id/historico-precos', getHistoricoPrecos); // Histórico de preços
 router.get('/:id', getMaterialById);
 router.post('/', createMaterial);
 router.put('/:id', updateMaterial);

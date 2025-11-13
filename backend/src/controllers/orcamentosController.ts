@@ -21,7 +21,8 @@ export const getOrcamentos = async (req: Request, res: Response): Promise<void> 
         items: {
           include: {
             material: { select: { id: true, nome: true, sku: true } },
-            kit: { select: { id: true, nome: true } }
+            kit: { select: { id: true, nome: true } },
+            cotacao: { select: { id: true, nome: true, dataAtualizacao: true, fornecedorNome: true } } // ✅ NOVO
           }
         }
       },
@@ -53,7 +54,8 @@ export const getOrcamentoById = async (req: Request, res: Response): Promise<voi
                   include: { material: true }
                 }
               }
-            }
+            },
+            cotacao: true // ✅ NOVO: Incluir dados da cotação
           }
         },
         projeto: true
