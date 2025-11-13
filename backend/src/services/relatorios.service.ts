@@ -379,6 +379,53 @@ export class RelatoriosService {
             contasReceberFiltradas = [];
         }
 
+        // Gerar dados para gráficos mensais
+        const mesesMap = new Map<string, { receita: number; despesa: number }>();
+        
+        // Determinar meses no período
+        const meses: string[] = [];
+        const mesInicio = new Date(dataInicio.getFullYear(), dataInicio.getMonth(), 1);
+        const mesFim = new Date(dataFim.getFullYear(), dataFim.getMonth(), 1);
+        
+        const mesAtual = new Date(mesInicio);
+        while (mesAtual <= mesFim) {
+            const mesAno = `${String(mesAtual.getMonth() + 1).padStart(2, '0')}/${mesAtual.getFullYear()}`;
+            meses.push(mesAno);
+            mesesMap.set(mesAno, { receita: 0, despesa: 0 });
+            mesAtual.setMonth(mesAtual.getMonth() + 1);
+        }
+
+        // Agregar receitas pagas por mês
+        contasReceber.filter(c => c.status === 'Pago' && c.dataPagamento).forEach(conta => {
+            const data = new Date(conta.dataPagamento!);
+            const mesAno = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
+            if (mesesMap.has(mesAno)) {
+                const atual = mesesMap.get(mesAno)!;
+                atual.receita += conta.valorParcela || 0;
+            }
+        });
+
+        // Agregar despesas pagas por mês
+        contasPagar.filter(c => c.status === 'Pago' && c.dataPagamento).forEach(conta => {
+            const data = new Date(conta.dataPagamento!);
+            const mesAno = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
+            if (mesesMap.has(mesAno)) {
+                const atual = mesesMap.get(mesAno)!;
+                atual.despesa += conta.valorParcela || 0;
+            }
+        });
+
+        // Converter para array para gráficos
+        const graficosMensais = meses.map(mes => {
+            const dados = mesesMap.get(mes)!;
+            return {
+                mes,
+                receita: dados.receita,
+                despesa: dados.despesa,
+                lucro: dados.receita - dados.despesa
+            };
+        });
+
         return {
             totalReceber,
             totalPagar,
@@ -402,6 +449,7 @@ export class RelatoriosService {
                 dataPagamento: c.dataPagamento,
                 status: c.status
             })),
+            graficosMensais,
             periodo: {
                 inicio: dataInicio,
                 fim: dataFim

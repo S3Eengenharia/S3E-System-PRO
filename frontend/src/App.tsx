@@ -29,8 +29,9 @@ import Servicos from './components/Servicos';
 import Financeiro from './components/Financeiro';
 import EmissaoNFe from './components/EmissaoNFe';
 import Configuracoes from './components/Configuracoes';
-import ComparacaoPrecos from './components/ComparacaoPrecos';
+import AtualizacaoPrecos from './components/AtualizacaoPrecos';
 import Vendas from './components/Vendas';
+import Cotacoes from './components/Cotacoes';
 import ObrasKanban from './pages/ObrasKanban';
 import NovaCompraPage from './pages/NovaCompraPage';
 // import SettingsModal from './components/SettingsModal'; // DESCONTINUADO - Substituído por página Configuracoes.tsx
@@ -88,8 +89,8 @@ const MainApp: React.FC = () => {
       case 'Estoque':
       case 'Materiais':
         return <Materiais toggleSidebar={toggleSidebar} />;
-      case 'Comparação de Preços':
-        return <ComparacaoPrecos toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
+      case 'Atualização de Preços':
+        return <AtualizacaoPrecos toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />;
       case 'Fornecedores':
         return <FornecedoresModerno toggleSidebar={toggleSidebar} />;
       case 'Clientes':
@@ -110,6 +111,8 @@ const MainApp: React.FC = () => {
         return <Financeiro toggleSidebar={toggleSidebar} />;
       case 'Vendas':
         return <Vendas toggleSidebar={toggleSidebar} />;
+      case 'Cotações':
+        return <Cotacoes toggleSidebar={toggleSidebar} />;
       case 'Emissão NF-e':
         return <EmissaoNFe toggleSidebar={toggleSidebar} />;
       case 'Serviços':
@@ -170,7 +173,7 @@ const StandalonePageWrapper: React.FC<{ children: React.ReactNode; activeView?: 
       'Compras': '/compras',
       'Materiais': '/',
       'Estoque': '/',
-      'Comparação de Preços': '/',
+      'Atualização de Preços': '/',
       'Fornecedores': '/',
       'Clientes': '/',
       'Projetos': '/',

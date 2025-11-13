@@ -3,7 +3,9 @@ import { PriceComparisonItem, PriceComparisonStatus, PriceComparisonImport } fro
 import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { axiosApiService } from '../services/axiosApi';
-import { comparacaoPrecosService, type ProcessedCSVResult, type ProcessedItem } from '../services/comparacaoPrecosService';
+import PrecoValidadeFlag from './PrecoValidadeFlag';
+import HistoricoPrecosModal from './HistoricoPrecosModal';
+import PreviewAtualizacaoModal from './PreviewAtualizacaoModal';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -48,12 +50,12 @@ const ArrowTrendingUpIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-interface ComparacaoPrecosProps {
+interface AtualizacaoPrecosProps {
     toggleSidebar: () => void;
     onNavigate?: (view: string) => void;
 }
 
-const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNavigate }) => {
+const AtualizacaoPrecos: React.FC<AtualizacaoPrecosProps> = ({ toggleSidebar, onNavigate }) => {
     const [imports, setImports] = useState<PriceComparisonImport[]>([]);
     const [selectedImport, setSelectedImport] = useState<PriceComparisonImport | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,22 +65,37 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
+    const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
+    const [previewModalOpen, setPreviewModalOpen] = useState(false);
+    const [materiaisParaAtualizar, setMateriaisParaAtualizar] = useState<any[]>([]);
     const { token } = useContext(AuthContext)!;
 
-    // Função para processar CSV
+    // Função para processar arquivo (JSON, CSV ou Excel)
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (file && file.type === 'text/csv') {
-            setSelectedFile(file);
-        } else {
-            alert('Por favor, selecione um arquivo CSV válido');
+        if (file) {
+            const validTypes = [
+                'application/json',
+                'text/csv',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            ];
+            const validExtensions = ['.json', '.csv', '.xlsx', '.xls'];
+            const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+            
+            if (validTypes.includes(file.type) || validExtensions.includes(fileExtension)) {
+                setSelectedFile(file);
+            } else {
+                alert('Por favor, selecione um arquivo JSON, CSV ou Excel válido (.json, .csv, .xlsx, .xls)');
+            }
         }
     };
 
-    // Processar CSV e criar comparação
+    // Processar arquivo e criar preview
     const processCSV = async () => {
-        if (!selectedFile || !supplierName.trim()) {
-            alert('Preencha todos os campos');
+        if (!selectedFile) {
+            alert('Selecione um arquivo');
             return;
         }
 
@@ -86,37 +103,64 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
         setError(null);
 
         try {
-            const response = await comparacaoPrecosService.uploadCSV(selectedFile, supplierName);
+            const formData = new FormData();
+            formData.append('arquivo', selectedFile);
+            
+            // Fazer preview antes de importar
+            const response = await axiosApiService.post('/api/materiais/preview-importacao', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
             
             if (response.success && response.data) {
                 const data = response.data;
                 
-                // Converter ProcessedItem[] para PriceComparisonItem[]
-                const items: PriceComparisonItem[] = data.items.map((item: ProcessedItem, index: number) => ({
+                // Verificar se não há alterações
+                if (data.totalAlteracoes === 0 && data.totalErros === 0) {
+                    alert(
+                        `ℹ️ Nenhuma Alteração Necessária\n\n` +
+                        `Todos os ${data.totalItens || 0} materiais já estão com os preços corretos.\n\n` +
+                        `Não há nada para atualizar.`
+                    );
+                    setIsUploadModalOpen(false);
+                    setSelectedFile(null);
+                    setIsProcessing(false);
+                    return;
+                }
+                
+                // Se houver erros, mostrar aviso mas continuar
+                if (data.totalErros > 0) {
+                    console.warn(`⚠️ ${data.totalErros} erros encontrados, mas ${data.totalAlteracoes} itens estão válidos`);
+                }
+                
+                // Converter preview para PriceComparisonItem[]
+                const items: PriceComparisonItem[] = data.preview.map((item: any, index: number) => ({
                     id: `${index + 1}`,
-                    materialCode: item.codigo,
-                    materialName: item.nome,
-                    unit: item.unidade,
-                    quantity: item.quantidade,
-                    currentPrice: item.preco_atual || 0,
-                    newPrice: item.preco_unitario,
-                    difference: item.diferenca_percentual || 0,
-                    differenceValue: item.preco_atual 
-                        ? (item.preco_unitario - item.preco_atual) * item.quantidade 
+                    materialCode: item.sku || '',
+                    materialName: item.nome || '',
+                    unit: item.unidade || 'UN',
+                    quantity: 1,
+                    currentPrice: item.precoAtual || 0,
+                    newPrice: item.precoNovo || 0,
+                    difference: item.diferenca || 0,
+                    differenceValue: item.precoAtual && item.precoNovo 
+                        ? (item.precoNovo - item.precoAtual) 
                         : 0,
-                    status: item.status as PriceComparisonStatus,
-                    supplierName: supplierName,
+                    status: item.status === 'reducao' ? PriceComparisonStatus.Lower :
+                            (item.status === 'aumento' ? PriceComparisonStatus.Higher :
+                            (item.status === 'igual' ? PriceComparisonStatus.Equal : 
+                            PriceComparisonStatus.NoHistory)),
+                    supplierName: item.fornecedor || 'N/A',
                     lastPurchaseDate: '',
-                    stockQuantity: 0
+                    stockQuantity: item.estoque || 0
                 }));
                 
-                const totalValue = items.reduce((sum, item) => sum + (item.newPrice * item.quantity), 0);
+                const totalValue = items.reduce((sum, item) => sum + item.newPrice, 0);
                 
                 const newImport: PriceComparisonImport = {
                     id: `IMP-${Date.now()}`,
                     fileName: selectedFile.name,
                     uploadDate: new Date().toISOString(),
-                    supplierName: supplierName,
+                    supplierName: 'Importação de Template',
                     itemsCount: items.length,
                     totalValue: totalValue,
                     status: 'completed',
@@ -129,15 +173,45 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                 setSupplierName('');
                 setSelectedFile(null);
 
-                alert('✅ CSV processado com sucesso!');
+                // Preparar dados para o modal de preview
+                const materiaisPreview = items.map(item => ({
+                    materialCode: item.materialCode,
+                    materialName: item.materialName,
+                    currentPrice: item.currentPrice,
+                    newPrice: item.newPrice,
+                    difference: ((item.newPrice - item.currentPrice) / item.currentPrice) * 100
+                }));
+                
+                setMateriaisParaAtualizar(materiaisPreview);
+                setPreviewModalOpen(true);
             } else {
-                setError(response.error || 'Erro ao processar CSV');
-                alert(`❌ ${response.error || 'Erro ao processar CSV'}`);
+                setError(response.error || 'Erro ao processar arquivo');
+                alert(`❌ ${response.error || 'Erro ao processar arquivo'}`);
             }
-        } catch (error) {
-            console.error('Erro ao processar CSV:', error);
-            setError('Erro ao processar arquivo CSV');
-            alert('❌ Erro ao processar arquivo CSV. Verifique o console para mais detalhes.');
+        } catch (error: any) {
+            console.error('❌ Erro ao processar arquivo:', error);
+            
+            // Tentar extrair mensagem de erro específica
+            let errorMessage = 'Erro ao processar arquivo';
+            
+            if (error?.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error?.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error?.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
+            alert(
+                `❌ Erro ao Processar Arquivo\n\n` +
+                `Detalhes: ${errorMessage}\n\n` +
+                `Verifique se:\n` +
+                `• O arquivo é um JSON válido\n` +
+                `• O JSON tem o campo "materiais"\n` +
+                `• Os campos "precoNovo" são números\n` +
+                `• Você não alterou os campos "id" ou "sku"`
+            );
         } finally {
             setIsProcessing(false);
         }
@@ -201,39 +275,337 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
         }
     };
 
-    const handleAtualizarPrecos = async () => {
-        if (!selectedImport || !selectedImport.items) return;
+    const handleDownloadTemplate = async (formato: 'json' | 'pdf') => {
+        try {
+            setIsProcessing(true);
+            
+            if (formato === 'json') {
+                // Buscar dados JSON (NÃO blob)
+                const response = await axiosApiService.get('/api/materiais/template-importacao?tipo=todos&formato=json');
+                
+                console.log('📄 Resposta COMPLETA (tipo):', typeof response);
+                console.log('📄 Resposta COMPLETA (keys):', Object.keys(response || {}));
+                
+                // ✨ CORREÇÃO: axiosApiService SEMPRE retorna { success, data }
+                // Os dados reais estão em response.data
+                const templateData = response.data;
+                
+                console.log('✅ Template extraído de response.data:', {
+                    tipo: typeof templateData,
+                    temVersao: !!templateData?.versao,
+                    temMateriais: Array.isArray(templateData?.materiais),
+                    totalMateriais: templateData?.materiais?.length || 0
+                });
+                
+                // Verificar se tem dados válidos
+                if (!templateData || !templateData.materiais || !Array.isArray(templateData.materiais)) {
+                    alert(
+                        '❌ Erro: Resposta inválida do servidor\n\n' +
+                        'O JSON não contém campo "materiais" ou está vazio.\n\n' +
+                        'Detalhes no console (F12)'
+                    );
+                    console.error('❌ Dados inválidos! Response completo:', response);
+                    console.error('❌ TemplateData extraído:', templateData);
+                    return;
+                }
+                
+                console.log('✅ Dados extraídos com sucesso:', {
+                    versao: templateData.versao,
+                    empresa: templateData.empresa,
+                    totalMateriais: templateData.materiais.length,
+                    primeiroMaterial: templateData.materiais[0]?.sku || 'N/A'
+                });
+                
+                // GARANTIR que não tem wrappers (success, data, etc)
+                // Criar objeto limpo com apenas os campos necessários
+                const dadosLimpos = {
+                    versao: templateData.versao || '1.0',
+                    geradoEm: templateData.geradoEm || new Date().toISOString(),
+                    empresa: templateData.empresa || 'S3E Engenharia Elétrica',
+                    instrucoes: templateData.instrucoes || 'Atualize apenas o campo precoNovo',
+                    materiais: templateData.materiais
+                };
+                
+                console.log('🧹 Dados limpos (sem wrappers):', {
+                    temVersao: !!dadosLimpos.versao,
+                    temMateriais: !!dadosLimpos.materiais,
+                    totalMateriais: dadosLimpos.materiais?.length || 0
+                });
+                
+                // Converter para string JSON formatado (com identação bonita)
+                const jsonString = JSON.stringify(dadosLimpos, null, 2);
+                
+                console.log('📝 JSON string gerado (tamanho):', jsonString.length, 'caracteres');
+                console.log('📝 JSON string (primeiros 200 chars):', jsonString.substring(0, 200));
+                
+                // Criar blob com string JSON
+                const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `template-precos-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                
+                alert(
+                    `✅ Template JSON baixado com sucesso!\n\n` +
+                    `📊 ${templateData.materiais.length} materiais incluídos\n\n` +
+                    `📝 Edite o campo "precoNovo" de cada material e importe o arquivo de volta.`
+                );
+            } else {
+                // Abrir PDF em HTML (como relatório financeiro)
+                const response = await axiosApiService.get('/api/materiais/template-importacao?tipo=todos&formato=pdf');
+                
+                // Extrair dados (pode estar em response.data ou direto em response)
+                let dados = response;
+                if (response && typeof response === 'object' && 'data' in response) {
+                    dados = response.data;
+                }
+                
+                if (!dados || !dados.materiais) {
+                    alert('❌ Erro ao carregar dados do template');
+                    console.error('Dados inválidos:', dados);
+                    return;
+                }
+                
+                await abrirPDFEmNovaAba(dados.materiais);
+            }
+        } catch (error) {
+            console.error('Erro ao baixar template:', error);
+            alert('❌ Erro ao baixar template');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Função para abrir PDF em HTML (como relatório financeiro)
+    const abrirPDFEmNovaAba = async (materiais: any[]) => {
+        const pdfWindow = window.open('', '_blank');
         
-        if (!window.confirm('Deseja atualizar os preços dos materiais com base nesta comparação? Apenas itens com preços menores serão atualizados.')) {
+        if (!pdfWindow) {
+            alert('❌ Bloqueador de pop-ups ativado. Permita pop-ups para gerar o PDF.');
+            return;
+        }
+
+        const html = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Template de Orçamento - S3E Engenharia</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        padding: 40px;
+                        background: #fff;
+                        color: #333;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 40px;
+                        padding-bottom: 20px;
+                        border-bottom: 3px solid #10B981;
+                    }
+                    .header h1 {
+                        color: #1E40AF;
+                        font-size: 32px;
+                        margin-bottom: 10px;
+                    }
+                    .header p {
+                        color: #666;
+                        font-size: 14px;
+                        margin-top: 5px;
+                    }
+                    .instrucoes {
+                        background: #FFF3E0;
+                        border: 2px solid #F57C00;
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin-bottom: 30px;
+                    }
+                    .instrucoes h3 {
+                        color: #F57C00;
+                        margin-bottom: 10px;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                    }
+                    table th, table td {
+                        padding: 12px;
+                        text-align: left;
+                        border: 1px solid #E5E7EB;
+                    }
+                    table th {
+                        background: #10B981;
+                        color: white;
+                        font-weight: 600;
+                    }
+                    table tr:nth-child(even) {
+                        background: #F9FAFB;
+                    }
+                    table tr.critico {
+                        background: #FFF3E0;
+                    }
+                    table tr.zerado {
+                        background: #FFEBEE;
+                    }
+                    .footer {
+                        margin-top: 50px;
+                        padding-top: 20px;
+                        border-top: 2px solid #E5E7EB;
+                        text-align: center;
+                        color: #666;
+                        font-size: 12px;
+                    }
+                    @media print {
+                        body { padding: 20px; }
+                        .no-print { display: none; }
+                    }
+                    .preco {
+                        text-align: right;
+                        font-weight: 600;
+                    }
+                    .linha-preco {
+                        min-width: 150px;
+                        border-bottom: 1px solid #999;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>S3E ENGENHARIA ELÉTRICA</h1>
+                    <p><strong>SOLICITAÇÃO DE ORÇAMENTO</strong></p>
+                    <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+                </div>
+
+                <div class="instrucoes">
+                    <h3>⚠️ INSTRUÇÕES IMPORTANTES:</h3>
+                    <ul>
+                        <li>Preencha a coluna "NOVO PREÇO" com os valores atualizados</li>
+                        <li>Use este documento como referência ou imprima e preencha manualmente</li>
+                        <li>Para atualização no sistema, edite o arquivo JSON correspondente</li>
+                        <li>Orçamento válido por 30 dias</li>
+                    </ul>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">SKU</th>
+                            <th>Material</th>
+                            <th style="width: 60px;">Un</th>
+                            <th style="width: 80px;">Estoque</th>
+                            <th style="width: 120px;">Preço Atual</th>
+                            <th style="width: 150px;">NOVO PREÇO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${materiais.map(m => `
+                            <tr class="${m.estoque === 0 ? 'zerado' : (m.estoque <= m.estoqueMinimo ? 'critico' : '')}">
+                                <td><strong>${m.sku}</strong></td>
+                                <td>${m.nome}</td>
+                                <td>${m.unidadeMedida}</td>
+                                <td style="text-align: center;">${m.estoque}</td>
+                                <td class="preco">R$ ${(m.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td class="linha-preco">_______________________</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <p><strong>S3E Engenharia Elétrica</strong> - Sistema de Gestão</p>
+                    <p>Total de ${materiais.length} materiais | Orçamento válido por 30 dias</p>
+                    <p class="no-print" style="margin-top: 20px;">
+                        <button onclick="window.print()" style="padding: 12px 24px; background: #10B981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin-right: 10px;">
+                            🖨️ Imprimir / Salvar como PDF
+                        </button>
+                        <button onclick="window.close()" style="padding: 12px 24px; background: #6B7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                            ✖️ Fechar
+                        </button>
+                    </p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        pdfWindow.document.write(html);
+        pdfWindow.document.close();
+        
+        alert('✅ Template aberto em nova aba!\n\n📄 Você pode imprimir ou salvar como PDF.');
+    };
+
+    const handleAtualizarPrecos = async () => {
+        if (!materiaisParaAtualizar || materiaisParaAtualizar.length === 0) {
+            alert('❌ Nenhum material para atualizar');
             return;
         }
 
         try {
             setIsProcessing(true);
             
-            // Converter items para ProcessedItem[]
-            const processedItems: ProcessedItem[] = selectedImport.items.map(item => ({
-                codigo: item.materialCode,
-                nome: item.materialName,
-                unidade: item.unit,
-                quantidade: item.quantity,
-                preco_unitario: item.newPrice,
-                preco_atual: item.currentPrice,
-                diferenca_percentual: item.difference,
-                status: item.status as 'Lower' | 'Higher' | 'Equal' | 'NoHistory'
-            }));
+            console.log('📤 Enviando materiais para atualização:', materiaisParaAtualizar);
             
-            const response = await comparacaoPrecosService.atualizarPrecos(processedItems);
+            // Criar estrutura JSON no formato que o backend espera
+            const templateData = {
+                versao: '1.0',
+                geradoEm: new Date().toISOString(),
+                empresa: 'S3E Engenharia Elétrica',
+                materiais: materiaisParaAtualizar.map(m => ({
+                    sku: m.materialCode,
+                    nome: m.materialName,
+                    precoAtual: m.currentPrice,
+                    precoNovo: m.newPrice
+                }))
+            };
             
-            if (response.success) {
-                alert(`✅ Preços atualizados com sucesso! ${response.data?.updated || 0} itens foram atualizados.`);
+            console.log('📦 Template JSON criado:', templateData);
+            
+            // Converter para JSON string
+            const jsonString = JSON.stringify(templateData);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const file = new File([blob], 'importacao-atualizacao.json', { type: 'application/json' });
+            
+            console.log('📄 Arquivo criado:', file.name, 'Tamanho:', file.size);
+            
+            // Criar FormData
+            const formData = new FormData();
+            formData.append('arquivo', file);
+            
+            console.log('📡 Enviando para /api/materiais/importar-precos...');
+            
+            const response = await axiosApiService.post('/api/materiais/importar-precos', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            console.log('✅ Resposta recebida:', response);
+            
+            if (response.success && response.data) {
+                setPreviewModalOpen(false);
                 setSelectedImport(null);
+                setMateriaisParaAtualizar([]);
+                
+                alert(`✅ Preços atualizados com sucesso! ${response.data.atualizados || materiaisParaAtualizar.length} itens foram atualizados.`);
             } else {
                 alert(`❌ ${response.error || 'Erro ao atualizar preços'}`);
             }
-        } catch (error) {
-            console.error('Erro ao atualizar preços:', error);
-            alert('❌ Erro ao atualizar preços. Verifique o console para mais detalhes.');
+        } catch (error: any) {
+            console.error('❌ Erro ao atualizar preços:', error);
+            
+            let errorMessage = 'Erro ao atualizar preços';
+            if (error?.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error?.message) {
+                errorMessage = error.message;
+            }
+            
+            alert(`❌ ${errorMessage}`);
         } finally {
             setIsProcessing(false);
         }
@@ -248,17 +620,40 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                         <Bars3Icon className="w-6 h-6" />
                     </button>
                     <div>
-                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">Comparação de Preços</h1>
-                        <p className="text-sm sm:text-base text-gray-500 mt-1">Compare preços de fornecedores e analise oportunidades</p>
+                        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">Atualização de Preços</h1>
+                        <p className="text-sm sm:text-base text-gray-500 mt-1">Atualize preços em massa com arquivos JSON</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => setIsUploadModalOpen(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-medium font-semibold"
-                >
-                    <DocumentArrowUpIcon className="w-5 h-5" />
-                    Importar CSV
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => handleDownloadTemplate('json')}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold disabled:opacity-50"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        📄 JSON
+                    </button>
+                    <button
+                        onClick={() => handleDownloadTemplate('pdf')}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl hover:from-red-700 hover:to-red-600 transition-all shadow-medium font-semibold disabled:opacity-50"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        📑 PDF
+                    </button>
+                    <button
+                        onClick={() => setIsUploadModalOpen(true)}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-medium font-semibold disabled:opacity-50"
+                    >
+                        <DocumentArrowUpIcon className="w-5 h-5" />
+                        Importar JSON
+                    </button>
+                </div>
             </header>
 
             {/* Error Message */}
@@ -439,54 +834,75 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                         </div>
 
                         <div className="p-6 space-y-6">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                    Nome do Fornecedor *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={supplierName}
-                                    onChange={(e) => setSupplierName(e.target.value)}
-                                    className="input-field"
-                                    placeholder="Nome da empresa fornecedora"
-                                />
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-2 border-blue-300 dark:border-blue-700 p-5 rounded-xl">
+                                <h4 className="font-bold text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2 text-lg">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    💡 Como usar esta funcionalidade
+                                </h4>
+                                <ol className="text-blue-800 dark:text-blue-300 text-sm space-y-2.5 ml-4 list-decimal">
+                                    <li>
+                                        <strong>Download do Template:</strong>
+                                        <ul className="ml-4 mt-1 space-y-1 list-disc">
+                                            <li><strong>📄 JSON</strong>: Para edição técnica (recomendado para importação)</li>
+                                            <li><strong>📑 PDF</strong>: Para enviar ao fornecedor (visualização/impressão)</li>
+                                        </ul>
+                                    </li>
+                                    <li>
+                                        <strong>Edição do JSON:</strong> Abra o arquivo .json em qualquer editor de texto e altere apenas o campo <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded">"precoNovo"</code>
+                                    </li>
+                                    <li><strong>Salvar:</strong> Salve o arquivo JSON modificado</li>
+                                    <li><strong>Importar:</strong> Clique em "Importar JSON" e selecione o arquivo</li>
+                                    <li><strong>Revisar:</strong> O sistema mostrará preview de todas as alterações</li>
+                                    <li><strong>Confirmar:</strong> Após revisar, confirme para aplicar as alterações</li>
+                                </ol>
+                                
+                                <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+                                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        Importante: Não altere os campos ID e SKU do JSON!
+                                    </p>
+                                </div>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                    Arquivo CSV *
+                                    Arquivo de Atualização *
                                 </label>
                                 <input
                                     type="file"
-                                    accept=".csv"
+                                    accept=".json,.csv,.xlsx,.xls"
                                     onChange={handleFileUpload}
                                     className="input-field"
                                 />
                                 <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-2">
-                                    Formato esperado: código, nome, unidade, quantidade, preço_unitário
+                                    Formatos aceitos: .json (recomendado), .xlsx, .xls, .csv
                                 </p>
                             </div>
 
                             {selectedFile && (
-                                <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 p-4 rounded-xl">
-                                    <p className="text-indigo-800 dark:text-indigo-300 font-medium">
-                                        📁 Arquivo selecionado: {selectedFile.name}
-                                    </p>
-                                    <p className="text-indigo-600 dark:text-indigo-400 text-sm mt-1">
-                                        Tamanho: {(selectedFile.size / 1024).toFixed(1)} KB
-                                    </p>
+                                <div className="bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 p-4 rounded-xl">
+                                    <div className="flex items-start gap-3">
+                                        <svg className="w-6 h-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <div className="flex-1">
+                                            <p className="text-green-800 dark:text-green-300 font-medium">
+                                                Arquivo selecionado:
+                                            </p>
+                                            <p className="text-green-700 dark:text-green-400 font-bold text-lg mt-1">
+                                                {selectedFile.name}
+                                            </p>
+                                            <p className="text-green-600 dark:text-green-400 text-sm mt-1">
+                                                Tamanho: {(selectedFile.size / 1024).toFixed(1)} KB
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
-
-                            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
-                                <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📋 Instruções</h4>
-                                <ul className="text-blue-800 dark:text-blue-300 text-sm space-y-1">
-                                    <li>• O arquivo deve estar em formato CSV</li>
-                                    <li>• Deve conter as colunas: código, nome, unidade, quantidade, preço_unitário</li>
-                                    <li>• Os preços serão comparados com o histórico de compras</li>
-                                    <li>• Itens sem histórico serão marcados como "Sem Histórico"</li>
-                                </ul>
-                            </div>
 
                             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-dark-border">
                                 <button
@@ -497,16 +913,26 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                                 </button>
                                 <button
                                     onClick={processCSV}
-                                    disabled={!selectedFile || !supplierName.trim() || isProcessing}
+                                    disabled={!selectedFile || isProcessing}
                                     className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {isProcessing ? 'Processando...' : 'Processar CSV'}
+                                    {isProcessing ? 'Processando...' : '📊 Processar e Visualizar'}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* MODAL DE HISTÓRICO DE PREÇOS */}
+            <HistoricoPrecosModal 
+                materialId={selectedMaterialId || ''}
+                isOpen={historicoModalOpen}
+                onClose={() => {
+                    setHistoricoModalOpen(false);
+                    setSelectedMaterialId(null);
+                }}
+            />
 
             {/* MODAL DE DETALHES */}
             {selectedImport && (
@@ -625,8 +1051,20 @@ const ComparacaoPrecos: React.FC<ComparacaoPrecosProps> = ({ toggleSidebar, onNa
                     </div>
                 </div>
             )}
+
+            {/* Modal de Preview de Atualização */}
+            <PreviewAtualizacaoModal
+                isOpen={previewModalOpen}
+                onClose={() => {
+                    setPreviewModalOpen(false);
+                    setMateriaisParaAtualizar([]);
+                }}
+                materiais={materiaisParaAtualizar}
+                onConfirmar={handleAtualizarPrecos}
+                isProcessing={isProcessing}
+            />
         </div>
     );
 };
 
-export default ComparacaoPrecos;
+export default AtualizacaoPrecos;

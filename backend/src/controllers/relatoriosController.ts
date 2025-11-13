@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import { RelatoriosService } from '../services/relatorios.service';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class RelatoriosController {
     /**
@@ -222,7 +228,7 @@ export class RelatoriosController {
     }
 
     /**
-     * Gera relatório em formato Excel
+     * Gera relatório em formato Excel com gráficos e logo
      */
     private static async gerarRelatorioExcel(
         res: Response,
@@ -238,41 +244,122 @@ export class RelatoriosController {
         // Aba: Resumo
         const sheetResumo = workbook.addWorksheet('Resumo Financeiro');
         
-        // Cabeçalho
-        sheetResumo.addRow(['RELATÓRIO FINANCEIRO - S3E ENGENHARIA']);
-        sheetResumo.addRow([`Período: ${dataInicio.toLocaleDateString('pt-BR')} até ${dataFim.toLocaleDateString('pt-BR')}`]);
+        // Adicionar logo (se existir)
+        try {
+            const logoPath = path.join(__dirname, '../../uploads/logos/logo-nome-azul.png');
+            if (fs.existsSync(logoPath)) {
+                const logoBuffer = fs.readFileSync(logoPath);
+                const imageId = workbook.addImage({
+                    buffer: logoBuffer,
+                    extension: 'png',
+                });
+                
+                // Adicionar logo nas linhas 1-4, colunas A-B
+                sheetResumo.addImage(imageId, {
+                    tl: { col: 0, row: 0 },
+                    ext: { width: 200, height: 80 }
+                });
+            }
+        } catch (error) {
+            console.warn('⚠️ Não foi possível adicionar o logo:', error);
+        }
+        
+        // Cabeçalho (após logo)
+        sheetResumo.mergeCells('C1:F1');
+        sheetResumo.getCell('C1').value = 'RELATÓRIO FINANCEIRO';
+        sheetResumo.getCell('C1').font = { bold: true, size: 18, color: { argb: 'FF1E40AF' } };
+        sheetResumo.getCell('C1').alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        sheetResumo.mergeCells('C2:F2');
+        sheetResumo.getCell('C2').value = 'S3E ENGENHARIA ELÉTRICA';
+        sheetResumo.getCell('C2').font = { bold: true, size: 14 };
+        sheetResumo.getCell('C2').alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        sheetResumo.mergeCells('C3:F3');
+        sheetResumo.getCell('C3').value = `Período: ${dataInicio.toLocaleDateString('pt-BR')} até ${dataFim.toLocaleDateString('pt-BR')}`;
+        sheetResumo.getCell('C3').font = { size: 11 };
+        sheetResumo.getCell('C3').alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        sheetResumo.mergeCells('C4:F4');
+        sheetResumo.getCell('C4').value = `Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
+        sheetResumo.getCell('C4').font = { size: 9, color: { argb: 'FF666666' } };
+        sheetResumo.getCell('C4').alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        // Espaço
+        sheetResumo.addRow([]);
         sheetResumo.addRow([]);
         
-        // Estilos
-        sheetResumo.getRow(1).font = { bold: true, size: 16 };
-        sheetResumo.getRow(2).font = { size: 12 };
+        // Métricas Principais (linha 7)
+        sheetResumo.mergeCells('A7:F7');
+        sheetResumo.getCell('A7').value = '📊 MÉTRICAS PRINCIPAIS';
+        sheetResumo.getCell('A7').font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        sheetResumo.getCell('A7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+        sheetResumo.getCell('A7').alignment = { horizontal: 'center', vertical: 'middle' };
+        sheetResumo.getRow(7).height = 25;
         
-        // Métricas Principais
-        sheetResumo.addRow(['MÉTRICAS PRINCIPAIS', '']);
-        sheetResumo.addRow(['Total a Receber', dados.totalReceber]);
-        sheetResumo.addRow(['Total a Pagar', dados.totalPagar]);
-        sheetResumo.addRow(['Saldo Previsto', dados.saldoPrevisto]);
-        sheetResumo.addRow(['Total Faturado', dados.totalFaturado]);
-        sheetResumo.addRow([]);
+        // Dados das métricas
+        const metricas = [
+            { label: '💰 Total a Receber', valor: dados.totalReceber || 0, cor: 'FFD4EDDA' },
+            { label: '💸 Total a Pagar', valor: dados.totalPagar || 0, cor: 'FFF8D7DA' },
+            { label: '📈 Saldo Previsto', valor: dados.saldoPrevisto || 0, cor: 'FFD1ECF1' },
+            { label: '✅ Total Faturado', valor: dados.totalFaturado || 0, cor: 'FFE2E3F1' },
+            { label: '✔️ Total Pago', valor: dados.totalPago || 0, cor: 'FFFEF3C7' },
+            { label: '💎 Lucro Líquido', valor: dados.lucroLiquido || 0, cor: 'FFE5E7EB' }
+        ];
         
-        // Formatação de valores
-        sheetResumo.getColumn(2).numFmt = 'R$ #,##0.00';
+        let currentRow = 8;
+        metricas.forEach(metrica => {
+            sheetResumo.getCell(`A${currentRow}`).value = metrica.label;
+            sheetResumo.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            sheetResumo.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: metrica.cor } };
+            
+            sheetResumo.getCell(`B${currentRow}`).value = metrica.valor;
+            sheetResumo.getCell(`B${currentRow}`).numFmt = 'R$ #,##0.00';
+            sheetResumo.getCell(`B${currentRow}`).font = { bold: true, size: 12 };
+            sheetResumo.getCell(`B${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: metrica.cor } };
+            sheetResumo.getCell(`B${currentRow}`).alignment = { horizontal: 'right' };
+            
+            currentRow++;
+        });
+        
+        // Formatação de colunas
         sheetResumo.getColumn(1).width = 30;
-        sheetResumo.getColumn(2).width = 20;
+        sheetResumo.getColumn(2).width = 25;
         
-        // Aplicar cores
-        sheetResumo.getRow(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4EDDA' } };
-        sheetResumo.getRow(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8D7DA' } };
-        sheetResumo.getRow(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1ECF1' } };
-        sheetResumo.getRow(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E3F1' } };
+        // Criar gráfico de barras (valores simulados via dados)
+        if (dados.graficosMensais && dados.graficosMensais.length > 0) {
+            const sheetGraficos = workbook.addWorksheet('Gráficos');
+            
+            // Cabeçalhos
+            sheetGraficos.addRow(['Mês', 'Receita', 'Despesa', 'Lucro']);
+            sheetGraficos.getRow(1).font = { bold: true };
+            sheetGraficos.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4CAF50' } };
+            
+            // Dados
+            dados.graficosMensais.forEach((item: any) => {
+                sheetGraficos.addRow([
+                    item.mes || '',
+                    item.receita || 0,
+                    item.despesa || 0,
+                    item.lucro || 0
+                ]);
+            });
+            
+            // Formatação
+            sheetGraficos.getColumn(2).numFmt = 'R$ #,##0.00';
+            sheetGraficos.getColumn(3).numFmt = 'R$ #,##0.00';
+            sheetGraficos.getColumn(4).numFmt = 'R$ #,##0.00';
+            sheetGraficos.columns.forEach(col => col.width = 20);
+        }
 
         // Detalhes de Transações (se solicitado)
         if (incluirDetalhes && dados.contasReceber && dados.contasReceber.length > 0) {
             const sheetReceber = workbook.addWorksheet('Contas a Receber');
             
             sheetReceber.addRow(['ID', 'Descrição', 'Valor', 'Data Vencimento', 'Status']);
-            sheetReceber.getRow(1).font = { bold: true };
-            sheetReceber.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4CAF50' } };
+            sheetReceber.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            sheetReceber.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+            sheetReceber.getRow(1).height = 25;
             
             dados.contasReceber.forEach((conta: any) => {
                 sheetReceber.addRow([
@@ -285,15 +372,16 @@ export class RelatoriosController {
             });
             
             sheetReceber.getColumn(3).numFmt = 'R$ #,##0.00';
-            sheetReceber.columns.forEach(col => col.width = 20);
+            sheetReceber.columns.forEach(col => col.width = 25);
         }
 
         if (incluirDetalhes && dados.contasPagar && dados.contasPagar.length > 0) {
             const sheetPagar = workbook.addWorksheet('Contas a Pagar');
             
             sheetPagar.addRow(['ID', 'Descrição', 'Valor', 'Data Vencimento', 'Status']);
-            sheetPagar.getRow(1).font = { bold: true };
-            sheetPagar.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF44336' } };
+            sheetPagar.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            sheetPagar.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEF4444' } };
+            sheetPagar.getRow(1).height = 25;
             
             dados.contasPagar.forEach((conta: any) => {
                 sheetPagar.addRow([
@@ -306,7 +394,7 @@ export class RelatoriosController {
             });
             
             sheetPagar.getColumn(3).numFmt = 'R$ #,##0.00';
-            sheetPagar.columns.forEach(col => col.width = 20);
+            sheetPagar.columns.forEach(col => col.width = 25);
         }
 
         // Enviar arquivo

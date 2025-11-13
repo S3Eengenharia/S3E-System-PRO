@@ -236,7 +236,7 @@ export const InvoiceIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-// Ícone de Comparação de Preços (Balança/Comparação)
+// Ícone de Atualização de Preços (Balança/Comparação)
 export const CompareIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="8" cy="21" r="1"/>
@@ -245,6 +245,14 @@ export const CompareIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path d="M16 8V4"/>
         <path d="M12 8V4"/>
         <path d="M8 8V4"/>
+    </svg>
+);
+
+// Ícone de Etiqueta de Preço (Cotações)
+export const PriceTagIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+        <line x1="7" y1="7" x2="7.01" y2="7"/>
     </svg>
 );
 
@@ -310,6 +318,7 @@ export const navLinks: NavLink[] = [
     { name: 'Clientes', icon: ClientsIcon, requiredPermission: 'view_projetos' },
     { name: 'Orçamentos', icon: BudgetIcon, requiredPermission: 'view_projetos' },
     { name: 'Vendas', icon: SalesIcon, requiredPermission: 'view_vendas' },
+    { name: 'Cotações', icon: PriceTagIcon, requiredPermission: 'view_projetos' },
     
     // ========== SUPRIMENTOS / ESTOQUE ==========
     // Fornecedores, Compras, Estoque, Catálogo, Comparação precisam de permissões
@@ -318,7 +327,7 @@ export const navLinks: NavLink[] = [
     { name: 'Estoque', icon: CubeIcon, requiredPermission: 'view_catalogo' },
     { name: 'Movimentações', icon: MovementIcon, requiredPermission: 'view_movimentacoes' },
     { name: 'Catálogo', icon: CatalogIcon, requiredPermission: 'view_catalogo' },
-    { name: 'Comparação de Preços', icon: CompareIcon, requiredPermission: 'view_comparacao_precos' },
+    { name: 'Atualização de Preços', icon: CompareIcon, requiredPermission: 'view_comparacao_precos' },
     
     // ========== OPERACIONAL / PROJETOS ==========
     { name: 'Projetos', icon: BlueprintIcon, requiredPermission: 'view_projetos' },

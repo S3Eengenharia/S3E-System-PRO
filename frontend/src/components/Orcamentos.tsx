@@ -72,13 +72,15 @@ interface Material {
 
 interface OrcamentoItem {
     id?: string;
-    tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA';
+    tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA' | 'COTACAO';
     materialId?: string;
     kitId?: string;
     quadroId?: string;
+    cotacaoId?: string; // Novo
     servicoId?: string;
     servicoNome?: string;
     descricao?: string;
+    dataAtualizacaoCotacao?: string; // Novo
     nome: string;
     unidadeMedida: string;
     quantidade: number;
@@ -151,6 +153,8 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const [items, setItems] = useState<OrcamentoItem[]>([]);
     const [showItemModal, setShowItemModal] = useState(false);
     const [itemSearchTerm, setItemSearchTerm] = useState('');
+    const [tipoItemSelecionado, setTipoItemSelecionado] = useState<'material' | 'kit' | 'servico' | 'quadro' | 'cotacao' | 'extra'>('material');
+    const [cotacoes, setCotacoes] = useState<any[]>([]);
 
     // Carregar dados iniciais usando os serviços adequados
     const loadData = async () => {
@@ -160,10 +164,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
             console.log('🔍 Carregando dados de orçamentos via serviços...');
 
-            const [orcamentosRes, clientesRes, materiaisRes] = await Promise.all([
+            const [orcamentosRes, clientesRes, materiaisRes, cotacoesRes] = await Promise.all([
                 orcamentosService.listar(),
                 clientesService.listar(),
-                axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS)
+                axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS),
+                axiosApiService.get('/api/cotacoes')
             ]);
 
             console.log('📊 Resposta do serviço - Orçamentos:', orcamentosRes);
@@ -200,6 +205,16 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 setMateriais([]);
             }
 
+            // Tratar cotações
+            if (cotacoesRes.success && cotacoesRes.data) {
+                const cotacoesData = Array.isArray(cotacoesRes.data) ? cotacoesRes.data : [];
+                setCotacoes(cotacoesData);
+                console.log(`✅ ${cotacoesData.length} cotações carregadas`);
+            } else {
+                console.warn('⚠️ Erro ao carregar cotações:', cotacoesRes.error);
+                setCotacoes([]);
+            }
+
         } catch (err) {
             console.error('❌ Erro crítico ao carregar dados:', err);
             setError('Erro de conexão ao carregar dados');
@@ -226,6 +241,19 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 material.sku.toLowerCase().includes(itemSearchTerm.toLowerCase())
             );
     }, [materiais, itemSearchTerm]);
+
+    // Filtrar cotações para seleção
+    const filteredCotacoes = useMemo(() => {
+        if (!Array.isArray(cotacoes)) return [];
+
+        return cotacoes
+            .filter(cotacao => cotacao.ativo)
+            .filter(cotacao =>
+                cotacao.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                cotacao.ncm?.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                cotacao.fornecedorNome?.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [cotacoes, itemSearchTerm]);
 
     // Filtrar orçamentos
     const filteredOrcamentos = useMemo(() => {
@@ -399,6 +427,28 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         setItems(prev => [...prev, newItem]);
         setShowItemModal(false);
         setItemSearchTerm('');
+        toast.success('Material adicionado ao orçamento');
+    };
+
+    // Adicionar cotação ao orçamento (BANCO FRIO)
+    const handleAddCotacao = (cotacao: any) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'COTACAO',
+            cotacaoId: cotacao.id,
+            nome: cotacao.nome,
+            descricao: cotacao.nome, // ✅ Apenas o nome do material (não mostrar fornecedor)
+            dataAtualizacaoCotacao: cotacao.dataAtualizacao,
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: cotacao.valorUnitario,
+            precoUnit: cotacao.valorUnitario * (1 + formState.bdi / 100),
+            subtotal: cotacao.valorUnitario * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success(`Cotação adicionada do banco frio`);
     };
 
     // Remover item
@@ -650,9 +700,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 previsaoTermino: (orcamento as any).previsaoTermino ? new Date((orcamento as any).previsaoTermino).toLocaleDateString('pt-BR') : undefined
             },
             items: (orcamento.items || []).map((item: any) => ({
-                codigo: item.materialId || item.kitId,
-                nome: item.nome || item.descricao || 'Item',
-                descricao: item.descricao,
+                codigo: item.materialId || item.kitId || item.cotacaoId,
+                nome: item.nome || 'Item', // ✅ Usar sempre o nome (não descricao)
+                descricao: item.tipo === 'COTACAO' ? undefined : item.descricao, // ✅ PDF: não mostrar descricao de cotações
                 unidade: item.unidadeMedida || 'UN',
                 quantidade: item.quantidade,
                 valorUnitario: item.precoUnit || item.precoUnitario,
@@ -1300,6 +1350,15 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                                         <div>
                                                             <p className="font-semibold text-gray-900">{item.nome}</p>
                                                             <p className="text-sm text-gray-600">{item.unidadeMedida}</p>
+                                                            {/* Flag de Banco Frio */}
+                                                            {(item.tipo === 'COTACAO' || (item as any).cotacao) && (
+                                                                <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
+                                                                    <span>📦 Banco Frio</span>
+                                                                    <span className="text-blue-600">
+                                                                        • {new Date((item as any).cotacao?.dataAtualizacao || item.dataAtualizacaoCotacao).toLocaleDateString('pt-BR')}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         <div>
@@ -1516,7 +1575,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             {showItemModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
                     <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong w-full max-w-4xl max-h-[80vh] overflow-hidden">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-blue-700">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border" style={{ background: '#0a1a2f' }}>
                             <div>
                                 <h3 className="text-xl font-bold text-white">Adicionar Item ao Orçamento</h3>
                                 <p className="text-sm text-white/80 mt-1">Escolha o tipo e selecione o item</p>
@@ -1529,21 +1588,72 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         <div className="p-6">
                             {/* Seletor de Tipo de Item */}
                             <div className="mb-6">
-                                <label className="block text-sm font-semibold text-gray-700 mb-3">Tipo de Item</label>
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                    <button type="button" className="px-4 py-3 bg-blue-100 border-2 border-blue-300 text-blue-800 rounded-xl font-semibold hover:bg-blue-200 transition-all">
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">Tipo de Item</label>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTipoItemSelecionado('material')}
+                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
+                                            tipoItemSelecionado === 'material'
+                                                ? 'bg-blue-100 border-blue-500 text-blue-800'
+                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
                                         📦 Material
                                     </button>
-                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
-                                        🎁 Kit
-                                    </button>
-                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTipoItemSelecionado('servico')}
+                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
+                                            tipoItemSelecionado === 'servico'
+                                                ? 'bg-purple-100 border-purple-500 text-purple-800'
+                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
                                         🔧 Serviço
                                     </button>
-                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTipoItemSelecionado('cotacao')}
+                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
+                                            tipoItemSelecionado === 'cotacao'
+                                                ? 'bg-green-100 border-green-500 text-green-800'
+                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        🏷️ Cotações
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTipoItemSelecionado('quadro')}
+                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
+                                            tipoItemSelecionado === 'quadro'
+                                                ? 'bg-yellow-100 border-yellow-500 text-yellow-800'
+                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
                                         ⚡ Quadro Pronto
                                     </button>
-                                    <button type="button" className="px-4 py-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTipoItemSelecionado('kit')}
+                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
+                                            tipoItemSelecionado === 'kit'
+                                                ? 'bg-indigo-100 border-indigo-500 text-indigo-800'
+                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        🎁 Kit
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTipoItemSelecionado('extra')}
+                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
+                                            tipoItemSelecionado === 'extra'
+                                                ? 'bg-red-100 border-red-500 text-red-800'
+                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
                                         💵 Custo Extra
                                     </button>
                                 </div>
@@ -1562,36 +1672,111 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                 </div>
                             </div>
 
+                            {/* Renderização baseada no tipo selecionado */}
                             <div className="max-h-96 overflow-y-auto">
-                                {filteredMaterials.length === 0 ? (
+                                {/* Lista de Materiais */}
+                                {tipoItemSelecionado === 'material' && (
+                                    filteredMaterials.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">📦</span>
+                                            </div>
+                                            <p className="text-gray-500 font-medium">Nenhum material disponível</p>
+                                            <p className="text-gray-400 text-sm mt-1">Verifique se há materiais cadastrados com estoque</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {filteredMaterials.map((material) => (
+                                                <div
+                                                    key={material.id}
+                                                    className="bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-dark-border p-4 rounded-xl hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer group"
+                                                    onClick={() => handleAddItem(material)}
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-semibold text-gray-900 dark:text-dark-text group-hover:text-blue-900 dark:group-hover:text-blue-400">{material.nome}</h4>
+                                                        <span className="px-2 py-1 text-xs font-bold bg-green-100 text-green-800 rounded-lg">
+                                                            Estoque: {material.estoque}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-1">SKU: {material.sku}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">Unidade: {material.unidadeMedida}</p>
+                                                    <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
+                                                        R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Lista de Cotações (BANCO FRIO) */}
+                                {tipoItemSelecionado === 'cotacao' && (
+                                    filteredCotacoes.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">🏷️</span>
+                                            </div>
+                                            <p className="text-gray-500 font-medium">Nenhuma cotação disponível</p>
+                                            <p className="text-gray-400 text-sm mt-1">Cadastre cotações na página de Cotações</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {filteredCotacoes.map((cotacao) => (
+                                                <div
+                                                    key={cotacao.id}
+                                                    className="bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-dark-border p-4 rounded-xl hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 transition-all cursor-pointer group"
+                                                    onClick={() => handleAddCotacao(cotacao)}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-gray-900 dark:text-dark-text group-hover:text-green-900 dark:group-hover:text-green-400 mb-2">
+                                                                {cotacao.nome}
+                                                            </h4>
+                                                            <div className="space-y-1">
+                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                                    📋 NCM: {cotacao.ncm || 'N/A'}
+                                                                </p>
+                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                                    🏢 Fornecedor: {cotacao.fornecedorNome || 'N/A'}
+                                                                </p>
+                                                                <p className="text-xs text-blue-600 dark:text-blue-400">
+                                                                    📅 Atualizado em {new Date(cotacao.dataAtualizacao).toLocaleDateString('pt-BR')}
+                                                                </p>
+                                                            </div>
+                                                            {cotacao.observacoes && (
+                                                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-2 italic">
+                                                                    {cotacao.observacoes}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right ml-4">
+                                                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-bold mb-2 inline-block">
+                                                                📦 Banco Frio
+                                                            </span>
+                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                                                                R$ {cotacao.valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Mensagem para outros tipos (ainda não implementados) */}
+                                {['servico', 'kit', 'quadro', 'extra'].includes(tipoItemSelecionado) && (
                                     <div className="text-center py-12">
                                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <span className="text-2xl">📦</span>
+                                            <span className="text-2xl">⚙️</span>
                                         </div>
-                                        <p className="text-gray-500 font-medium">Nenhum material disponível</p>
-                                        <p className="text-gray-400 text-sm mt-1">Verifique se há materiais cadastrados com estoque</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {filteredMaterials.map((material) => (
-                                            <div
-                                                key={material.id}
-                                                className="bg-gray-50 border-2 border-gray-200 p-4 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer group"
-                                                onClick={() => handleAddItem(material)}
-                                            >
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <h4 className="font-semibold text-gray-900 group-hover:text-blue-900">{material.nome}</h4>
-                                                    <span className="px-2 py-1 text-xs font-bold bg-green-100 text-green-800 rounded-lg">
-                                                        Estoque: {material.estoque}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-gray-600 mb-1">SKU: {material.sku}</p>
-                                                <p className="text-sm text-gray-600 mb-2">Unidade: {material.unidadeMedida}</p>
-                                                <p className="text-lg font-bold text-blue-700">
-                                                    R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                </p>
-                                            </div>
-                                        ))}
+                                        <p className="text-gray-500 font-medium">Funcionalidade em desenvolvimento</p>
+                                        <p className="text-gray-400 text-sm mt-1">
+                                            {tipoItemSelecionado === 'servico' && 'Serviços serão implementados em breve'}
+                                            {tipoItemSelecionado === 'kit' && 'Kits serão implementados em breve'}
+                                            {tipoItemSelecionado === 'quadro' && 'Quadros prontos serão implementados em breve'}
+                                            {tipoItemSelecionado === 'extra' && 'Custos extras serão implementados em breve'}
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -1654,10 +1839,21 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                             <div key={index} className="bg-gray-50 border border-gray-200 p-4 rounded-xl">
                                                 <div className="flex justify-between items-start">
                                                     <div className="flex-1">
-                                                        <p className="font-semibold text-gray-900">{(item as any).nome || (item as any).descricao || 'Item'}</p>
+                                                        <p className="font-semibold text-gray-900">
+                                                            {(item as any).nome || 'Item'}
+                                                        </p>
                                                         <p className="text-sm text-gray-600 mt-1">
                                                             {item.quantidade} {(item as any).unidadeMedida || 'UN'} × R$ {((item as any).precoUnit || (item as any).precoUnitario)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
                                                         </p>
+                                                        {/* Flag de Banco Frio */}
+                                                        {((item as any).tipo === 'COTACAO' || (item as any).cotacao) && (
+                                                            <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
+                                                                <span>📦 Banco Frio</span>
+                                                                <span className="text-blue-600">
+                                                                    • {new Date((item as any).cotacao?.dataAtualizacao || (item as any).dataAtualizacaoCotacao).toLocaleDateString('pt-BR')}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="font-bold text-lg text-purple-700">
