@@ -189,13 +189,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 )}
 
                 {/* COMERCIAL / VENDAS */}
-                {filteredNavLinks.filter(link => ['Clientes', 'Orçamentos', 'Vendas'].includes(link.name)).length > 0 && (
+                {filteredNavLinks.filter(link => ['Clientes', 'Orçamentos', 'Vendas', 'Cotações'].includes(link.name)).length > 0 && (
                     <div className="mb-6">
                         {!isCollapsed && (
                             <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20 rounded-lg">Comercial</span>
                         )}
                         <ul className="space-y-1">
-                            {filteredNavLinks.filter(link => ['Clientes', 'Orçamentos', 'Vendas'].includes(link.name)).map((link) => (
+                            {filteredNavLinks.filter(link => ['Clientes', 'Orçamentos', 'Vendas', 'Cotações'].includes(link.name)).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"
@@ -220,13 +220,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
                 )}
 
                 {/* SUPRIMENTOS / ESTOQUE */}
-                {filteredNavLinks.filter(link => ['Fornecedores', 'Compras', 'Estoque', 'Movimentações', 'Catálogo', 'Comparação de Preços'].includes(link.name)).length > 0 && (
+                {filteredNavLinks.filter(link => ['Fornecedores', 'Compras', 'Estoque', 'Movimentações', 'Catálogo', 'Atualização de Preços'].includes(link.name)).length > 0 && (
                     <div className="mb-6">
                         {!isCollapsed && (
                             <span className="block px-3 py-1.5 mb-2 text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider bg-orange-50 dark:bg-orange-900/20 rounded-lg">Suprimentos</span>
                         )}
                         <ul className="space-y-1">
-                            {filteredNavLinks.filter(link => ['Fornecedores', 'Compras', 'Estoque', 'Movimentações', 'Catálogo', 'Comparação de Preços'].includes(link.name)).map((link) => (
+                            {filteredNavLinks.filter(link => ['Fornecedores', 'Compras', 'Estoque', 'Movimentações', 'Catálogo', 'Atualização de Preços'].includes(link.name)).map((link) => (
                             <li key={link.name}>
                                 <a
                                     href="#"

@@ -7,6 +7,8 @@ import { quadrosService } from '../services/quadrosService';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import JoditEditorComponent from '../components/JoditEditor';
+import PrecoValidadeFlag from '../components/PrecoValidadeFlag';
+import HistoricoPrecosModal from '../components/HistoricoPrecosModal';
 
 // ==================== ICONS ====================
 const ArrowLeftIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -53,6 +55,7 @@ interface Material {
     estoque: number;
     categoria: string;
     ativo: boolean;
+    ultimaAtualizacaoPreco?: string | null;
 }
 
 interface Quadro {
@@ -77,11 +80,13 @@ interface Kit {
 
 interface OrcamentoItem {
     id?: string;
-    tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA';
+    tipo: 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA' | 'COTACAO';
     materialId?: string;
     kitId?: string;
+    cotacaoId?: string; // Novo: ID da cotação do banco frio
     servicoNome?: string;
     descricao?: string;
+    dataAtualizacaoCotacao?: string; // Novo: data da cotação para exibir flag
     nome: string;
     unidadeMedida: string;
     quantidade: number;
@@ -109,6 +114,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const [servicos, setServicos] = useState<Servico[]>([]);
     const [quadros, setQuadros] = useState<Quadro[]>([]);
     const [kits, setKits] = useState<Kit[]>([]);
+    const [cotacoes, setCotacoes] = useState<any[]>([]); // Novo: cotações do banco frio
     const [loading, setLoading] = useState(true);
     const [salvando, setSalvando] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -140,7 +146,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const [itemSearchTerm, setItemSearchTerm] = useState('');
     
     // Estado para modo de adição (com novas opções)
-    const [modoAdicao, setModoAdicao] = useState<'materiais' | 'servicos' | 'kits' | 'quadros' | 'manual'>('materiais');
+    const [modoAdicao, setModoAdicao] = useState<'materiais' | 'servicos' | 'kits' | 'quadros' | 'cotacoes' | 'manual'>('materiais');
     const [novoItemManual, setNovoItemManual] = useState({
         nome: '',
         descricao: '',
@@ -158,11 +164,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const loadInitialData = async () => {
         try {
             setLoading(true);
-            const [clientesRes, materiaisRes, servicosRes, quadrosRes] = await Promise.all([
+            const [clientesRes, materiaisRes, servicosRes, quadrosRes, cotacoesRes] = await Promise.all([
                 clientesService.listar(),
                 axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS),
                 servicosService.listar({ ativo: true }),
-                quadrosService.listar()
+                quadrosService.listar(),
+                axiosApiService.get('/api/cotacoes') // Novo: carregar cotações
             ]);
 
             if (clientesRes.success && clientesRes.data) {
@@ -179,6 +186,10 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
             if (quadrosRes.success && quadrosRes.data) {
                 setQuadros(Array.isArray(quadrosRes.data) ? quadrosRes.data : []);
+            }
+
+            if (cotacoesRes.success && cotacoesRes.data) {
+                setCotacoes(Array.isArray(cotacoesRes.data) ? cotacoesRes.data : []);
             }
 
             // TODO: Carregar kits quando endpoint estiver disponível
@@ -228,6 +239,17 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 kit.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
             );
     }, [kits, itemSearchTerm]);
+
+    // Filtrar cotações para seleção
+    const filteredCotacoes = useMemo(() => {
+        return cotacoes
+            .filter(cotacao => cotacao.ativo)
+            .filter(cotacao =>
+                cotacao.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                cotacao.ncm?.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                cotacao.fornecedorNome?.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [cotacoes, itemSearchTerm]);
 
     // Calcular totais do orçamento
     const calculosOrcamento = useMemo(() => {
@@ -300,6 +322,29 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         setItemSearchTerm('');
         toast.success('Quadro adicionado', {
             description: `${quadro.nome} adicionado ao orçamento`
+        });
+    };
+
+    // Adicionar cotação ao orçamento (BANCO FRIO)
+    const handleAddCotacao = (cotacao: any) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'COTACAO',
+            cotacaoId: cotacao.id,
+            nome: cotacao.nome,
+            descricao: cotacao.nome, // ✅ Apenas o nome do material (não mostrar fornecedor)
+            dataAtualizacaoCotacao: cotacao.dataAtualizacao,
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: cotacao.valorUnitario,
+            precoUnit: cotacao.valorUnitario * (1 + formState.bdi / 100),
+            subtotal: cotacao.valorUnitario * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Cotação adicionada', {
+            description: `${cotacao.nome} do banco frio adicionado ao orçamento`
         });
     };
 
@@ -776,6 +821,15 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                         <div>
                                             <p className="font-semibold text-gray-900 dark:text-dark-text">{item.nome}</p>
                                             <p className="text-sm text-gray-600 dark:text-dark-text-secondary">{item.unidadeMedida}</p>
+                                            {/* Flag de Banco Frio */}
+                                            {(item.tipo === 'COTACAO' || (item as any).cotacao) && (
+                                                <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-medium">
+                                                    <span>📦 Banco Frio</span>
+                                                    <span className="text-blue-600 dark:text-blue-400">
+                                                        • {new Date((item as any).cotacao?.dataAtualizacao || item.dataAtualizacaoCotacao).toLocaleDateString('pt-BR')}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div>
@@ -1052,6 +1106,17 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                 </button>
                                 <button
                                     type="button"
+                                    onClick={() => setModoAdicao('cotacoes')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'cotacoes'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    🏷️ Cotações
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => setModoAdicao('manual')}
                                     className={`px-4 py-2 rounded-lg font-semibold transition-all ${
                                         modoAdicao === 'manual'
@@ -1236,6 +1301,70 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                     {quadro.descricao && (
                                                         <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{quadro.descricao}</p>
                                                     )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Cotações (Banco Frio) */}
+                            {modoAdicao === 'cotacoes' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar cotação por nome, NCM ou fornecedor..."
+                                        />
+                                    </div>
+
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg mb-4">
+                                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                                            📦 <strong>Banco Frio:</strong> Materiais cotados com fornecedores, sem necessidade de estoque físico.
+                                        </p>
+                                    </div>
+
+                                    {filteredCotacoes.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">🏷️</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhuma cotação encontrada</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">
+                                                Cadastre cotações na página de Cotações
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredCotacoes.map(cotacao => (
+                                                <button
+                                                    key={cotacao.id}
+                                                    type="button"
+                                                    onClick={() => handleAddCotacao(cotacao)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all"
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <p className="font-semibold text-gray-900 dark:text-dark-text">{cotacao.nome}</p>
+                                                            <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                                NCM: {cotacao.ncm || 'N/A'} • Fornecedor: {cotacao.fornecedorNome || 'N/A'}
+                                                            </p>
+                                                            {cotacao.observacoes && (
+                                                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{cotacao.observacoes}</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right ml-4">
+                                                            <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                                                                R$ {cotacao.valorUnitario.toFixed(2)}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
+                                                                Atualizado em {new Date(cotacao.dataAtualizacao).toLocaleDateString('pt-BR')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
                                                 </button>
                                             ))}
                                         </div>

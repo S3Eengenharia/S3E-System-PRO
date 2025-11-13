@@ -5,6 +5,7 @@ import PDFDocument from 'pdfkit';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 
@@ -27,13 +28,13 @@ export const uploadImportFile = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /xlsx|csv/;
+    const allowedTypes = /xlsx|csv|json/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     
     if (extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Apenas arquivos XLSX ou CSV são permitidos'));
+      cb(new Error('Apenas arquivos JSON, XLSX ou CSV são permitidos'));
     }
   }
 }).single('arquivo');
@@ -395,10 +396,11 @@ export const exportarMateriaisCriticos = async (req: Request, res: Response): Pr
     console.log(`📊 Exportando ${materiais.length} materiais críticos em formato ${formato}`);
 
     if (materiais.length === 0) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Nenhum material com estoque crítico encontrado'
       });
+      return;
     }
 
     // Gerar arquivo conforme formato solicitado
@@ -539,15 +541,13 @@ async function gerarExcelCotacao(res: Response, materiais: any[]) {
       row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
     }
 
-    // Gerar buffer
-    const buffer = await workbook.xlsx.writeBuffer();
-    
-    // Enviar arquivo
+    // Configurar headers antes de escrever
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=cotacao-materiais-criticos-${new Date().toISOString().split('T')[0]}.xlsx`);
-    res.setHeader('Content-Length', buffer.length.toString());
     
-    res.send(buffer);
+    // Escrever diretamente no response
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (error) {
     console.error('❌ Erro ao gerar Excel:', error);
     throw error;
@@ -671,10 +671,11 @@ export const importarPrecos = async (req: Request, res: Response): Promise<void>
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Nenhum arquivo foi enviado'
       });
+      return;
     }
 
     console.log(`📥 Importando preços do arquivo: ${file.filename}`);
@@ -687,10 +688,11 @@ export const importarPrecos = async (req: Request, res: Response): Promise<void>
     } else if (ext === '.csv') {
       dadosImportados = await processarCSV(file.path);
     } else {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Formato de arquivo inválido'
       });
+      return;
     }
 
     // Processar atualizações
@@ -726,25 +728,42 @@ export const importarPrecos = async (req: Request, res: Response): Promise<void>
           continue;
         }
 
-        // Atualizar preço
-        await prisma.material.update({
-          where: { id: material.id },
-          data: {
-            preco: parseFloat(precoFornecedor),
-            updatedAt: new Date()
-          }
-        });
+        const precoNovo = parseFloat(precoFornecedor);
+        const precoAntigo = material.preco || 0;
+        
+        // Atualizar preço e registrar histórico em transação
+        await prisma.$transaction([
+          // Atualizar material
+          prisma.material.update({
+            where: { id: material.id },
+            data: {
+              preco: precoNovo,
+              ultimaAtualizacaoPreco: new Date(),
+              updatedAt: new Date()
+            }
+          }),
+          // Registrar no histórico
+          prisma.historicoPreco.create({
+            data: {
+              materialId: material.id,
+              precoAntigo: precoAntigo,
+              precoNovo: precoNovo,
+              motivo: 'Importação de arquivo',
+              usuario: 'Sistema'
+            }
+          })
+        ]);
 
         atualizados++;
         detalhes.push({
           sku,
           nome: material.nome,
-          precoAntigo: material.preco,
-          precoNovo: parseFloat(precoFornecedor),
+          precoAntigo: precoAntigo,
+          precoNovo: precoNovo,
           sucesso: true
         });
 
-        console.log(`✅ Material ${sku} atualizado: R$ ${material.preco} → R$ ${precoFornecedor}`);
+        console.log(`✅ Material ${sku} atualizado: R$ ${precoAntigo} → R$ ${precoNovo}`);
 
       } catch (error) {
         erros++;
@@ -861,4 +880,412 @@ async function processarCSV(filePath: string): Promise<any[]> {
   console.log(`📊 ${dados.length} linhas processadas do CSV`);
   return dados;
 }
+
+/**
+ * Gerar template de importação de preços em JSON
+ * GET /api/materiais/template-importacao?formato=json
+ */
+/**
+ * Buscar histórico de preços de um material
+ * GET /api/materiais/:id/historico-precos
+ */
+export const getHistoricoPrecos = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    
+    const historico = await prisma.historicoPreco.findMany({
+      where: { materialId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50 // Últimas 50 alterações
+    });
+
+    const material = await prisma.material.findUnique({
+      where: { id },
+      select: {
+        nome: true,
+        sku: true,
+        preco: true,
+        ultimaAtualizacaoPreco: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        material,
+        historico
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar histórico:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar histórico de preços'
+    });
+  }
+};
+
+export const gerarTemplateImportacao = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tipo = 'todos', formato = 'json' } = req.query;
+    
+    // Buscar materiais para o template
+    let materiais;
+    if (tipo === 'criticos') {
+      // Buscar apenas materiais com estoque crítico
+      const todosMateriais = await prisma.material.findMany({
+        where: { ativo: true },
+        include: {
+          fornecedor: {
+            select: { id: true, nome: true }
+          }
+        },
+        orderBy: [
+          { estoque: 'asc' },
+          { nome: 'asc' }
+        ]
+      });
+      materiais = todosMateriais.filter(m => m.estoque === 0 || m.estoque <= m.estoqueMinimo);
+    } else {
+      // Buscar todos os materiais ativos (limitar para evitar arquivos muito grandes)
+      materiais = await prisma.material.findMany({
+        where: { ativo: true },
+        include: {
+          fornecedor: {
+            select: { id: true, nome: true }
+          }
+        },
+        orderBy: { nome: 'asc' },
+        take: 1000 // Limitar a 1000 materiais para evitar arquivo muito grande
+      });
+    }
+
+    console.log(`📋 Gerando template ${formato} com ${materiais.length} materiais`);
+
+    if (materiais.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: 'Nenhum material encontrado para gerar template'
+      });
+      return;
+    }
+
+    // Preparar dados dos materiais
+    const materiaisData = materiais.map(m => ({
+      id: m.id,
+      sku: m.sku,
+      nome: m.nome,
+      descricao: m.descricao || '',
+      categoria: m.categoria,
+      tipo: m.tipo,
+      unidadeMedida: m.unidadeMedida,
+      estoque: m.estoque,
+      estoqueMinimo: m.estoqueMinimo,
+      precoAtual: m.preco || 0,
+      precoNovo: m.preco || 0, // Campo a ser atualizado pelo fornecedor
+      ultimaAtualizacao: m.ultimaAtualizacaoPreco || m.updatedAt,
+      fornecedor: m.fornecedor?.nome || 'N/A',
+      localizacao: m.localizacao || '',
+      preco: m.preco || 0 // Alias para compatibilidade
+    }));
+
+    // Gerar JSON
+    if (formato === 'json') {
+      const templateData = {
+        versao: '1.0',
+        geradoEm: new Date().toISOString(),
+        empresa: 'S3E Engenharia Elétrica',
+        instrucoes: 'Atualize apenas o campo "precoNovo" de cada material. Não altere os demais campos!',
+        materiais: materiaisData
+      };
+
+      console.log('✅ Gerando template JSON:', {
+        totalMateriais: materiaisData.length,
+        primeiroMaterial: materiaisData[0]?.sku || 'N/A'
+      });
+
+      // NÃO usar Content-Disposition (deixar frontend controlar download)
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.json(templateData);
+      return;
+    }
+
+    // Gerar PDF (retornar dados para frontend renderizar em HTML)
+    if (formato === 'pdf') {
+      res.json({
+        success: true,
+        materiais: materiaisData,
+        geradoEm: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Se não for JSON nem PDF, retorna erro
+    res.status(400).json({
+      success: false,
+      error: 'Formato inválido. Use: json ou pdf'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar template:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao gerar template de importação',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+};
+
+
+/**
+ * Fazer preview das alterações antes de importar (JSON, XLSX ou CSV)
+ * POST /api/materiais/preview-importacao
+ */
+export const previewImportacao = async (req: Request, res: Response): Promise<void> => {
+  try {
+    console.log('📥 Preview - Recebendo arquivo...');
+    console.log('📄 Body:', req.body);
+    console.log('📄 File:', req.file ? {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      filename: req.file.filename,
+      size: req.file.size,
+      path: req.file.path
+    } : 'Nenhum arquivo');
+    
+    const file = req.file;
+
+    if (!file) {
+      console.error('❌ Nenhum arquivo foi enviado!');
+      res.status(400).json({
+        success: false,
+        error: 'Nenhum arquivo foi enviado'
+      });
+      return;
+    }
+
+    console.log(`📥 Preview de importação: ${file.filename}`);
+
+    const ext = path.extname(file.filename).toLowerCase();
+    let dadosImportados: any[] = [];
+
+    if (ext === '.json') {
+      // Processar JSON
+      try {
+        console.log('📂 Lendo arquivo JSON do disco:', file.path);
+        
+        // Verificar se arquivo existe
+        if (!fs.existsSync(file.path)) {
+          console.error('❌ Arquivo não encontrado no disco:', file.path);
+          res.status(400).json({
+            success: false,
+            error: 'Arquivo não encontrado no servidor'
+          });
+          return;
+        }
+        
+        const jsonContent = fs.readFileSync(file.path, 'utf-8');
+        console.log('📝 Conteúdo do arquivo (primeiros 200 chars):', jsonContent.substring(0, 200));
+        
+        let jsonData = JSON.parse(jsonContent);
+        
+        // ✨ CORREÇÃO: Remover wrapper { success, data } se existir
+        if (jsonData.success && jsonData.data) {
+          console.log('🧹 Detectado wrapper Axios { success, data } - Extraindo data...');
+          jsonData = jsonData.data;
+        }
+        
+        console.log('📄 JSON parseado (após limpeza):', {
+          versao: jsonData.versao,
+          empresa: jsonData.empresa,
+          totalMateriais: jsonData.materiais?.length || 0,
+          primeiroMaterial: jsonData.materiais?.[0]?.sku || 'N/A'
+        });
+        
+        if (!jsonData.materiais || !Array.isArray(jsonData.materiais)) {
+          res.status(400).json({
+            success: false,
+            error: 'Formato JSON inválido. Deve conter array "materiais"'
+          });
+          return;
+        }
+        
+        // ✨ VALIDAÇÃO INTELIGENTE: Apenas materiais com preço diferente
+        dadosImportados = jsonData.materiais
+          .filter((m: any) => {
+            // Verificar se precoNovo é diferente de precoAtual
+            const precoAtual = parseFloat(m.precoAtual) || 0;
+            const precoNovo = parseFloat(m.precoNovo) || 0;
+            
+            // Apenas incluir se houver mudança real (diferença > 0.01)
+            const mudou = Math.abs(precoNovo - precoAtual) > 0.01;
+            
+            if (!mudou) {
+              console.log(`⏭️ Pulando ${m.sku} - Preço não mudou (${precoAtual})`);
+            }
+            
+            return mudou;
+          })
+          .map((m: any) => ({
+            sku: m.sku,
+            nome: m.nome,
+            precoFornecedor: m.precoNovo,
+            id: m.id // Manter ID para referência
+          }));
+        
+        console.log(`✅ ${dadosImportados.length} materiais com alteração de preço detectados`);
+      } catch (jsonError) {
+        console.error('❌ Erro ao processar JSON:', jsonError);
+        res.status(400).json({
+          success: false,
+          error: 'Erro ao processar JSON: ' + (jsonError instanceof Error ? jsonError.message : 'Formato inválido')
+        });
+        return;
+      }
+    } else if (ext === '.xlsx') {
+      dadosImportados = await processarExcel(file.path);
+    } else if (ext === '.csv') {
+      dadosImportados = await processarCSV(file.path);
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Formato de arquivo inválido. Use JSON, XLSX ou CSV.'
+      });
+      return;
+    }
+
+    // ✨ VALIDAÇÃO: Se nenhum item foi alterado
+    if (dadosImportados.length === 0) {
+      res.json({
+        success: true,
+        data: {
+          totalItens: 0,
+          totalAlteracoes: 0,
+          totalErros: 0,
+          preview: [],
+          mensagem: '✅ Nenhuma alteração detectada. Todos os preços já estão atualizados ou são iguais aos valores no sistema.'
+        }
+      });
+      
+      // Limpar arquivo temporário
+      try {
+        fs.unlinkSync(file.path);
+      } catch (err) {
+        console.warn('Erro ao limpar arquivo:', err);
+      }
+      
+      return;
+    }
+
+    // Processar preview (sem salvar)
+    const preview: any[] = [];
+    let totalAlteracoes = 0;
+    let totalErros = 0;
+    let totalIgnorados = 0;
+
+    for (const item of dadosImportados) {
+      try {
+        const { sku, precoFornecedor } = item;
+
+        // Validar dados
+        if (!sku || !precoFornecedor || isNaN(parseFloat(precoFornecedor)) || parseFloat(precoFornecedor) <= 0) {
+          totalErros++;
+          preview.push({
+            sku,
+            nome: item.nome || 'N/A',
+            precoAtual: null,
+            precoNovo: precoFornecedor,
+            status: 'erro',
+            mensagem: 'Preço inválido ou não informado'
+          });
+          continue;
+        }
+
+        // Buscar material pelo SKU
+        const material = await prisma.material.findUnique({
+          where: { sku },
+          include: {
+            fornecedor: {
+              select: { nome: true }
+            }
+          }
+        });
+
+        if (!material) {
+          totalErros++;
+          preview.push({
+            sku,
+            nome: item.nome || 'N/A',
+            precoAtual: null,
+            precoNovo: parseFloat(precoFornecedor),
+            status: 'erro',
+            mensagem: 'Material não encontrado no sistema'
+          });
+          continue;
+        }
+
+        const precoNovo = parseFloat(precoFornecedor);
+        const precoAtual = material.preco || 0;
+        const diferenca = precoAtual > 0 ? ((precoNovo - precoAtual) / precoAtual) * 100 : 0;
+
+        totalAlteracoes++;
+        preview.push({
+          sku: material.sku,
+          nome: material.nome,
+          unidade: material.unidadeMedida,
+          estoque: material.estoque,
+          precoAtual: precoAtual,
+          precoNovo: precoNovo,
+          diferenca: diferenca,
+          fornecedor: material.fornecedor?.nome || 'N/A',
+          status: precoNovo < precoAtual ? 'reducao' : (precoNovo > precoAtual ? 'aumento' : 'igual'),
+          mensagem: 'Pronto para atualizar'
+        });
+
+      } catch (error) {
+        totalErros++;
+        preview.push({
+          sku: item.sku,
+          nome: item.nome || 'N/A',
+          status: 'erro',
+          mensagem: 'Erro ao processar item'
+        });
+        console.error(`❌ Erro ao processar material ${item.sku}:`, error);
+      }
+    }
+
+    // Limpar arquivo temporário
+    try {
+      const fs = await import('fs');
+      fs.unlinkSync(file.path);
+    } catch (err) {
+      console.warn('Erro ao limpar arquivo temporário:', err);
+    }
+
+    const resultado = {
+      success: true,
+      data: {
+        totalItens: dadosImportados.length,
+        totalAlteracoes,
+        totalErros,
+        totalIgnorados,
+        preview: preview,
+        mensagem: totalAlteracoes > 0 
+          ? `✅ ${totalAlteracoes} alteração(ões) detectada(s). Revise antes de confirmar.`
+          : '✅ Nenhuma alteração necessária. Todos os preços já estão corretos.'
+      }
+    };
+
+    console.log(`✅ Preview gerado: ${totalAlteracoes} alterações, ${totalErros} erros, ${totalIgnorados} ignorados`);
+    
+    res.json(resultado);
+
+  } catch (error) {
+    console.error('Erro ao fazer preview de importação:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao processar preview',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+};
 
