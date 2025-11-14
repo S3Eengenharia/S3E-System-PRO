@@ -25,9 +25,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relacionamentos
-  pdfTemplates       PDFTemplate[]
-  projetosResponsavel Projeto[]    @relation("ProjetoResponsavel")
-  auditLogs          AuditLog[]
+  pdfTemplates        PDFTemplate[]
+  projetosResponsavel Projeto[]     @relation("ProjetoResponsavel")
+  auditLogs           AuditLog[]
 
   @@map("users")
 }
@@ -38,13 +38,13 @@ model AuditLog {
   userId      String?
   userName    String?
   userRole    String?
-  action      String   // LOGIN, LOGOUT, CREATE, UPDATE, DELETE, ACCESS, etc
-  entity      String?  // Projeto, Orcamento, Cliente, etc
+  action      String // LOGIN, LOGOUT, CREATE, UPDATE, DELETE, ACCESS, etc
+  entity      String? // Projeto, Orcamento, Cliente, etc
   entityId    String?
   description String
   ipAddress   String?
   userAgent   String?
-  metadata    Json?    // Dados adicionais em JSON
+  metadata    Json? // Dados adicionais em JSON
   createdAt   DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -58,21 +58,21 @@ model AuditLog {
 
 // Templates de Customização de PDF
 model PDFTemplate {
-  id          String   @id @default(uuid())
-  userId      String
+  id           String  @id @default(uuid())
+  userId       String
   templateName String
-  description String?
-  
+  description  String?
+
   // Configurações de Customização (JSON)
   customization Json // Armazena toda a configuração PDFCustomization
-  
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relacionamento
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId])
   @@map("pdf_templates")
 }
@@ -80,7 +80,7 @@ model PDFTemplate {
 model ConfiguracaoSistema {
   id              String   @id @default("sistema-config") // ID fixo para garantir registro único
   temaPreferido   String   @default("light") // light, dark, system
-  logoUrl         String?  // URL da logo/perfil da empresa
+  logoUrl         String? // URL da logo/perfil da empresa
   nomeEmpresa     String   @default("S3E Engenharia")
   emailContato    String?
   telefoneContato String?
@@ -111,7 +111,7 @@ model Cliente {
   orcamentos Orcamento[]
   projetos   Projeto[]
   vendas     Venda[]
-  obras      Obra[]     // ✅ Relação com obras de manutenção
+  obras      Obra[] // ✅ Relação com obras de manutenção
 
   @@map("clientes")
 }
@@ -130,7 +130,7 @@ model Fornecedor {
   materiais   Material[]
   compras     Compra[]
   contasPagar ContaPagar[]
-  cotacoes    Cotacao[]  // Novo: cotações do fornecedor
+  cotacoes    Cotacao[] // Novo: cotações do fornecedor
 
   @@map("fornecedores")
 }
@@ -140,29 +140,29 @@ model Fornecedor {
 // ============================================
 
 model Material {
-  id                      String   @id @default(uuid())
-  nome                    String
-  sku                     String   @unique
-  tipo                    String // Tipo do material
-  categoria               String // MaterialEletrico, Insumo, Ferramenta
-  descricao               String?
-  estoque                 Float    @default(0)
-  estoqueMinimo           Float    @default(5)
-  unidadeMedida           String   @default("un")
-  localizacao             String?
-  preco                   Float? // Preço de referência
-  ultimaAtualizacaoPreco  DateTime? // Data da última atualização de preço
-  fornecedorId            String?
-  ativo                   Boolean  @default(true)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                     String    @id @default(uuid())
+  nome                   String
+  sku                    String    @unique
+  tipo                   String // Tipo do material
+  categoria              String // MaterialEletrico, Insumo, Ferramenta
+  descricao              String?
+  estoque                Float     @default(0)
+  estoqueMinimo          Float     @default(5)
+  unidadeMedida          String    @default("un")
+  localizacao            String?
+  preco                  Float? // Preço de referência
+  ultimaAtualizacaoPreco DateTime? // Data da última atualização de preço
+  fornecedorId           String?
+  ativo                  Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  fornecedor       Fornecedor?           @relation(fields: [fornecedorId], references: [id])
-  kitItems         KitItem[]
-  orcamentoItems   OrcamentoItem[]
-  compraItems      CompraItem[]
-  movimentacoes    MovimentacaoEstoque[]
-  historicoPrecos  HistoricoPreco[]
+  fornecedor      Fornecedor?           @relation(fields: [fornecedorId], references: [id])
+  kitItems        KitItem[]
+  orcamentoItems  OrcamentoItem[]
+  compraItems     CompraItem[]
+  movimentacoes   MovimentacaoEstoque[]
+  historicoPrecos HistoricoPreco[]
 
   @@map("materiais")
 }
@@ -186,20 +186,20 @@ model HistoricoPreco {
 
 // Banco de Cotações (materiais cotados - banco frio)
 model Cotacao {
-  id                    String    @id @default(uuid())
-  nome                  String
-  ncm                   String?
-  valorUnitario         Float
-  fornecedorId          String?
-  fornecedorNome        String?   // Nome do fornecedor (redundante para performance)
-  dataAtualizacao       DateTime  @default(now()) // Data da última cotação
-  observacoes           String?
-  ativo                 Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id              String   @id @default(uuid())
+  nome            String
+  ncm             String?
+  valorUnitario   Float
+  fornecedorId    String?
+  fornecedorNome  String? // Nome do fornecedor (redundante para performance)
+  dataAtualizacao DateTime @default(now()) // Data da última cotação
+  observacoes     String?
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  fornecedor            Fornecedor? @relation(fields: [fornecedorId], references: [id])
-  itensOrcamento        OrcamentoItem[] // Relação com itens de orçamento
+  fornecedor     Fornecedor?     @relation(fields: [fornecedorId], references: [id])
+  itensOrcamento OrcamentoItem[] // Relação com itens de orçamento
 
   @@index([fornecedorId])
   @@index([dataAtualizacao])
@@ -223,12 +223,18 @@ model Servico {
 }
 
 model Kit {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   nome      String
   descricao String?
   preco     Float
   tipo      String // medidores, comando, quadro-eletrico, subestacoes
-  ativo     Boolean  @default(true)
+  ativo     Boolean @default(true)
+
+  // Controle de Estoque para Quadros Elétricos
+  temItensCotacao Boolean @default(false) // Se tem itens do banco frio (cotações)
+  itensFaltantes  Json? // Array de {materialId, quantidade, nome} dos itens que faltam em estoque
+  statusEstoque   String  @default("COMPLETO") // COMPLETO, PENDENTE, PARCIAL
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -255,39 +261,39 @@ model KitItem {
 // ============================================
 
 model Orcamento {
-  id                  String    @id @default(uuid())
-  numeroSequencial    Int       @unique @default(autoincrement()) // Número sequencial automático
-  clienteId           String
-  titulo              String
-  descricao           String? // HTML do Quill editor ou texto rico
-  descricaoProjeto    String? // Descrição técnica avançada do projeto
-  validade            DateTime
-  status              String    @default("Pendente") // Pendente, Aprovado, Recusado
-  bdi                 Float     @default(0) // Margem de lucro (%)
-  custoTotal          Float     @default(0)
-  precoVenda          Float     @default(0)
-  observacoes         String?
-  
-  // NOVOS CAMPOS - Engenharia Elétrica
-  empresaCNPJ         String? // CNPJ da empresa executora
-  enderecoObra        String? // Endereço completo da obra
-  cidade              String? // Cidade da obra
-  bairro              String? // Bairro da obra
-  cep                 String? // CEP da obra
-  responsavelObra     String? // Responsável técnico no local
-  previsaoInicio      DateTime? // Data prevista de início
-  previsaoTermino     DateTime? // Data prevista de término
-  descontoValor       Float     @default(0) // Desconto em R$
-  impostoPercentual   Float     @default(0) // Impostos em %
-  condicaoPagamento   String? // Ex: "À Vista", "30/60/90 dias"
-  
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  aprovedAt           DateTime?
-  recusadoAt          DateTime?
-  motivoRecusa        String? // Motivo da recusa (se aplicável)
+  id               String   @id @default(uuid())
+  numeroSequencial Int      @unique @default(autoincrement()) // Número sequencial automático
+  clienteId        String
+  titulo           String
+  descricao        String? // HTML do Quill editor ou texto rico
+  descricaoProjeto String? // Descrição técnica avançada do projeto
+  validade         DateTime
+  status           String   @default("Pendente") // Pendente, Aprovado, Recusado
+  bdi              Float    @default(0) // Margem de lucro (%)
+  custoTotal       Float    @default(0)
+  precoVenda       Float    @default(0)
+  observacoes      String?
 
-  cliente Cliente           @relation(fields: [clienteId], references: [id])
+  // NOVOS CAMPOS - Engenharia Elétrica
+  empresaCNPJ       String? // CNPJ da empresa executora
+  enderecoObra      String? // Endereço completo da obra
+  cidade            String? // Cidade da obra
+  bairro            String? // Bairro da obra
+  cep               String? // CEP da obra
+  responsavelObra   String? // Responsável técnico no local
+  previsaoInicio    DateTime? // Data prevista de início
+  previsaoTermino   DateTime? // Data prevista de término
+  descontoValor     Float     @default(0) // Desconto em R$
+  impostoPercentual Float     @default(0) // Impostos em %
+  condicaoPagamento String? // Ex: "À Vista", "30/60/90 dias"
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  aprovedAt    DateTime?
+  recusadoAt   DateTime?
+  motivoRecusa String? // Motivo da recusa (se aplicável)
+
+  cliente Cliente         @relation(fields: [clienteId], references: [id])
   items   OrcamentoItem[]
   fotos   OrcamentoFoto[]
   projeto Projeto?
@@ -685,8 +691,38 @@ model Equipe {
   updatedAt DateTime   @updatedAt
 
   alocacoes AlocacaoObra[]
+  alocacoesTarefas AlocacaoEquipe[]
 
   @@map("equipes")
+}
+
+// Alocação de equipes em tarefas específicas (novo sistema)
+model AlocacaoEquipe {
+  id          String   @id @default(uuid())
+  tarefaId    String
+  obraId      String
+  equipeId    String
+  dataInicio  DateTime
+  dataFim     DateTime
+  status      StatusAlocacao @default(PLANEJADA)
+  observacoes String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  equipe Equipe @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+
+  @@index([tarefaId])
+  @@index([obraId])
+  @@index([equipeId])
+  @@index([dataInicio, dataFim])
+  @@map("alocacoes_equipe")
+}
+
+enum StatusAlocacao {
+  PLANEJADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
 }
 
 model AlocacaoObra {
@@ -709,24 +745,24 @@ model AlocacaoObra {
 
 // Obra representa o Projeto em fase de execução (Kanban)
 model Obra {
-  id                String       @id @default(uuid())
-  projetoId         String?      @unique  // ✅ Opcional para obras de manutenção
-  clienteId         String?               // ✅ Cliente direto (para manutenção)
-  nomeObra          String
-  descricao         String?               // ✅ Descrição da obra
-  endereco          String?               // ✅ Endereço da obra
-  tipoObra          String       @default("PROJETO") // PROJETO ou MANUTENCAO
-  status            StatusObra   @default(BACKLOG)
+  id                 String     @id @default(uuid())
+  projetoId          String?    @unique // ✅ Opcional para obras de manutenção
+  clienteId          String? // ✅ Cliente direto (para manutenção)
+  nomeObra           String
+  descricao          String? // ✅ Descrição da obra
+  endereco           String? // ✅ Endereço da obra
+  tipoObra           String     @default("PROJETO") // PROJETO ou MANUTENCAO
+  status             StatusObra @default(BACKLOG)
   dataPrevistaInicio DateTime?
-  dataPrevistaFim   DateTime?
-  dataInicioReal    DateTime?
-  dataFimReal       DateTime?
-  observacoes       String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  dataPrevistaFim    DateTime?
+  dataInicioReal     DateTime?
+  dataFimReal        DateTime?
+  observacoes        String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
-  projeto Projeto?    @relation(fields: [projetoId], references: [id], onDelete: Cascade)
-  cliente Cliente?    @relation(fields: [clienteId], references: [id])
+  projeto Projeto?     @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  cliente Cliente?     @relation(fields: [clienteId], references: [id])
   tarefas TarefaObra[]
 
   @@map("obras")
@@ -741,18 +777,21 @@ enum StatusObra {
 
 // Tarefas dentro de cada Obra
 model TarefaObra {
-  id                  String    @id @default(uuid())
-  obraId              String
-  descricao           String
-  atribuidoA          String? // ID do User (eletricista/operador)
-  progresso           Int       @default(0) // 0 a 100
-  dataPrevista        DateTime?
-  dataConclusaoReal   DateTime?
-  observacoes         String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                String    @id @default(uuid())
+  obraId            String
+  descricao         String
+  atribuidoA        String? // ID do User (eletricista/operador individual)
+  equipeId          String? // ID da Equipe alocada (novo campo)
+  alocacaoId        String? // ID da Alocação relacionada
+  progresso         Int       @default(0) // 0 a 100
+  dataPrevista      DateTime?
+  dataPrevistaFim   DateTime? // Data de término prevista (para alocação de equipes)
+  dataConclusaoReal DateTime?
+  observacoes       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  obra               Obra                  @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  obra               Obra                @relation(fields: [obraId], references: [id], onDelete: Cascade)
   registrosAtividade RegistroAtividade[]
 
   @@map("tarefas_obra")
@@ -760,14 +799,14 @@ model TarefaObra {
 
 // Registro de atividades/relatos diários
 model RegistroAtividade {
-  id                  String    @id @default(uuid())
-  tarefaId            String
-  dataRegistro        DateTime  @default(now())
-  descricaoAtividade  String // O que foi feito (resumo do dia)
-  horasTrabalhadas    Float     @default(0)
-  observacoes         String?
-  imagens             String[]  @default([]) // URLs das imagens enviadas
-  createdAt           DateTime  @default(now())
+  id                 String   @id @default(uuid())
+  tarefaId           String
+  dataRegistro       DateTime @default(now())
+  descricaoAtividade String // O que foi feito (resumo do dia)
+  horasTrabalhadas   Float    @default(0)
+  observacoes        String?
+  imagens            String[] @default([]) // URLs das imagens enviadas
+  createdAt          DateTime @default(now())
 
   tarefa TarefaObra @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
 
@@ -799,14 +838,14 @@ model Funcionario {
 
 // Vales (Transporte, Alimentação, Adiantamentos)
 model Vale {
-  id            String      @id @default(uuid())
+  id            String   @id @default(uuid())
   funcionarioId String
   tipo          String // Vale Transporte, Vale Alimentação, Adiantamento
-  valor         Decimal     @db.Decimal(10, 2)
+  valor         Decimal  @db.Decimal(10, 2)
   data          DateTime
   descricao     String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   funcionario Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
 
@@ -892,13 +931,13 @@ model DespesaFixa {
 
 // Histórico de Pagamentos das Despesas Fixas
 model PagamentoDespesaFixa {
-  id            String      @id @default(uuid())
+  id            String   @id @default(uuid())
   despesaFixaId String
   mesReferencia String // Ex: "2025-01", "2025-02"
-  valorPago     Decimal     @db.Decimal(10, 2)
+  valorPago     Decimal  @db.Decimal(10, 2)
   dataPagamento DateTime
   observacoes   String?
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime @default(now())
 
   despesaFixa DespesaFixa @relation(fields: [despesaFixaId], references: [id], onDelete: Cascade)
 

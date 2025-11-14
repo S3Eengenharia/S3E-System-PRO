@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { pessoaService, type PessoaDTO } from '../../services/PessoaService';
 import { equipeService, type EquipeDTO } from '../../services/EquipeService';
+import { axiosApiService } from '../../services/axiosApi';
+
+interface EletricistaDTO {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+}
 
 interface ModalEquipesDeObraProps {
   isOpen: boolean;
@@ -8,7 +16,7 @@ interface ModalEquipesDeObraProps {
 }
 
 const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose }) => {
-  const [disponiveis, setDisponiveis] = useState<PessoaDTO[]>([]);
+  const [eletricistas, setEletricistas] = useState<EletricistaDTO[]>([]);
   const [equipes, setEquipes] = useState<EquipeDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,23 +29,55 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
 
   useEffect(() => {
     if (isOpen) {
-      void Promise.all([loadDisponiveis(), loadEquipes()]);
+      console.log('📂 Modal aberto, carregando dados...');
+      void Promise.all([loadEletricistas(), loadEquipes()]);
+    } else {
+      // Limpar dados quando o modal fechar
+      setEletricistas([]);
+      setEquipes([]);
+      setSelecionados([]);
+      setNomeEquipe('');
+      setBusca('');
+      setEditingEquipeId(null);
+      setError(null);
     }
   }, [isOpen]);
 
-  async function loadDisponiveis() {
+  async function loadEletricistas() {
     try {
       setLoading(true);
       setError(null);
-      const res = await pessoaService.getDisponiveisParaEquipe();
-      if (res.success && Array.isArray(res.data)) {
-        setDisponiveis(res.data);
+      console.log('🔍 Carregando eletricistas do backend...');
+      
+      // Carregar usuários do sistema
+      const response = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
+      
+      if (response.success && response.data) {
+        // Filtrar apenas eletricistas ativos
+        const usuariosArray = Array.isArray(response.data) ? response.data : [];
+        const eletricistasFiltered = usuariosArray
+          .filter((u: any) => 
+            u.role?.toLowerCase() === 'eletricista' && 
+            (u.active !== false) // Apenas usuários ativos
+          )
+          .map((u: any) => ({
+            id: u.id,
+            name: u.name || 'Sem nome',
+            email: u.email || 'Sem email',
+            role: u.role,
+            active: u.active
+          }));
+        
+        console.log('✅ Eletricistas carregados:', eletricistasFiltered);
+        setEletricistas(eletricistasFiltered);
       } else {
-        setDisponiveis([]);
+        console.warn('⚠️ Resposta sem dados de eletricistas:', response);
+        setEletricistas([]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar pessoas disponíveis');
-      setDisponiveis([]);
+      console.error('❌ Erro ao carregar eletricistas:', e);
+      setError(e instanceof Error ? e.message : 'Erro ao carregar eletricistas disponíveis');
+      setEletricistas([]);
     } finally {
       setLoading(false);
     }
@@ -47,13 +87,18 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
     try {
       setLoading(true);
       setError(null);
+      console.log('🔍 Carregando equipes do backend...');
       const res = await equipeService.getAllEquipes();
+      console.log('📥 Resposta de equipes:', res);
       if (res.success && Array.isArray(res.data)) {
+        console.log('✅ Equipes carregadas:', res.data.length);
         setEquipes(res.data);
       } else {
+        console.warn('⚠️ Resposta sem dados de equipes:', res);
         setEquipes([]);
       }
     } catch (e) {
+      console.error('❌ Erro ao carregar equipes:', e);
       setError(e instanceof Error ? e.message : 'Erro ao carregar equipes');
       setEquipes([]);
     } finally {
@@ -61,71 +106,116 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
     }
   }
 
-  const pessoasParaSelecao: PessoaDTO[] = useMemo(() => {
-    if (!editingEquipeId) return disponiveis;
+  // Verificar se um eletricista já está em outra equipe (exceto a equipe sendo editada)
+  const isEletricistaEmOutraEquipe = useMemo(() => {
+    return (eletricistaId: string): { emOutraEquipe: boolean; nomeEquipe?: string } => {
+      // Se estiver editando uma equipe, ignorar os membros dessa equipe atual
+      const equipeAtualId = editingEquipeId;
+      
+      // Se o eletricista está na equipe atual sendo editada, não está em outra equipe
+      if (equipeAtualId && selecionados.includes(eletricistaId)) {
+        return { emOutraEquipe: false };
+      }
+      
+      for (const equipe of equipes) {
+        // Ignorar a equipe atual se estiver editando
+        if (equipeAtualId && equipe.id === equipeAtualId) {
+          continue;
+        }
+        
+        // Verificar se o eletricista está nesta equipe (verificar pelos membros)
+        const estaNaEquipe = equipe.membros?.some(membro => {
+          // Membros podem ser objetos com id ou apenas strings (IDs)
+          const membroId = typeof membro === 'string' ? membro : membro.id;
+          return membroId === eletricistaId;
+        });
+        
+        if (estaNaEquipe && equipe.ativa !== false) {
+          return { emOutraEquipe: true, nomeEquipe: equipe.nome };
+        }
+      }
+      
+      return { emOutraEquipe: false };
+    };
+  }, [editingEquipeId, selecionados, equipes]);
+
+  const eletricistasParaSelecao: EletricistaDTO[] = useMemo(() => {
+    // Se estiver editando, incluir os membros atuais da equipe sendo editada
+    if (!editingEquipeId) return eletricistas;
+    
     const equipeAtual = equipes.find(e => e.id === editingEquipeId);
-    if (!equipeAtual) return disponiveis;
+    if (!equipeAtual) return eletricistas;
 
-    const currentMembers: PessoaDTO[] = (equipeAtual.membros || []).map((m) => ({
-      id: m.id,
-      nome: m.nome,
-      email: m.email || undefined,
-      funcao: (m.funcao as unknown as PessoaDTO['funcao'])
-    }));
-
-    const byId = new Map<string, PessoaDTO>();
-    [...disponiveis, ...currentMembers].forEach((p) => {
-      if (p.id) byId.set(p.id, p);
+    // Criar um mapa de eletricistas por ID
+    const eletricistasById = new Map<string, EletricistaDTO>();
+    eletricistas.forEach(e => {
+      if (e.id) eletricistasById.set(e.id, e);
     });
-    return Array.from(byId.values());
-  }, [disponiveis, editingEquipeId, equipes]);
+
+    // Adicionar membros atuais que não estão na lista de eletricistas
+    (equipeAtual.membros || []).forEach((m) => {
+      const membroId = typeof m === 'string' ? m : m.id;
+      if (!eletricistasById.has(membroId)) {
+        // Criar um objeto básico para membros que não estão na lista de eletricistas
+        eletricistasById.set(membroId, {
+          id: membroId,
+          name: (m as any).nome || (m as any).name || 'Sem nome',
+          email: (m as any).email || 'Sem email',
+          role: (m as any).funcao || (m as any).role || 'eletricista',
+          active: true
+        });
+      }
+    });
+
+    return Array.from(eletricistasById.values());
+  }, [eletricistas, editingEquipeId, equipes]);
 
   const filtrados = useMemo(() => {
     const s = busca.toLowerCase();
-    return pessoasParaSelecao.filter(p =>
-      p.nome.toLowerCase().includes(s) ||
-      (p.email || '').toLowerCase().includes(s) ||
-      (p.funcao || '').toLowerCase().includes(s)
+    
+    // Filtrar por busca
+    let resultado = eletricistasParaSelecao.filter(e =>
+      (e.name || '').toLowerCase().includes(s) ||
+      (e.email || '').toLowerCase().includes(s) ||
+      (e.role || '').toLowerCase().includes(s)
     );
-  }, [pessoasParaSelecao, busca]);
-
-  // Verificar se uma pessoa já está em outra equipe (exceto a equipe sendo editada)
-  const isPessoaEmOutraEquipe = (pessoaId: string): { emOutraEquipe: boolean; nomeEquipe?: string } => {
-    for (const equipe of equipes) {
-      // Ignorar a equipe atual se estiver editando
-      if (editingEquipeId && equipe.id === editingEquipeId) {
-        continue;
-      }
+    
+    // Se estiver editando, mostrar apenas eletricistas disponíveis (não em outras equipes)
+    // MAS incluir os membros atuais da equipe sendo editada
+    if (editingEquipeId) {
+      const equipeAtual = equipes.find(e => e.id === editingEquipeId);
+      const membrosAtuaisIds = (equipeAtual?.membros || []).map(m => {
+        return typeof m === 'string' ? m : m.id;
+      });
       
-      // Verificar se a pessoa está nesta equipe
-      const estaNaEquipe = equipe.membros?.some(membro => membro.id === pessoaId);
-      if (estaNaEquipe) {
-        return { emOutraEquipe: true, nomeEquipe: equipe.nome };
-      }
+      resultado = resultado.filter(e => {
+        // Incluir se é membro atual
+        if (membrosAtuaisIds.includes(e.id)) {
+          return true;
+        }
+        // Incluir se não está em nenhuma outra equipe
+        const { emOutraEquipe } = isEletricistaEmOutraEquipe(e.id);
+        return !emOutraEquipe;
+      });
+    } else {
+      // Ao criar, mostrar apenas eletricistas que não estão em equipes ativas
+      resultado = resultado.filter(e => {
+        const { emOutraEquipe } = isEletricistaEmOutraEquipe(e.id);
+        return !emOutraEquipe;
+      });
     }
     
-    return { emOutraEquipe: false };
-  };
+    return resultado;
+  }, [eletricistasParaSelecao, busca, editingEquipeId, equipes, isEletricistaEmOutraEquipe]);
 
   const alternarSelecionado = (id: string) => {
-    // Verificar se a pessoa já está em outra equipe
-    const { emOutraEquipe, nomeEquipe } = isPessoaEmOutraEquipe(id);
-    
     // Se já está selecionado, permitir desmarcar
     if (selecionados.includes(id)) {
       setSelecionados(prev => prev.filter(x => x !== id));
       return;
     }
     
-    // Se está em outra equipe, não permitir adicionar
-    if (emOutraEquipe) {
-      setError(`Esta pessoa já faz parte da equipe "${nomeEquipe}". Uma pessoa não pode estar em múltiplas equipes simultaneamente.`);
-      // Limpar o erro após 5 segundos
-      setTimeout(() => setError(null), 5000);
-      return;
-    }
-    
-    // Se passou pelas validações, adicionar
+    // Adicionar às pessoas selecionadas
     setSelecionados(prev => [...prev, id]);
   };
 
@@ -144,8 +234,8 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
         setNomeEquipe('');
         setSelecionados([]);
         setEditingEquipeId(null);
-        // Atualiza pessoas disponíveis, pois as selecionadas ficaram indisponíveis
-        void loadDisponiveis();
+        // Atualiza eletricistas disponíveis, pois os selecionados ficaram indisponíveis
+        void Promise.all([loadEletricistas(), loadEquipes()]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao criar equipe');
@@ -183,7 +273,7 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
         setNomeEquipe('');
         setSelecionados([]);
         // Atualiza disponibilidade após mudar membros
-        void loadDisponiveis();
+        void Promise.all([loadEletricistas(), loadEquipes()]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar edição da equipe');
@@ -200,7 +290,7 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
       if (res.success) {
         setEquipes(prev => prev.filter(e => e.id !== id));
         // Ao excluir, membros ficam disponíveis novamente
-        void loadDisponiveis();
+        void Promise.all([loadEletricistas(), loadEquipes()]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao excluir equipe');
@@ -234,14 +324,30 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold text-gray-900">Gestão de Equipes de Obra</h3>
-            <p className="text-sm text-gray-600">Monte equipes a partir das Pessoas disponíveis</p>
+            <p className="text-sm text-gray-600">Monte equipes a partir dos Eletricistas disponíveis</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">✕</button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           <div>
-            <h4 className="font-semibold text-gray-900 mb-3">Pessoas Disponíveis</h4>
+            <h4 className="font-semibold text-gray-900 mb-3">
+              {editingEquipeId ? 'Eletricistas Disponíveis para Adicionar' : 'Eletricistas Disponíveis'}
+            </h4>
+            
+            {editingEquipeId && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-800 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    Mostrando apenas eletricistas que <strong>não estão em outras equipes</strong> + membros atuais desta equipe.
+                  </span>
+                </p>
+              </div>
+            )}
+            
             <div className="flex items-center gap-2 mb-3">
               <input
                 value={busca}
@@ -249,60 +355,74 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
                 placeholder="Buscar por nome, email ou função"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               />
-              <button onClick={loadDisponiveis} className="px-3 py-2 bg-white border-2 border-brand-blue text-brand-blue font-semibold rounded-lg">Atualizar</button>
+              <button onClick={() => Promise.all([loadEletricistas(), loadEquipes()])} className="px-3 py-2 bg-white border-2 border-brand-blue text-brand-blue font-semibold rounded-lg hover:bg-blue-50 transition-colors">Atualizar</button>
             </div>
 
             <div className="border border-gray-200 rounded-xl max-h-80 overflow-auto">
               {loading ? (
-                <div className="p-4 text-sm text-gray-600">Carregando...</div>
+                <div className="p-4 text-sm text-gray-600">Carregando eletricistas...</div>
               ) : error ? (
                 <div className="p-4 text-sm text-red-700 bg-red-50">{error}</div>
               ) : filtrados.length === 0 ? (
-                <div className="p-4 text-sm text-gray-600">Nenhuma pessoa disponível</div>
+                <div className="p-4 text-sm text-gray-600">
+                  {eletricistas.length === 0 
+                    ? 'Nenhum eletricista cadastrado no sistema.' 
+                    : 'Nenhum eletricista disponível. Todos já estão em equipes ativas.'}
+                </div>
               ) : (
                 <ul className="divide-y divide-gray-200">
-                  {filtrados.map(p => {
-                    const isSelected = selecionados.includes(p.id!);
-                    const { emOutraEquipe, nomeEquipe } = isPessoaEmOutraEquipe(p.id!);
-                    const isDisabled = emOutraEquipe && !isSelected;
+                  {filtrados.map(eletricista => {
+                    const isSelected = selecionados.includes(eletricista.id);
+                    const { emOutraEquipe, nomeEquipe } = isEletricistaEmOutraEquipe(eletricista.id);
+                    const isDisabled = emOutraEquipe && !isSelected && !editingEquipeId;
                     
                     return (
                       <li 
-                        key={p.id} 
-                        className={`flex items-center justify-between p-3 ${isDisabled ? 'bg-gray-50 opacity-60' : ''}`}
+                        key={eletricista.id} 
+                        className={`flex items-center justify-between p-3 transition-colors ${
+                          isDisabled ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'
+                        }`}
                       >
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`font-medium ${isDisabled ? 'text-gray-500' : 'text-gray-900'}`}>
-                              {p.nome}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="font-medium text-gray-900">
+                              {eletricista.name || 'Sem nome'}
                             </div>
+                            {isSelected && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                                ✓ Selecionado
+                              </span>
+                            )}
                             {isDisabled && (
                               <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
                                 Em outra equipe
                               </span>
                             )}
                           </div>
-                          <div className={`text-xs ${isDisabled ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {p.email || 'sem email'} • {p.funcao}
+                          <div className="text-xs text-gray-600">
+                            {eletricista.email || 'Sem email'} • {eletricista.role || 'Eletricista'}
                           </div>
                           {isDisabled && nomeEquipe && (
-                            <div className="text-xs text-orange-600 mt-1 font-medium">
+                            <div className="text-xs text-orange-600 mt-1">
                               Equipe: {nomeEquipe}
                             </div>
                           )}
                         </div>
                         <label 
-                          className={`inline-flex items-center gap-2 text-sm ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                          title={isDisabled ? `Esta pessoa já faz parte da equipe "${nomeEquipe}"` : ''}
+                          className={`inline-flex items-center gap-2 text-sm ${
+                            isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                          }`}
                         >
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => alternarSelecionado(p.id!)}
+                            onChange={() => !isDisabled && alternarSelecionado(eletricista.id)}
                             disabled={isDisabled}
-                            className={isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
                           />
-                          {isSelected ? 'Selecionado' : isDisabled ? 'Indisponível' : 'Selecionar'}
+                          <span className={isSelected ? 'text-green-700 font-semibold' : isDisabled ? 'text-gray-400' : 'text-gray-700'}>
+                            {isSelected ? 'Selecionado' : isDisabled ? 'Indisponível' : 'Selecionar'}
+                          </span>
                         </label>
                       </li>
                     );

@@ -106,5 +106,37 @@ export class QuadrosController {
       });
     }
   }
+
+  static async revalidarEstoque(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      const resultado = await QuadrosService.revalidarEstoque(id);
+      
+      if (!resultado.success) {
+        res.status(400).json(resultado);
+        return;
+      }
+      
+      // Verificar se houve mudança de status
+      if (resultado.statusAnterior !== resultado.statusNovo) {
+        console.log(`🔄 Status do quadro ${id} mudou: ${resultado.statusAnterior} → ${resultado.statusNovo}`);
+      }
+      
+      res.json({ 
+        success: true, 
+        data: resultado.data,
+        message: `Estoque revalidado - Status: ${resultado.statusNovo}`,
+        itensFaltantes: resultado.itensFaltantes,
+        statusMudou: resultado.statusAnterior !== resultado.statusNovo
+      });
+    } catch (error: any) {
+      console.error('Erro ao revalidar estoque:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: error.message || 'Erro ao revalidar estoque do quadro' 
+      });
+    }
+  }
 }
 

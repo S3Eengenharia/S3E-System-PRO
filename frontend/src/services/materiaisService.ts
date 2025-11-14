@@ -11,6 +11,10 @@ export interface Material {
   estoqueMinimo: number;
   categoria?: string;
   fornecedorId?: string;
+  fornecedor?: {
+    id: string;
+    nome: string;
+  };
   ativo: boolean;
   createdAt: string;
   updatedAt: string;

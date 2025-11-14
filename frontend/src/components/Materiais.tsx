@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { type MaterialItem, MaterialCategory } from '../types';
 import { materiaisService, Material } from '../services/materiaisService';
+import ViewToggle from './ui/ViewToggle';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -47,6 +48,12 @@ const CubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
     </svg>
 );
+const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.432 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
 
 interface MateriaisProps {
     toggleSidebar: () => void;
@@ -77,11 +84,14 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<MaterialCategory | 'Todos'>('Todos');
     const [stockFilter, setStockFilter] = useState<'Todos' | 'Baixo' | 'Zerado'>('Todos');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     
     // Estados do modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToEdit, setItemToEdit] = useState<MaterialItem | null>(null);
     const [itemToDelete, setItemToDelete] = useState<MaterialItem | null>(null);
+    const [viewModalOpen, setViewModalOpen] = useState(false);
+    const [materialParaVisualizar, setMaterialParaVisualizar] = useState<MaterialItem | null>(null);
     const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
     const [materialSelecionado, setMaterialSelecionado] = useState<MaterialItem | null>(null);
     const [historicoCompras, setHistoricoCompras] = useState<any[]>([]);
@@ -131,7 +141,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                     unitOfMeasure: material.unidade,
                     location: 'Estoque', // Campo não disponível na API
                     price: material.preco,
-                    supplier: { id: material.fornecedorId || '', name: 'Fornecedor' } // Mapear conforme necessário
+                    supplier: material.fornecedor 
+                        ? { id: material.fornecedor.id, name: material.fornecedor.nome } 
+                        : { id: '', name: 'Sem fornecedor' }
                 }));
                 
                 setMaterials(materialsData);
@@ -799,6 +811,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         Exibindo <span className="font-bold text-gray-900 dark:text-white">{filteredMaterials.length}</span> de <span className="font-bold text-gray-900 dark:text-white">{materials.length}</span> materiais
                     </p>
                     <div className="flex items-center gap-4">
+                        <ViewToggle view={viewMode} onViewChange={setViewMode} />
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded-full"></div>
                             <span className="text-xs text-gray-600 dark:text-gray-400">Normal: {materials.filter(m => m.stock > m.minStock).length}</span>
@@ -837,7 +850,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         </button>
                     )}
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredMaterials.map((material) => (
                         <div key={material.id} className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-teal-300 dark:hover:border-teal-600 transition-all duration-200">
@@ -921,10 +934,21 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             </div>
 
                             {/* Botões de Ação */}
-                            <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <div className="grid grid-cols-2 gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <button
+                                    onClick={() => {
+                                        setMaterialParaVisualizar(material);
+                                        setViewModalOpen(true);
+                                    }}
+                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/70 transition-colors text-sm font-semibold"
+                                    title="Visualizar detalhes do material"
+                                >
+                                    <EyeIcon className="w-4 h-4" />
+                                    Ver
+                                </button>
                                 <button
                                     onClick={() => handleAbrirHistorico(material)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/70 transition-colors text-sm font-semibold"
+                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/70 transition-colors text-sm font-semibold"
                                     title="Ver histórico de compras e preços"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -934,14 +958,14 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                 </button>
                                 <button
                                     onClick={() => handleOpenModal(material)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg hover:bg-teal-200 dark:hover:bg-teal-900/70 transition-colors text-sm font-semibold"
+                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg hover:bg-teal-200 dark:hover:bg-teal-900/70 transition-colors text-sm font-semibold"
                                 >
                                     <PencilIcon className="w-4 h-4" />
                                     Editar
                                 </button>
                                 <button
                                     onClick={() => setItemToDelete(material)}
-                                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/70 transition-colors text-sm font-semibold"
+                                    className="flex items-center justify-center gap-1 px-3 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/70 transition-colors text-sm font-semibold"
                                 >
                                     <TrashIcon className="w-4 h-4" />
                                     Remover
@@ -949,6 +973,106 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
                     ))}
+                </div>
+            ) : (
+                /* Visualização em Lista */
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shadow-soft">
+                    <table className="w-full">
+                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 border-b border-gray-200 dark:border-gray-600">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Material</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">SKU</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Categoria</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Estoque</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Preço</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Fornecedor</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Status</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {filteredMaterials.map((material) => (
+                                <tr key={material.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <p className="font-semibold text-gray-900 dark:text-white">
+                                            {material.name.includes('Produto importado via XML') 
+                                                ? material.description || material.name 
+                                                : material.name}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{material.type}</p>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded font-mono">
+                                            {material.sku}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300">
+                                            {getCategoryIcon(material.category)} {material.category}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <p className="font-bold text-gray-900 dark:text-white">
+                                            {material.stock} <span className="text-xs text-gray-500">{material.unitOfMeasure}</span>
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Mín: {material.minStock}</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
+                                            R$ {(material.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                            {material.supplier?.name || '-'}
+                                        </p>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`px-3 py-1 text-xs font-bold rounded-lg ${getStockStatusClass(material)}`}>
+                                            {getStockStatusText(material)}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setMaterialParaVisualizar(material);
+                                                    setViewModalOpen(true);
+                                                }}
+                                                className="p-2 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 transition-colors"
+                                                title="Visualizar"
+                                            >
+                                                <EyeIcon className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleAbrirHistorico(material)}
+                                                className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 transition-colors"
+                                                title="Histórico"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleOpenModal(material)}
+                                                className="p-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg hover:bg-teal-200 transition-colors"
+                                                title="Editar"
+                                            >
+                                                <PencilIcon className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => setItemToDelete(material)}
+                                                className="p-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 transition-colors"
+                                                title="Remover"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
@@ -1373,6 +1497,119 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             >
                                 Fechar
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE VISUALIZAÇÃO */}
+            {viewModalOpen && materialParaVisualizar && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-strong max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/30 dark:to-blue-900/30">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Detalhes do Material</h2>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Informações completas do item</p>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setViewModalOpen(false);
+                                    setMaterialParaVisualizar(null);
+                                }} 
+                                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white/80 dark:hover:bg-gray-700 rounded-xl"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Informações Principais */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Nome</h3>
+                                    <p className="text-gray-900 dark:text-white font-medium">
+                                        {materialParaVisualizar.name.includes('Produto importado via XML') 
+                                            ? materialParaVisualizar.description || materialParaVisualizar.name 
+                                            : materialParaVisualizar.name}
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">SKU</h3>
+                                    <p className="text-gray-900 dark:text-white font-mono font-medium">{materialParaVisualizar.sku}</p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Categoria</h3>
+                                    <span className="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300 ring-1 ring-teal-200 dark:ring-teal-700">
+                                        {getCategoryIcon(materialParaVisualizar.category)} {materialParaVisualizar.category}
+                                    </span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Tipo</h3>
+                                    <p className="text-gray-900 dark:text-white font-medium">{materialParaVisualizar.type || 'N/A'}</p>
+                                </div>
+                            </div>
+
+                            {/* Descrição */}
+                            {materialParaVisualizar.description && (
+                                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Descrição</h3>
+                                    <p className="text-gray-700 dark:text-gray-300">{materialParaVisualizar.description}</p>
+                                </div>
+                            )}
+
+                            {/* Estoque */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">📊 Estoque Atual</h3>
+                                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                                        {materialParaVisualizar.stock} <span className="text-sm text-gray-500 dark:text-gray-400">{materialParaVisualizar.unitOfMeasure}</span>
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">⚠️ Estoque Mínimo</h3>
+                                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                                        {materialParaVisualizar.minStock} <span className="text-sm text-gray-500 dark:text-gray-400">{materialParaVisualizar.unitOfMeasure}</span>
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Status</h3>
+                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm ${getStockStatusClass(materialParaVisualizar)}`}>
+                                        {getStockStatusText(materialParaVisualizar)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Valores */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">💰 Valor Unitário</h3>
+                                    <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">
+                                        R$ {(materialParaVisualizar.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                                <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-green-800 dark:text-green-300 mb-2">💵 Valor Total em Estoque</h3>
+                                    <p className="text-3xl font-bold text-green-700 dark:text-green-400">
+                                        R$ {(materialParaVisualizar.stock * (materialParaVisualizar.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Fornecedor e Localização */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {materialParaVisualizar.supplier && (
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                        <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">🏭 Fornecedor</h3>
+                                        <p className="text-lg font-bold text-blue-900 dark:text-blue-300">{materialParaVisualizar.supplier.name}</p>
+                                    </div>
+                                )}
+                                {materialParaVisualizar.location && (
+                                    <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 p-4 rounded-xl">
+                                        <h3 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">📍 Localização</h3>
+                                        <p className="text-lg font-bold text-purple-900 dark:text-purple-300">{materialParaVisualizar.location}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,140 +1,147 @@
-import { axiosApiService } from './axiosApi';
+import { axiosApiService, type ApiResponse } from './axiosApi';
 
-export interface Equipe {
+export interface AlocacaoEquipeDTO {
   id: string;
-  nome: string;
-  especialidade: string;
-  lider: string;
-  membros: string[];
-  ativa: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Alocacao {
-  id: string;
+  tarefaId: string;
+  obraId: string;
   equipeId: string;
-  projetoId: string;
+  equipeNome: string;
+  membros: Array<{
+    id: string;
+    nome: string;
+    funcao: string;
+  }>;
   dataInicio: string;
   dataFim: string;
-  status: 'Planejada' | 'EmAndamento' | 'Concluida' | 'Cancelada';
+  status: 'PLANEJADA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
   observacoes?: string;
-  equipe?: Equipe;
-  projeto?: any;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface AlocacaoCalendario {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  equipe: string;
-  projeto: string;
-  status: string;
+export interface CreateAlocacaoInput {
+  tarefaId: string;
+  obraId: string;
+  equipeId: string;
+  dataInicio: string;
+  dataFim: string;
+  observacoes?: string;
 }
 
-export interface Estatisticas {
-  totalEquipes: number;
-  equipesAtivas: number;
-  totalAlocacoes: number;
-  alocacoesAtivas: number;
-  taxaOcupacao: number;
+export interface UpdateAlocacaoInput {
+  dataInicio?: string;
+  dataFim?: string;
+  status?: AlocacaoEquipeDTO['status'];
+  observacoes?: string;
+}
+
+export interface AlocacoesPorPeriodoParams {
+  dataInicio: string;
+  dataFim: string;
+  equipeId?: string;
+  obraId?: string;
+}
+
+export interface ConflictCheck {
+  temConflito: boolean;
+  conflitos: Array<{
+    equipeId: string;
+    equipeNome: string;
+    tarefaId: string;
+    tarefaDescricao: string;
+    dataInicio: string;
+    dataFim: string;
+  }>;
 }
 
 class AlocacaoService {
-  // =============================================
-  // EQUIPES
-  // =============================================
-
-  async criarEquipe(data: Partial<Equipe>) {
-    return axiosApiService.post<Equipe>('/api/obras/equipes', data);
+  private unwrap<T>(res: ApiResponse<any>): ApiResponse<T> {
+    if (!res.success) return res as unknown as ApiResponse<T>;
+    const payload = res.data as any;
+    const data = payload?.data ?? payload;
+    return { success: true, data } as ApiResponse<T>;
   }
 
-  async listarEquipes(todas?: boolean) {
-    const params = todas ? { todas: 'true' } : {};
-    return axiosApiService.get<Equipe[]>('/api/obras/equipes', params);
+  /**
+   * Criar alocação de equipe para uma tarefa
+   */
+  async criar(data: CreateAlocacaoInput): Promise<ApiResponse<AlocacaoEquipeDTO>> {
+    const res = await axiosApiService.post<any>('/api/alocacoes', data);
+    return this.unwrap<AlocacaoEquipeDTO>(res);
   }
 
-  async buscarEquipe(id: string) {
-    return axiosApiService.get<Equipe>(`/api/obras/equipes/${id}`);
+  /**
+   * Buscar alocações por período
+   */
+  async buscarPorPeriodo(params: AlocacoesPorPeriodoParams): Promise<ApiResponse<AlocacaoEquipeDTO[]>> {
+    const res = await axiosApiService.get<any>('/api/alocacoes/periodo', params);
+    return this.unwrap<AlocacaoEquipeDTO[]>(res);
   }
 
-  async getEquipesDisponiveis(dataInicio: string, dataFim: string) {
-    return axiosApiService.get<Equipe[]>('/api/obras/equipes/disponiveis', {
+  /**
+   * Buscar alocações de uma obra
+   */
+  async buscarPorObra(obraId: string): Promise<ApiResponse<AlocacaoEquipeDTO[]>> {
+    const res = await axiosApiService.get<any>(`/api/alocacoes/obra/${obraId}`);
+    return this.unwrap<AlocacaoEquipeDTO[]>(res);
+  }
+
+  /**
+   * Buscar alocações de uma equipe
+   */
+  async buscarPorEquipe(equipeId: string): Promise<ApiResponse<AlocacaoEquipeDTO[]>> {
+    const res = await axiosApiService.get<any>(`/api/alocacoes/equipe/${equipeId}`);
+    return this.unwrap<AlocacaoEquipeDTO[]>(res);
+  }
+
+  /**
+   * Verificar conflitos de alocação antes de criar
+   */
+  async verificarConflitos(equipeId: string, dataInicio: string, dataFim: string): Promise<ApiResponse<ConflictCheck>> {
+    const res = await axiosApiService.get<any>('/api/alocacoes/verificar-conflitos', {
+      equipeId,
       dataInicio,
-      dataFim,
+      dataFim
     });
+    return this.unwrap<ConflictCheck>(res);
   }
 
-  async atualizarEquipe(id: string, data: Partial<Equipe>) {
-    return axiosApiService.put<Equipe>(`/api/obras/equipes/${id}`, data);
+  /**
+   * Atualizar alocação
+   */
+  async atualizar(id: string, data: UpdateAlocacaoInput): Promise<ApiResponse<AlocacaoEquipeDTO>> {
+    const res = await axiosApiService.put<any>(`/api/alocacoes/${id}`, data);
+    return this.unwrap<AlocacaoEquipeDTO>(res);
   }
 
-  async desativarEquipe(id: string) {
-    return axiosApiService.delete<void>(`/api/obras/equipes/${id}`);
+  /**
+   * Excluir alocação
+   */
+  async excluir(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    const res = await axiosApiService.delete<any>(`/api/alocacoes/${id}`);
+    return this.unwrap<{ success: boolean }>(res);
   }
 
-  // =============================================
-  // ALOCAÇÕES
-  // =============================================
-
-  async alocarEquipe(data: {
+  /**
+   * Obter disponibilidade de equipes em um período
+   */
+  async obterDisponibilidade(dataInicio: string, dataFim: string): Promise<ApiResponse<Array<{
     equipeId: string;
-    projetoId: string;
-    dataInicio: string;
-    dataFim: string;
-    observacoes?: string;
-  }) {
-    return axiosApiService.post<Alocacao>('/api/obras/alocar', data);
-  }
-
-  async listarAlocacoes(filtros?: {
-    equipeId?: string;
-    projetoId?: string;
-    status?: string;
-    dataInicio?: string;
-    dataFim?: string;
-  }) {
-    return axiosApiService.get<Alocacao[]>('/api/obras/alocacoes', filtros);
-  }
-
-  async buscarAlocacao(id: string) {
-    return axiosApiService.get<Alocacao>(`/api/obras/alocacoes/${id}`);
-  }
-
-  async getAlocacoesCalendario(mes?: number, ano?: number) {
-    const params: any = {};
-    if (mes) params.mes = mes;
-    if (ano) params.ano = ano;
-    return axiosApiService.get<AlocacaoCalendario[]>('/api/obras/alocacoes/calendario', params);
-  }
-
-  async atualizarAlocacao(id: string, data: Partial<Alocacao>) {
-    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}`, data);
-  }
-
-  async iniciarAlocacao(id: string) {
-    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}/iniciar`);
-  }
-
-  async concluirAlocacao(id: string) {
-    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}/concluir`);
-  }
-
-  async cancelarAlocacao(id: string) {
-    return axiosApiService.put<Alocacao>(`/api/obras/alocacoes/${id}/cancelar`);
-  }
-
-  // =============================================
-  // ESTATÍSTICAS
-  // =============================================
-
-  async getEstatisticas() {
-    return axiosApiService.get<Estatisticas>('/api/obras/estatisticas');
+    equipeNome: string;
+    disponivel: boolean;
+    percentualOcupacao: number;
+    alocacoes: Array<{
+      tarefaId: string;
+      dataInicio: string;
+      dataFim: string;
+    }>;
+  }>>> {
+    const res = await axiosApiService.get<any>('/api/alocacoes/disponibilidade', {
+      dataInicio,
+      dataFim
+    });
+    return this.unwrap(res);
   }
 }
 
 export const alocacaoService = new AlocacaoService();
-

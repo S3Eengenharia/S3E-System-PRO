@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { QuadrosService } from '../services/quadros.service.js';
 
 const prisma = new PrismaClient();
 
@@ -118,6 +119,13 @@ export class MovimentacoesController {
         return movimentacao;
       });
 
+      // Se for ENTRADA, revalidar quadros que usam este material
+      if (tipo === 'ENTRADA') {
+        this.revalidarQuadrosComMaterial(materialId).catch(err => {
+          console.error('Erro ao revalidar quadros:', err);
+        });
+      }
+
       res.status(201).json({ success: true, data: resultado });
     } catch (error: any) {
       console.error('Erro ao criar movimentação:', error);
@@ -233,6 +241,39 @@ export class MovimentacoesController {
     } catch (error: any) {
       console.error('Erro ao deletar movimentação:', error);
       res.status(500).json({ success: false, message: 'Erro ao deletar movimentação', error: error.message });
+    }
+  }
+
+  // Revalidar quadros que usam um material específico
+  private static async revalidarQuadrosComMaterial(materialId: string) {
+    try {
+      console.log(`🔄 Revalidando quadros que usam material: ${materialId}`);
+      
+      // Buscar todos os quadros ativos que usam este material
+      const kitsComMaterial = await prisma.kitItem.findMany({
+        where: { materialId },
+        select: { kitId: true }
+      });
+      
+      const kitIds = [...new Set(kitsComMaterial.map(ki => ki.kitId))];
+      
+      if (kitIds.length === 0) {
+        console.log('ℹ️ Nenhum quadro usa este material');
+        return;
+      }
+      
+      console.log(`📦 Revalidando ${kitIds.length} quadro(s)...`);
+      
+      // Revalidar cada quadro
+      const resultados = await Promise.allSettled(
+        kitIds.map(kitId => QuadrosService.revalidarEstoque(kitId))
+      );
+      
+      const sucessos = resultados.filter(r => r.status === 'fulfilled').length;
+      console.log(`✅ ${sucessos}/${kitIds.length} quadros revalidados com sucesso`);
+      
+    } catch (error) {
+      console.error('❌ Erro ao revalidar quadros:', error);
     }
   }
 }

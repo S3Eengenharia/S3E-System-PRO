@@ -89,6 +89,35 @@ class EtapasAdminService {
       `/api/projetos/etapas-admin/${projetoId}/${etapaId}/reabrir`
     );
   }
+
+  /**
+   * Criar uma nova etapa personalizada
+   */
+  async criar(projetoId: string, data: { nome: string; dataPrevista: string; tipo: string }) {
+    return axiosApiService.post<EtapaAdmin>(
+      `/api/projetos/etapas-admin/${projetoId}/criar`,
+      data
+    );
+  }
+
+  /**
+   * Atualizar uma etapa
+   */
+  async atualizar(projetoId: string, etapaId: string, data: { nome?: string; dataPrevista?: string }) {
+    return axiosApiService.put<EtapaAdmin>(
+      `/api/projetos/etapas-admin/${projetoId}/${etapaId}`,
+      data
+    );
+  }
+
+  /**
+   * Excluir uma etapa
+   */
+  async excluir(projetoId: string, etapaId: string) {
+    return axiosApiService.delete<void>(
+      `/api/projetos/etapas-admin/${projetoId}/${etapaId}`
+    );
+  }
 }
 
 export const etapasAdminService = new EtapasAdminService();

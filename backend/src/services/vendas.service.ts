@@ -44,7 +44,16 @@ export class VendasService {
 
         // Usar transação para garantir consistência
         return await prisma.$transaction(async (tx) => {
-            // 0. Buscar orçamento e projeto vinculado
+            // 0. Verificar se já existe venda para este orçamento
+            const vendaExistente = await tx.venda.findUnique({
+                where: { orcamentoId }
+            });
+
+            if (vendaExistente) {
+                throw new Error(`Já existe uma venda registrada para este orçamento (Venda #${vendaExistente.numeroVenda}). Não é possível criar venda duplicada.`);
+            }
+
+            // 1. Buscar orçamento e projeto vinculado
             const orcamento = await tx.orcamento.findUnique({
                 where: { id: orcamentoId },
                 include: { projeto: true }
@@ -103,7 +112,7 @@ export class VendasService {
                 }
             });
 
-            // 1. Criar a venda principal
+            // 2. Criar a venda principal
             const venda = await tx.venda.create({
                 data: {
                     numeroVenda,
@@ -119,7 +128,7 @@ export class VendasService {
                 }
             });
 
-            // 2. Gerar contas a receber (parcelas)
+            // 3. Gerar contas a receber (parcelas)
             const contasReceber = [];
 
             for (let i = 1; i <= parcelas; i++) {
@@ -142,7 +151,7 @@ export class VendasService {
                 contasReceber.push(contaReceber);
             }
 
-            // 3. Processar baixa de estoque baseado no orçamento
+            // 4. Processar baixa de estoque baseado no orçamento
             let baixaEstoque = null;
             try {
                 baixaEstoque = await EstoqueService.processarBaixaOrcamento(

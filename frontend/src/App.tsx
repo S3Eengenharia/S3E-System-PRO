@@ -40,6 +40,7 @@ import TarefasObra from './components/TarefasObra';
 import GerenciamentoEmpresarial from './components/GerenciamentoEmpresarial';
 import { type Project } from './types';
 import { Toaster } from './components/ui/sonner';
+import MobileMenuButton from './components/MobileMenuButton';
 
 const MainApp: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -142,7 +143,9 @@ const MainApp: React.FC = () => {
           aria-hidden="true"
         ></div>
       )}
-      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg">
+      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg relative">
+        {/* Botão Hambúrguer para Mobile - aparece apenas quando sidebar está fechada em mobile */}
+        {!isSidebarOpen && <MobileMenuButton onClick={toggleSidebar} isOpen={isSidebarOpen} />}
         {renderActiveView()}
       </main>
       {/* SettingsModal DESCONTINUADO - Substituído por página Configuracoes.tsx */}
@@ -208,7 +211,9 @@ const StandalonePageWrapper: React.FC<{ children: React.ReactNode; activeView?: 
           aria-hidden="true"
         ></div>
       )}
-      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg">
+      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-dark-bg relative">
+        {/* Botão Hambúrguer para Mobile - aparece apenas quando sidebar está fechada em mobile */}
+        {!isSidebarOpen && <MobileMenuButton onClick={toggleSidebar} isOpen={isSidebarOpen} />}
         {React.cloneElement(children as React.ReactElement, { toggleSidebar })}
       </main>
     </div>
