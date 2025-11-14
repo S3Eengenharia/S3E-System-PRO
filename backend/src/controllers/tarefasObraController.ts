@@ -311,7 +311,7 @@ export const getTarefaById = async (req: Request, res: Response): Promise<void> 
  */
 export const criarTarefa = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { obraId, descricao, atribuidoA, dataPrevista, observacoes } = req.body;
+    const { obraId, descricao, atribuidoA, equipeId, dataPrevista, dataPrevistaFim, observacoes } = req.body;
     const userId = (req as any).user?.userId;
     
     if (!obraId || !descricao) {
@@ -347,6 +347,22 @@ export const criarTarefa = async (req: Request, res: Response): Promise<void> =>
         return;
       }
     }
+
+    // Verificar se equipe existe (se fornecida)
+    let equipe = null;
+    if (equipeId) {
+      equipe = await prisma.equipe.findUnique({
+        where: { id: equipeId }
+      });
+      
+      if (!equipe) {
+        res.status(404).json({ 
+          success: false, 
+          error: 'Equipe não encontrada' 
+        });
+        return;
+      }
+    }
     
     // Criar tarefa
     const tarefa = await prisma.tarefaObra.create({
@@ -354,7 +370,9 @@ export const criarTarefa = async (req: Request, res: Response): Promise<void> =>
         obraId,
         descricao,
         atribuidoA: atribuidoA || null,
+        equipeId: equipeId || null,
         dataPrevista: dataPrevista ? new Date(dataPrevista) : null,
+        dataPrevistaFim: dataPrevistaFim ? new Date(dataPrevistaFim) : null,
         observacoes: observacoes || null,
         progresso: 0
       },
@@ -365,9 +383,14 @@ export const criarTarefa = async (req: Request, res: Response): Promise<void> =>
     });
     
     // Audit log
-    const descricaoLog = eletricista 
-      ? `Nova tarefa criada e atribuída ao eletricista ${eletricista.name}`
-      : 'Nova tarefa criada sem eletricista atribuído';
+    let descricaoLog = 'Nova tarefa criada';
+    if (equipe) {
+      descricaoLog += ` e atribuída à equipe ${equipe.nome}`;
+    } else if (eletricista) {
+      descricaoLog += ` e atribuída ao eletricista ${eletricista.name}`;
+    } else {
+      descricaoLog += ' sem atribuição';
+    }
     
     await prisma.auditLog.create({
       data: {
@@ -378,12 +401,13 @@ export const criarTarefa = async (req: Request, res: Response): Promise<void> =>
         description: descricaoLog,
         metadata: {
           obraId,
-          eletricistaId: atribuidoA || null
+          eletricistaId: atribuidoA || null,
+          equipeId: equipeId || null
         }
       }
     });
     
-    console.log(`✅ Tarefa criada: ${tarefa.id} ${eletricista ? `- Atribuída a ${eletricista.name}` : '- Sem eletricista atribuído'}`);
+    console.log(`✅ Tarefa criada: ${tarefa.id} ${equipe ? `- Atribuída à equipe ${equipe.nome}` : eletricista ? `- Atribuída a ${eletricista.name}` : '- Sem atribuição'}`);
     
     res.json({ 
       success: true, 
@@ -543,10 +567,11 @@ export const getTarefasPorObra = async (req: Request, res: Response): Promise<vo
       orderBy: { dataPrevista: 'asc' }
     });
 
-    // Buscar informações dos eletricistas para cada tarefa
+    // Buscar informações dos eletricistas e equipes para cada tarefa
     const tarefasComNomes = await Promise.all(
       tarefas.map(async (tarefa) => {
         let atribuidoNome = null;
+        let equipeNome = null;
         
         if (tarefa.atribuidoA) {
           const usuario = await prisma.user.findUnique({
@@ -556,9 +581,18 @@ export const getTarefasPorObra = async (req: Request, res: Response): Promise<vo
           atribuidoNome = usuario?.name || null;
         }
 
+        if (tarefa.equipeId) {
+          const equipe = await prisma.equipe.findUnique({
+            where: { id: tarefa.equipeId },
+            select: { nome: true }
+          });
+          equipeNome = equipe?.nome || null;
+        }
+
         return {
           ...tarefa,
-          atribuidoNome
+          atribuidoNome,
+          equipeNome
         };
       })
     );

@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { CatalogItem, CatalogItemType, Product, Kit, KitProduct, Service, KitService, ServiceType, KitConfiguration, MaterialItem } from '../types';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import CriacaoQuadroModular from './CriacaoQuadroModular';
+import CriacaoKitModal from './CriacaoKitModal';
+import ViewToggle from './ui/ViewToggle';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -67,39 +70,58 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<CatalogItemType | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
+    const [kitDetalhes, setKitDetalhes] = useState<any>(null);
+    const [loadingKitDetalhes, setLoadingKitDetalhes] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToEdit, setItemToEdit] = useState<CatalogItem | null>(null);
     const [itemToDelete, setItemToDelete] = useState<CatalogItem | null>(null);
     const [showQuadroModal, setShowQuadroModal] = useState(false);
+    const [showKitModal, setShowKitModal] = useState(false);
+    const [kitParaEditar, setKitParaEditar] = useState<any>(null);
 
     const loadCatalogItems = async () => {
         try {
             setLoading(true);
             setError(null);
             
-            // Carregar materiais
-            const materiaisResponse = await axiosApiService.get<MaterialItem[]>(ENDPOINTS.MATERIAIS);
-            
             const catalogItems: CatalogItem[] = [];
             
-            // Converter materiais em itens do catálogo
-            if (materiaisResponse.success && materiaisResponse.data) {
-                const materiais = Array.isArray(materiaisResponse.data) ? materiaisResponse.data : [];
-                materiais.forEach((material: any) => {
-                    catalogItems.push({
-                        id: material.id,
-                        name: material.nome || material.descricao || 'Material',
-                        description: material.descricao || '',
-                        type: CatalogItemType.Produto,
-                        price: material.preco || material.price || 0,
-                        category: material.categoria || material.category || 'Material',
-                        imageUrl: undefined,
-                        isActive: material.ativo !== false,
-                        createdAt: material.createdAt || new Date().toISOString(),
-                        updatedAt: material.updatedAt || new Date().toISOString()
+            // Carregar apenas Kits e Serviços (NÃO carregar Produtos/Materiais - eles ficam apenas no Estoque)
+            try {
+                // Carregar Kits
+                const kitsResponse = await axiosApiService.get(ENDPOINTS.KITS);
+                if (kitsResponse.success && kitsResponse.data) {
+                    const kits = Array.isArray(kitsResponse.data) ? kitsResponse.data : [];
+                    kits.forEach((kit: any) => {
+                        catalogItems.push({
+                            id: kit.id,
+                            name: kit.nome,
+                            description: kit.descricao || 'Kit sem descrição',
+                            price: kit.preco || 0,
+                            category: kit.tipo || 'Kit',
+                            type: 'Kit' as CatalogItemType,
+                            createdAt: kit.createdAt || new Date().toISOString(),
+                            updatedAt: kit.updatedAt || new Date().toISOString(),
+                            // Campos adicionais para controle de estoque
+                            temItensCotacao: kit.temItensCotacao || false,
+                            itensFaltantes: kit.itensFaltantes || [],
+                            statusEstoque: kit.statusEstoque || 'COMPLETO',
+                            isActive: kit.ativo !== false
+                        } as any);
                     });
-                });
+                    console.log(`✅ ${kits.length} kits carregados`);
+                }
+                
+                // TODO: Implementar carregamento de Serviços quando endpoint estiver disponível  
+                // const servicosResponse = await axiosApiService.get(ENDPOINTS.SERVICOS);
+                // if (servicosResponse.success && servicosResponse.data) { ... }
+                
+                console.log('📦 Catálogo configurado para mostrar apenas Kits e Serviços');
+                console.log('ℹ️ Produtos/Materiais estão disponíveis na página de Estoque');
+            } catch (err) {
+                console.warn('Erro ao carregar kits/serviços:', err);
             }
             
             setCatalogItems(catalogItems);
@@ -149,14 +171,65 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     }, [catalogItems]);
 
     // Handlers
-    const handleOpenModal = (item: CatalogItem | null = null) => {
-        setItemToEdit(item);
-        setIsModalOpen(true);
+    const handleOpenModal = async (item: CatalogItem | null = null) => {
+        // Se for kit, abrir modal de edição de kit
+        if (item && item.type === 'Kit') {
+            await handleEditarKit(item);
+        } else {
+            // Para outros tipos (serviços), usar modal genérico
+            setItemToEdit(item);
+            setIsModalOpen(true);
+        }
+    };
+
+    const handleEditarKit = async (item: CatalogItem) => {
+        try {
+            // Carregar detalhes completos do kit
+            const response = await axiosApiService.get(`${ENDPOINTS.KITS}/${item.id}`);
+            if (response.success && response.data) {
+                setKitParaEditar(response.data);
+                setShowKitModal(true);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar kit para edição:', error);
+            toast.error('Erro ao carregar kit para edição');
+        }
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setItemToEdit(null);
+    };
+
+    const handleViewItem = async (item: CatalogItem) => {
+        setSelectedItem(item);
+        
+        // Se for um kit, carregar detalhes completos
+        if (item.type === 'Kit') {
+            try {
+                setLoadingKitDetalhes(true);
+                const response = await axiosApiService.get(`${ENDPOINTS.KITS}/${item.id}`);
+                console.log('📦 Detalhes do kit carregados:', response.data);
+                console.log('   - Items:', response.data?.items?.length || 0);
+                console.log('   - ItensFaltantes:', response.data?.itensFaltantes);
+                console.log('   - temItensCotacao:', response.data?.temItensCotacao);
+                console.log('   - statusEstoque:', response.data?.statusEstoque);
+                
+                if (response.success && response.data) {
+                    setKitDetalhes(response.data);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar detalhes do kit:', error);
+                toast.error('Erro ao carregar detalhes do kit');
+            } finally {
+                setLoadingKitDetalhes(false);
+            }
+        }
+    };
+
+    const handleCloseViewModal = () => {
+        setSelectedItem(null);
+        setKitDetalhes(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -179,24 +252,45 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         
         try {
             // Verificar o tipo do item e deletar conforme necessário
-            if (itemToDelete.type === CatalogItemType.Servico) {
-                const response = await servicosService.desativar(itemToDelete.id);
+            if (itemToDelete.type === 'Kit') {
+                const response = await axiosApiService.delete(`${ENDPOINTS.KITS}/${itemToDelete.id}`);
                 if (response.success) {
-                    alert('✅ Item removido com sucesso!');
+                    toast.success('Kit removido com sucesso!', {
+                        description: `"${itemToDelete.name}" foi excluído do catálogo`,
+                        icon: '🗑️'
+                    });
                     setItemToDelete(null);
                     await loadCatalogItems();
                 } else {
-                    alert(`❌ Erro ao remover item: ${response.error || 'Erro desconhecido'}`);
+                    toast.error('Erro ao remover kit', {
+                        description: response.error || 'Erro desconhecido'
+                    });
+                }
+            } else if (itemToDelete.type === CatalogItemType.Servico) {
+                const response = await servicosService.desativar(itemToDelete.id);
+                if (response.success) {
+                    toast.success('Serviço removido com sucesso!', {
+                        description: `"${itemToDelete.name}" foi desativado`,
+                        icon: '🗑️'
+                    });
+                    setItemToDelete(null);
+                    await loadCatalogItems();
+                } else {
+                    toast.error('Erro ao remover serviço', {
+                        description: response.error || 'Erro desconhecido'
+                    });
                 }
             } else {
-                // Para produtos e kits, pode ser necessário implementar endpoint específico
-                alert('✅ Funcionalidade de remoção será implementada em breve!');
+                toast.info('Funcionalidade em desenvolvimento', {
+                    description: 'Remoção de outros tipos de itens será implementada em breve'
+                });
                 setItemToDelete(null);
-                await loadCatalogItems();
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Erro ao remover item:', error);
-            alert('❌ Erro ao remover item. Verifique o console para mais detalhes.');
+            toast.error('Erro ao remover item', {
+                description: error?.response?.data?.error || error.message || 'Erro ao comunicar com servidor'
+            });
         }
     };
 
@@ -272,7 +366,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                         Criar Quadro Elétrico
                     </button>
                     <button
-                        onClick={() => handleOpenModal()}
+                        onClick={() => setShowKitModal(true)}
                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
                     >
                         <PlusIcon className="w-5 h-5" />
@@ -383,10 +477,27 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                     </div>
 
                     <div className="flex items-center justify-end">
-                        <p className="text-sm text-gray-600">
-                            <span className="font-bold text-gray-900">{filteredItems.length}</span> itens encontrados
-                        </p>
+                        <div className="flex items-center gap-4">
+                            <p className="text-sm text-gray-600">
+                                <span className="font-bold text-gray-900">{filteredItems.length}</span> itens encontrados
+                            </p>
+                            <ViewToggle view={viewMode} onViewChange={setViewMode} />
+                        </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Aviso sobre Produtos/Materiais */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 mb-6 flex items-start gap-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl">ℹ️</span>
+                </div>
+                <div>
+                    <h3 className="text-lg font-bold text-blue-900 mb-2">Produtos/Materiais estão no Estoque</h3>
+                    <p className="text-blue-800">
+                        Esta página exibe apenas <strong>Kits</strong> e <strong>Serviços</strong>. 
+                        Para visualizar produtos/materiais individuais, acesse a página de <strong>Estoque</strong>.
+                    </p>
                 </div>
             </div>
 
@@ -396,11 +507,11 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                     <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <span className="text-4xl">📋</span>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item encontrado</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum kit ou serviço encontrado</h3>
                     <p className="text-gray-500 mb-6">
                         {searchTerm || filter !== 'Todos'
                             ? 'Tente ajustar os filtros de busca'
-                            : 'Comece adicionando seus primeiros itens ao catálogo'}
+                            : 'Comece adicionando kits ou serviços ao catálogo'}
                     </p>
                     {!searchTerm && filter === 'Todos' && (
                         <button
@@ -408,11 +519,11 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                             className="bg-gradient-to-r from-teal-600 to-teal-500 text-white px-6 py-3 rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow-medium font-semibold"
                         >
                             <PlusIcon className="w-5 h-5 inline mr-2" />
-                            Adicionar Primeiro Item
+                            Adicionar Kit ou Serviço
                         </button>
                     )}
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredItems.map((item) => (
                         <div key={item.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-teal-300 transition-all duration-200">
@@ -448,8 +559,8 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                 </div>
                             </div>
 
-                            {/* Status */}
-                            <div className="mb-4">
+                            {/* Status e Alertas */}
+                            <div className="mb-4 space-y-2">
                                 <span className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm ${
                                     item.isActive 
                                         ? 'bg-green-100 text-green-800 ring-1 ring-green-200' 
@@ -457,12 +568,39 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                 }`}>
                                     {item.isActive ? '✅ Ativo' : '❌ Inativo'}
                                 </span>
+                                
+                                {/* Flag de itens faltantes (para quadros elétricos) */}
+                                {(item as any).statusEstoque === 'PENDENTE' && (
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg">⚠️</span>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-bold text-yellow-900">Itens Faltantes</p>
+                                                <p className="text-xs text-yellow-700">
+                                                    {(item as any).itensFaltantes?.length || 0} item(ns) pendente(s)
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {(item as any).temItensCotacao && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg">❄️</span>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-bold text-blue-900">Banco Frio</p>
+                                                <p className="text-xs text-blue-700">Requer compra de itens</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Botões de Ação */}
                             <div className="flex gap-2 pt-4 border-t border-gray-100">
                                 <button
-                                    onClick={() => setSelectedItem(item)}
+                                    onClick={() => handleViewItem(item)}
                                     className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
                                 >
                                     <EyeIcon className="w-4 h-4" />
@@ -485,6 +623,92 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
                     ))}
+                </div>
+            ) : (
+                /* Visualização em Lista */
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-soft">
+                    <table className="w-full">
+                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Item</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Tipo</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Categoria</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Preço</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {filteredItems.map((item) => (
+                                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div>
+                                            <p className="font-semibold text-gray-900">{item.name}</p>
+                                            <p className="text-sm text-gray-500 line-clamp-1">{item.description}</p>
+                                            {/* Flags */}
+                                            <div className="flex gap-2 mt-2">
+                                                {(item as any).statusEstoque === 'PENDENTE' && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                        ⚠️ {(item as any).itensFaltantes?.length || 0} Faltantes
+                                                    </span>
+                                                )}
+                                                {(item as any).temItensCotacao && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                        ❄️ Banco Frio
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 text-xs font-bold rounded-lg ${getTypeColor(item.type)}`}>
+                                            {getTypeIcon(item.type)} {getTypeName(item.type)}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">{item.category}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <p className="text-lg font-bold text-teal-700">
+                                            R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`px-3 py-1 text-xs font-bold rounded-lg ${
+                                            item.isActive 
+                                                ? 'bg-green-100 text-green-800' 
+                                                : 'bg-red-100 text-red-800'
+                                        }`}>
+                                            {item.isActive ? '✅ Ativo' : '❌ Inativo'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => handleViewItem(item)}
+                                                className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                                                title="Visualizar"
+                                            >
+                                                <EyeIcon className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleOpenModal(item)}
+                                                className="p-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-colors"
+                                                title="Editar"
+                                            >
+                                                <PencilIcon className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => setItemToDelete(item)}
+                                                className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                                                title="Remover"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
@@ -552,7 +776,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                 <h2 className="text-2xl font-bold text-gray-900">Detalhes do Item</h2>
                                 <p className="text-sm text-gray-600 mt-1">Informações completas do item</p>
                             </div>
-                            <button onClick={() => setSelectedItem(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
+                            <button onClick={handleCloseViewModal} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
@@ -586,6 +810,106 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                 <p className="text-gray-700">{selectedItem.description}</p>
                             </div>
 
+                            {/* Composição do Kit (se for um Kit) */}
+                            {selectedItem.type === 'Kit' && (
+                                <div>
+                                    <h3 className="font-semibold text-gray-800 mb-4">Composição do Kit</h3>
+                                    {loadingKitDetalhes ? (
+                                        <div className="text-center py-8">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto"></div>
+                                            <p className="text-sm text-gray-600 mt-2">Carregando composição...</p>
+                                        </div>
+                                    ) : kitDetalhes ? (
+                                        <div className="space-y-4">
+                                            {/* Itens do Estoque Real */}
+                                            {kitDetalhes.items && kitDetalhes.items.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
+                                                        <span>✅</span> Itens do Estoque Real ({kitDetalhes.items.length})
+                                                    </h4>
+                                                    <div className="space-y-2">
+                                                        {kitDetalhes.items.map((item: any, index: number) => (
+                                                            <div key={index} className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="flex-1">
+                                                                        <p className="font-semibold text-gray-900 text-sm">
+                                                                            {item.material?.nome || item.material?.descricao || 'Material'}
+                                                                        </p>
+                                                                        <p className="text-xs text-gray-600 mt-1">
+                                                                            {item.quantidade} {item.material?.unidadeMedida || 'UN'} × R$ {(item.material?.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="font-bold text-sm text-green-700">
+                                                                            R$ {((item.quantidade || 0) * (item.material?.preco || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Itens do Banco Frio (Cotações) */}
+                                            {kitDetalhes.itensFaltantes && Array.isArray(kitDetalhes.itensFaltantes) && kitDetalhes.itensFaltantes.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
+                                                        <span>❄️</span> Itens do Banco Frio ({kitDetalhes.itensFaltantes.length})
+                                                    </h4>
+                                                    <div className="space-y-2">
+                                                        {kitDetalhes.itensFaltantes.map((item: any, index: number) => (
+                                                            <div key={index} className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="flex-1">
+                                                                        <p className="font-semibold text-gray-900 text-sm">
+                                                                            {item.nome}
+                                                                        </p>
+                                                                        <p className="text-xs text-gray-600 mt-1">
+                                                                            {item.quantidade} UN × R$ {(item.precoUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                        </p>
+                                                                        {item.dataUltimaCotacao && (
+                                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                                                                                📅 Cotação: {(() => {
+                                                                                    const data = new Date(item.dataUltimaCotacao);
+                                                                                    return !isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : 'Sem data';
+                                                                                })()}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="font-bold text-sm text-blue-700">
+                                                                            R$ {((item.quantidade || 0) * (item.precoUnit || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                                                        <p className="text-xs text-orange-800 font-medium">
+                                                            ⚠️ Estes itens precisam ser comprados e adicionados ao estoque antes de usar o kit em obras
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Se não tem nenhum item */}
+                                            {(!kitDetalhes.items || kitDetalhes.items.length === 0) && 
+                                             (!kitDetalhes.itensFaltantes || kitDetalhes.itensFaltantes.length === 0) && (
+                                                <div className="text-center py-8 text-gray-500">
+                                                    Nenhum item na composição
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-gray-500">
+                                            Erro ao carregar composição do kit
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="bg-gray-50 p-4 rounded-xl">
                                     <h3 className="font-semibold text-gray-800 mb-2">Criado em</h3>
@@ -602,6 +926,36 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                     </span>
                                 </div>
                             </div>
+
+                            {/* Alertas de Estoque (para quadros elétricos) */}
+                            {(selectedItem as any).statusEstoque === 'PENDENTE' && (selectedItem as any).itensFaltantes && (
+                                <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <span className="text-3xl">⚠️</span>
+                                        <div>
+                                            <h3 className="font-bold text-yellow-900 text-lg">Itens Faltantes em Estoque</h3>
+                                            <p className="text-sm text-yellow-700">
+                                                Este quadro possui itens que precisam ser comprados ou reabastecidos
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {JSON.parse(JSON.stringify((selectedItem as any).itensFaltantes || [])).map((item: any, idx: number) => (
+                                            <div key={idx} className="bg-white border border-yellow-200 rounded-lg p-3">
+                                                <p className="font-semibold text-gray-900 text-sm">{item.nome}</p>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <span className="text-xs text-gray-600">
+                                                        {item.tipo === 'COTACAO' ? '❄️ Banco Frio' : '📦 Estoque Insuficiente'}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-yellow-700">
+                                                        {item.quantidade} un necessária(s)
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -642,6 +996,21 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                     setShowQuadroModal(false);
                     loadCatalogItems();
                 }}
+            />
+
+            {/* Modal de Criação/Edição de Kit */}
+            <CriacaoKitModal
+                isOpen={showKitModal}
+                onClose={() => {
+                    setShowKitModal(false);
+                    setKitParaEditar(null);
+                }}
+                onSave={() => {
+                    setShowKitModal(false);
+                    setKitParaEditar(null);
+                    loadCatalogItems();
+                }}
+                kitParaEditar={kitParaEditar}
             />
         </div>
     );

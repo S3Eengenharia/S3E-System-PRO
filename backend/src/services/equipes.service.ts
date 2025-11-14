@@ -41,6 +41,15 @@ export class EquipesService {
    */
   async criarEquipe(data: EquipeData): Promise<EquipeComMembros> {
     try {
+      // Verificar se já existe uma equipe com o mesmo nome
+      const equipeExistente = await prisma.equipe.findUnique({
+        where: { nome: data.nome }
+      });
+
+      if (equipeExistente) {
+        throw new Error(`Já existe uma equipe com o nome "${data.nome}". Por favor, escolha outro nome.`);
+      }
+
       const membrosIds = Array.isArray(data.membrosIds) ? Array.from(new Set(data.membrosIds)) : [];
 
       const result = await prisma.$transaction(async (tx) => {
@@ -56,7 +65,7 @@ export class EquipesService {
             alocacoes: {
               select: {
                 id: true,
-                obraId: true,
+                projetoId: true,
                 dataInicio: true,
                 dataFimPrevisto: true,
                 status: true
@@ -92,6 +101,10 @@ export class EquipesService {
 
     } catch (error) {
       console.error('Erro ao criar equipe:', error);
+      // Se for um erro de validação (nome duplicado), relançar o erro original
+      if (error instanceof Error && error.message.includes('Já existe uma equipe')) {
+        throw error;
+      }
       throw new Error('Erro ao criar equipe');
     }
   }
@@ -109,7 +122,7 @@ export class EquipesService {
           alocacoes: {
             select: {
               id: true,
-              obraId: true,
+              projetoId: true,
               dataInicio: true,
               dataFimPrevisto: true,
               status: true
@@ -177,7 +190,7 @@ export class EquipesService {
           alocacoes: {
             select: {
               id: true,
-              obraId: true,
+              projetoId: true,
               dataInicio: true,
               dataFimPrevisto: true,
               status: true
@@ -219,6 +232,20 @@ export class EquipesService {
         throw new Error('Equipe não encontrada');
       }
 
+      // Se estiver atualizando o nome, verificar se já existe outra equipe com o mesmo nome
+      if (data.nome && data.nome !== current.nome) {
+        const equipeComMesmoNome = await prisma.equipe.findFirst({
+          where: {
+            nome: data.nome,
+            id: { not: id } // Excluir a própria equipe da verificação
+          }
+        });
+
+        if (equipeComMesmoNome) {
+          throw new Error(`Já existe uma equipe com o nome "${data.nome}". Por favor, escolha outro nome.`);
+        }
+      }
+
       const newMembros = Array.isArray(data.membrosIds)
         ? Array.from(new Set(data.membrosIds))
         : current.membros;
@@ -241,7 +268,7 @@ export class EquipesService {
             alocacoes: {
               select: {
                 id: true,
-                obraId: true,
+                projetoId: true,
                 dataInicio: true,
                 dataFimPrevisto: true,
                 status: true
@@ -268,6 +295,13 @@ export class EquipesService {
 
     } catch (error) {
       console.error('Erro ao atualizar equipe:', error);
+      // Se for um erro de validação (nome duplicado ou equipe não encontrada), relançar o erro original
+      if (error instanceof Error && (
+        error.message.includes('Já existe uma equipe') ||
+        error.message.includes('não encontrada')
+      )) {
+        throw error;
+      }
       throw new Error('Erro ao atualizar equipe');
     }
   }

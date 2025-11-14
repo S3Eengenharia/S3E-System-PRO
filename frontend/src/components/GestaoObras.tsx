@@ -109,6 +109,9 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const [isAlocacaoModalOpen, setIsAlocacaoModalOpen] = useState(false);
     const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null);
     const [alertaValidacao, setAlertaValidacao] = useState<{ tipo: 'erro' | 'info'; mensagem: string } | null>(null);
+    const [modalVisualizarMembros, setModalVisualizarMembros] = useState(false);
+    const [equipeParaVisualizar, setEquipeParaVisualizar] = useState<Equipe | null>(null);
+    const [loadingMembros, setLoadingMembros] = useState(false);
     const [formState, setFormState] = useState({
         nome: '',
         tipo: '' as '' | 'MONTAGEM' | 'CAMPO' | 'DISTINTA',
@@ -139,6 +142,92 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             console.error('❌ Erro ao carregar equipes:', err);
             setError('Erro ao carregar equipes. Verifique sua conexão.');
             setEquipes([]);
+        }
+    };
+
+    // Carregar equipe completa com membros do backend
+    const loadEquipeComMembros = async (equipeId: string) => {
+        try {
+            setLoadingMembros(true);
+            console.log('🔍 Carregando equipe completa do backend:', equipeId);
+            
+            // Tentar primeiro com o endpoint de obras
+            let response = await axiosApiService.get<any>(`${ENDPOINTS.OBRAS.EQUIPES}/${equipeId}`);
+            
+            // Se não funcionar, tentar com o endpoint padrão
+            if (!response.success) {
+                response = await axiosApiService.get<any>(`/api/equipes/${equipeId}`);
+            }
+            
+            if (response.success && response.data) {
+                const equipe = response.data;
+                console.log('📥 Equipe carregada (raw):', equipe);
+                
+                // Se os membros são apenas IDs (strings), buscar dados completos dos usuários
+                if (equipe.membros && Array.isArray(equipe.membros)) {
+                    const membrosIds = equipe.membros.map((m: any) => {
+                        return typeof m === 'string' ? m : m.id;
+                    }).filter((id: string) => id);
+                    
+                    if (membrosIds.length > 0) {
+                        console.log('🔍 Buscando dados completos dos membros:', membrosIds);
+                        
+                        // Buscar dados dos usuários
+                        const usuariosResponse = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
+                        
+                        if (usuariosResponse.success && usuariosResponse.data) {
+                            const usuariosArray = Array.isArray(usuariosResponse.data) ? usuariosResponse.data : [];
+                            const membrosCompletos = membrosIds.map((membroId: string) => {
+                                const usuario = usuariosArray.find((u: any) => u.id === membroId);
+                                if (usuario) {
+                                    return {
+                                        id: usuario.id,
+                                        nome: usuario.name || 'Sem nome',
+                                        email: usuario.email || 'Sem email',
+                                        role: usuario.role || 'Eletricista',
+                                        funcao: usuario.role || 'Eletricista'
+                                    };
+                                } else {
+                                    // Se não encontrar o usuário, retornar um objeto básico
+                                    return {
+                                        id: membroId,
+                                        nome: 'Usuário não encontrado',
+                                        email: 'Sem email',
+                                        role: 'Eletricista',
+                                        funcao: 'Eletricista'
+                                    };
+                                }
+                            });
+                            
+                            equipe.membros = membrosCompletos;
+                            console.log('✅ Membros completos carregados:', membrosCompletos);
+                        } else {
+                            console.warn('⚠️ Não foi possível carregar dados dos usuários');
+                            // Se não conseguir carregar, criar objetos básicos
+                            equipe.membros = membrosIds.map((id: string) => ({
+                                id,
+                                nome: 'Carregando...',
+                                email: 'Sem email',
+                                role: 'Eletricista',
+                                funcao: 'Eletricista'
+                            }));
+                        }
+                    } else {
+                        equipe.membros = [];
+                    }
+                }
+                
+                console.log('✅ Equipe carregada com membros completos:', equipe);
+                return equipe as Equipe;
+            } else {
+                console.warn('⚠️ Resposta sem dados da equipe:', response);
+                return null;
+            }
+        } catch (err) {
+            console.error('❌ Erro ao carregar equipe:', err);
+            return null;
+        } finally {
+            setLoadingMembros(false);
         }
     };
 
@@ -232,33 +321,71 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             const response = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
             
             if (response.success && response.data) {
-                // Filtrar apenas eletricistas
+                // Filtrar apenas eletricistas ativos
                 const usuariosArray = Array.isArray(response.data) ? response.data : [];
-                const eletricistasFiltered = usuariosArray.filter((u: any) => 
-                    u.role?.toLowerCase() === 'eletricista'
-                );
+                const eletricistasFiltered = usuariosArray
+                    .filter((u: any) => 
+                        u.role?.toLowerCase() === 'eletricista' && 
+                        (u.active !== false) // Apenas usuários ativos
+                    )
+                    .map((u: any) => ({
+                        id: u.id,
+                        name: u.name || 'Sem nome',
+                        email: u.email || 'Sem email',
+                        role: u.role,
+                        active: u.active
+                    }));
+                
+                console.log('✅ Eletricistas carregados:', eletricistasFiltered);
                 setEletricistas(eletricistasFiltered);
             } else {
+                console.warn('⚠️ Resposta sem dados de eletricistas:', response);
                 setEletricistas([]);
             }
         } catch (err) {
-            console.error('Erro ao carregar eletricistas:', err);
+            console.error('❌ Erro ao carregar eletricistas:', err);
             setEletricistas([]);
         } finally {
             setLoadingEletricistas(false);
         }
     };
 
-    const handleOpenModal = (equipe: Equipe | null = null) => {
+    const handleOpenModal = async (equipe: Equipe | null = null) => {
+        console.log('🔍 Abrindo modal de equipe:', equipe ? 'EDITAR' : 'CRIAR', equipe);
         if (equipe) {
-            setEquipeToEdit(equipe);
-            setFormState({
-                nome: equipe.nome,
-                tipo: equipe.tipo,
-                membrosIds: equipe.membros.map(m => m.id),
-                ativa: equipe.ativa
-            });
+            // Carregar equipe completa com membros antes de abrir o modal
+            const equipeCompleta = await loadEquipeComMembros(equipe.id);
+            if (equipeCompleta) {
+                // Extrair IDs dos membros (pode ser array de objetos ou strings)
+                const membrosIds = equipeCompleta.membros.map(m => {
+                    return typeof m === 'string' ? m : m.id;
+                }).filter((id: string) => id);
+                
+                console.log('✅ Membros IDs extraídos:', membrosIds);
+                
+                setEquipeToEdit(equipeCompleta);
+                setFormState({
+                    nome: equipeCompleta.nome,
+                    tipo: equipeCompleta.tipo,
+                    membrosIds: membrosIds,
+                    ativa: equipeCompleta.ativa
+                });
+            } else {
+                // Fallback: usar equipe da lista se não conseguir recarregar
+                const membrosIds = equipe.membros.map(m => {
+                    return typeof m === 'string' ? m : m.id;
+                }).filter((id: string) => id);
+                
+                setEquipeToEdit(equipe);
+                setFormState({
+                    nome: equipe.nome,
+                    tipo: equipe.tipo,
+                    membrosIds: membrosIds,
+                    ativa: equipe.ativa
+                });
+            }
         } else {
+            // Limpar completamente o estado para criar nova equipe
             setEquipeToEdit(null);
             setFormState({
                 nome: '',
@@ -267,14 +394,24 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 ativa: true
             });
         }
-        loadEletricistas(); // Carregar eletricistas ao abrir o modal
+        setAlertaValidacao(null); // Limpar alertas anteriores
+        // Recarregar equipes e eletricistas para ter dados atualizados
+        await Promise.all([loadEquipes(), loadEletricistas()]);
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
+        console.log('🔒 Fechando modal de equipe');
         setIsModalOpen(false);
         setEquipeToEdit(null);
         setAlertaValidacao(null);
+        // Limpar o formulário ao fechar
+        setFormState({
+            nome: '',
+            tipo: '' as '' | 'MONTAGEM' | 'CAMPO' | 'DISTINTA',
+            membrosIds: [],
+            ativa: true
+        });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -296,6 +433,36 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             return;
         }
         
+        // Verificar se o nome já existe (apenas ao criar, não ao editar)
+        if (!equipeToEdit) {
+            const nomeJaExiste = equipes.some(e => 
+                e.nome.trim().toLowerCase() === formState.nome.trim().toLowerCase() && e.ativa
+            );
+            if (nomeJaExiste) {
+                setAlertaValidacao({ 
+                    tipo: 'erro', 
+                    mensagem: `Já existe uma equipe ativa com o nome "${formState.nome}". Por favor, escolha outro nome ou use o botão "✨ Sugerir" para gerar um nome único.` 
+                });
+                return;
+            }
+        } else {
+            // Ao editar, verificar se o nome mudou e se já existe outra equipe com esse nome
+            if (formState.nome.trim().toLowerCase() !== equipeToEdit.nome.trim().toLowerCase()) {
+                const nomeJaExiste = equipes.some(e => 
+                    e.id !== equipeToEdit.id &&
+                    e.nome.trim().toLowerCase() === formState.nome.trim().toLowerCase() && 
+                    e.ativa
+                );
+                if (nomeJaExiste) {
+                    setAlertaValidacao({ 
+                        tipo: 'erro', 
+                        mensagem: `Já existe outra equipe ativa com o nome "${formState.nome}". Por favor, escolha outro nome.` 
+                    });
+                    return;
+                }
+            }
+        }
+        
         // Limpar alerta se tudo estiver OK
         setAlertaValidacao(null);
         
@@ -313,26 +480,33 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 const response = await axiosApiService.put(`${ENDPOINTS.OBRAS.EQUIPES}/${equipeToEdit.id}`, equipeData);
                 console.log('📥 Resposta:', response);
                 if (response.success) {
-                    await loadEquipes();
+                    // Recarregar equipes e eletricistas para atualizar a lista de disponíveis
+                    await Promise.all([loadEquipes(), loadEletricistas()]);
                     handleCloseModal();
                     toast.success('✅ Equipe atualizada com sucesso!');
                 } else {
                     toast.error('❌ Erro ao atualizar equipe: ' + (response.error || 'Erro desconhecido'));
                 }
             } else {
+                console.log('📤 Criando NOVA equipe:', equipeData);
+                console.log('🔍 equipeToEdit:', equipeToEdit);
                 const response = await axiosApiService.post(ENDPOINTS.OBRAS.EQUIPES, equipeData);
                 console.log('📥 Resposta:', response);
                 if (response.success) {
-                    await loadEquipes();
+                    // Recarregar equipes e eletricistas para atualizar a lista de disponíveis
+                    await Promise.all([loadEquipes(), loadEletricistas()]);
                     handleCloseModal();
                     toast.success('✅ Equipe criada com sucesso!');
                 } else {
-                    toast.error('❌ Erro ao criar equipe: ' + (response.error || 'Erro desconhecido'));
+                    const errorMsg = response.error || 'Erro desconhecido';
+                    setAlertaValidacao({ tipo: 'erro', mensagem: errorMsg });
+                    toast.error('❌ Erro ao criar equipe: ' + errorMsg);
                 }
             }
         } catch (err: any) {
             console.error('Erro ao salvar equipe:', err);
-            const errorMessage = err?.response?.data?.error || err?.message || 'Erro desconhecido';
+            const errorMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Erro desconhecido';
+            setAlertaValidacao({ tipo: 'erro', mensagem: errorMessage });
             toast.error('❌ Erro ao salvar equipe: ' + errorMessage);
         }
     };
@@ -363,24 +537,30 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
 
     // Função para sugerir nome automático baseado no tipo
     const sugerirNomeAutomatico = () => {
-        const tipo = formState.tipo || 'CAMPO';
-        const prefixo = tipo === 'MONTAGEM' ? 'Equipe Montagem' : 
-                       tipo === 'CAMPO' ? 'Equipe Campo' : 
-                       'Equipe Distinta';
+        const tipo = formState.tipo;
+        if (!tipo) {
+            toast.error('Por favor, selecione o tipo da equipe primeiro');
+            return;
+        }
         
-        // Verificar quais números já existem
-        const equipesDoTipo = equipes.filter(e => 
-            e.nome.startsWith(prefixo)
-        );
+        const prefixos: Record<string, string> = {
+            'MONTAGEM': 'Equipe Montagem',
+            'CAMPO': 'Equipe Campo',
+            'DISTINTA': 'Equipe Distinta'
+        };
         
+        const prefixo = prefixos[tipo] || 'Equipe';
         let numero = 1;
-        let nomeDisponivel = '';
+        let nomeDisponivel = `${prefixo} ${numero}`;
         
-        while (true) {
-            nomeDisponivel = `${prefixo} ${numero}`;
-            const existe = equipesDoTipo.some(e => e.nome === nomeDisponivel);
-            if (!existe) break;
+        // Verificar se o nome já existe (ignorar a equipe atual se estiver editando)
+        while (equipes.some(e => {
+            const nomeIgual = e.nome.trim().toLowerCase() === nomeDisponivel.trim().toLowerCase();
+            const naoEhEquipeAtual = equipeToEdit ? e.id !== equipeToEdit.id : true;
+            return nomeIgual && naoEhEquipeAtual && e.ativa;
+        })) {
             numero++;
+            nomeDisponivel = `${prefixo} ${numero}`;
         }
         
         setFormState(prev => ({ ...prev, nome: nomeDisponivel }));
@@ -392,14 +572,24 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         // Se estiver editando uma equipe, ignorar os membros dessa equipe atual
         const equipeAtualId = equipeToEdit?.id;
         
+        // Se o eletricista está na equipe atual sendo editada, não está em outra equipe
+        if (equipeAtualId && formState.membrosIds.includes(eletricistaId)) {
+            return { emOutraEquipe: false };
+        }
+        
         for (const equipe of equipes) {
             // Ignorar a equipe atual se estiver editando
             if (equipeAtualId && equipe.id === equipeAtualId) {
                 continue;
             }
             
-            // Verificar se o eletricista está nesta equipe
-            const estaNaEquipe = equipe.membros?.some(membro => membro.id === eletricistaId);
+            // Verificar se o eletricista está nesta equipe (verificar pelos membros)
+            const estaNaEquipe = equipe.membros?.some(membro => {
+                // Membros podem ser objetos com id ou apenas strings (IDs)
+                const membroId = typeof membro === 'string' ? membro : membro.id;
+                return membroId === eletricistaId;
+            });
+            
             if (estaNaEquipe && equipe.ativa) {
                 return { emOutraEquipe: true, nomeEquipe: equipe.nome };
             }
@@ -713,6 +903,27 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                             </div>
                                             
                                             <div className="flex gap-2 pt-4 border-t border-gray-100">
+                                                <button
+                                                    onClick={async () => {
+                                                        // Recarregar equipe com membros atualizados do backend
+                                                        const equipeCompleta = await loadEquipeComMembros(equipe.id);
+                                                        if (equipeCompleta) {
+                                                            setEquipeParaVisualizar(equipeCompleta);
+                                                            setModalVisualizarMembros(true);
+                                                        } else {
+                                                            // Fallback: usar equipe da lista se não conseguir recarregar
+                                                            setEquipeParaVisualizar(equipe);
+                                                            setModalVisualizarMembros(true);
+                                                        }
+                                                    }}
+                                                    className="flex-1 text-purple-600 hover:text-purple-700 transition-colors text-sm font-semibold py-2 px-3 rounded-lg hover:bg-purple-50 flex items-center justify-center gap-1"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    Ver Membros
+                                                </button>
                                                 <button
                                                     onClick={() => handleOpenModal(equipe)}
                                                     className="flex-1 text-blue-600 hover:text-blue-700 transition-colors text-sm font-semibold py-2 px-3 rounded-lg hover:bg-blue-50"
@@ -1211,6 +1422,106 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 </div>
             )}
 
+        {/* Modal de Visualizar Membros da Equipe */}
+        {modalVisualizarMembros && equipeParaVisualizar && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong max-w-2xl w-full animate-slide-in-up">
+                    <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-dark-border bg-gradient-to-r from-purple-600 to-indigo-600">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">{equipeParaVisualizar.nome}</h2>
+                            <p className="text-purple-100 text-sm mt-1">Membros da Equipe • Tipo: {equipeParaVisualizar.tipo}</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setModalVisualizarMembros(false);
+                                setEquipeParaVisualizar(null);
+                            }}
+                            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div className="p-6">
+                        {loadingMembros ? (
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                                    <UsersIcon className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <p className="text-gray-500 font-medium">Carregando membros...</p>
+                            </div>
+                        ) : equipeParaVisualizar.membros && equipeParaVisualizar.membros.length > 0 ? (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                        👥 {equipeParaVisualizar.membros.length} {equipeParaVisualizar.membros.length === 1 ? 'Membro' : 'Membros'}
+                                    </h3>
+                                    <span className={`px-3 py-1 text-xs font-bold rounded-lg shadow-sm ${
+                                        equipeParaVisualizar.ativa 
+                                            ? 'bg-green-100 text-green-800 ring-1 ring-green-200' 
+                                            : 'bg-gray-100 text-gray-800 ring-1 ring-gray-200'
+                                    }`}>
+                                        {equipeParaVisualizar.ativa ? 'Ativa' : 'Inativa'}
+                                    </span>
+                                </div>
+
+                                {equipeParaVisualizar.membros.map((membro, index) => (
+                                    <div 
+                                        key={membro.id || `membro-${index}`}
+                                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-xl hover:shadow-md transition-all"
+                                    >
+                                        <div className="flex items-center justify-center w-10 h-10 bg-purple-600 text-white rounded-full font-bold text-lg">
+                                            {index + 1}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-gray-900 dark:text-white">{membro.nome}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{membro.email || 'Sem email'}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 rounded-lg text-xs font-semibold">
+                                                {(membro as any).role || membro.funcao || 'Eletricista'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <UsersIcon className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <p className="text-gray-500 font-medium">Nenhum membro nesta equipe</p>
+                                <p className="text-sm text-gray-400 mt-2">Adicione eletricistas editando a equipe</p>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-100 dark:border-dark-border">
+                            <button
+                                onClick={() => {
+                                    setModalVisualizarMembros(false);
+                                    setEquipeParaVisualizar(null);
+                                }}
+                                className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setModalVisualizarMembros(false);
+                                    handleOpenModal(equipeParaVisualizar);
+                                }}
+                                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
+                            >
+                                Editar Equipe
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Modal de Formação de Equipes com Pessoas Disponíveis */}
         {isEquipeManagerOpen && (
             <ModalEquipesDeObra isOpen={isEquipeManagerOpen} onClose={() => setIsEquipeManagerOpen(false)} />
@@ -1317,74 +1628,120 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                         <p className="text-xs mt-1">Cadastre eletricistas em Configurações → Usuários</p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
-                                        {eletricistas.map((eletricista) => {
-                                            const isSelected = formState.membrosIds.includes(eletricista.id);
-                                            const { emOutraEquipe, nomeEquipe } = isEletricistaEmOutraEquipe(eletricista.id);
-                                            const isDisabled = emOutraEquipe && !isSelected;
-                                            
-                                            return (
-                                                <button
-                                                    key={eletricista.id}
-                                                    type="button"
-                                                    onClick={() => isSelected ? handleRemoveMembroId(eletricista.id) : handleAddEletricista(eletricista.id)}
-                                                    disabled={isDisabled}
-                                                    className={`p-3 rounded-xl border-2 transition-all text-left ${
-                                                        isSelected 
-                                                            ? 'border-blue-500 bg-blue-50' 
-                                                            : isDisabled
-                                                            ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60'
-                                                            : 'border-gray-200 bg-white hover:border-blue-300'
-                                                    }`}
-                                                    title={isDisabled ? `Este eletricista já faz parte da equipe "${nomeEquipe}"` : ''}
-                                                >
-                                                    <div className="flex items-start gap-2">
-                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                                            isSelected ? 'bg-blue-600 border-blue-600' : isDisabled ? 'border-gray-300 bg-gray-200' : 'border-gray-300'
-                                                        }`}>
-                                                            {isSelected && (
-                                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    <div className="space-y-2">
+                                        {/* Informação sobre selecionados */}
+                                        <div className="flex items-center justify-between text-sm px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                                            <span className="text-blue-800 font-medium">
+                                                Selecionados: {formState.membrosIds.length} eletricista(s)
+                                            </span>
+                                        </div>
+                                        
+                                        {/* Lista de eletricistas selecionados (se houver) */}
+                                        {formState.membrosIds.length > 0 && (
+                                            <div className="mb-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                                                <p className="text-xs font-semibold text-green-800 mb-2">Eletricistas Selecionados:</p>
+                                                <div className="space-y-1">
+                                                    {formState.membrosIds.map(membroId => {
+                                                        const eletricista = eletricistas.find(e => e.id === membroId);
+                                                        return (
+                                                            <div key={membroId} className="flex items-center gap-2 text-sm">
+                                                                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                                 </svg>
-                                                            )}
-                                                            {isDisabled && (
-                                                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                </svg>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className={`text-sm font-semibold ${isSelected ? 'text-blue-900' : isDisabled ? 'text-gray-500' : 'text-gray-900'}`}>
-                                                                    {eletricista.name}
-                                                                </p>
+                                                                <span className="text-green-800 font-medium">
+                                                                    {eletricista ? `${eletricista.name} (${eletricista.email})` : `ID: ${membroId}`}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Lista de eletricistas */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
+                                            {eletricistas.map((eletricista) => {
+                                                const isSelected = formState.membrosIds.includes(eletricista.id);
+                                                const { emOutraEquipe, nomeEquipe } = isEletricistaEmOutraEquipe(eletricista.id);
+                                                // Se estiver editando, permitir selecionar membros atuais mesmo se estiverem em outra equipe
+                                                // Se não estiver editando, desabilitar eletricistas que já estão em equipes ativas
+                                                const isDisabled = emOutraEquipe && !isSelected && !equipeToEdit;
+                                                
+                                                return (
+                                                    <button
+                                                        key={eletricista.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                handleRemoveMembroId(eletricista.id);
+                                                            } else if (!isDisabled) {
+                                                                handleAddEletricista(eletricista.id);
+                                                            }
+                                                        }}
+                                                        disabled={isDisabled}
+                                                        className={`p-3 rounded-xl border-2 transition-all text-left ${
+                                                            isSelected 
+                                                                ? 'border-blue-500 bg-blue-50 hover:bg-blue-100' 
+                                                                : isDisabled
+                                                                ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60'
+                                                                : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                                                        }`}
+                                                        title={isDisabled ? `Este eletricista já faz parte da equipe "${nomeEquipe}"` : isSelected ? 'Clique para remover' : 'Clique para adicionar'}
+                                                    >
+                                                        <div className="flex items-start gap-2">
+                                                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                                                                isSelected ? 'bg-blue-600 border-blue-600' : isDisabled ? 'border-gray-300 bg-gray-200' : 'border-gray-300 bg-white'
+                                                            }`}>
+                                                                {isSelected && (
+                                                                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                )}
                                                                 {isDisabled && (
-                                                                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
-                                                                        Em outra equipe
-                                                                    </span>
+                                                                    <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                    </svg>
                                                                 )}
                                                             </div>
-                                                            <p className={`text-xs ${isSelected ? 'text-blue-700' : isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                                {eletricista.email}
-                                                            </p>
-                                                            {isDisabled && nomeEquipe && (
-                                                                <p className="text-xs text-orange-600 mt-1 font-medium">
-                                                                    Equipe: {nomeEquipe}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <p className={`text-sm font-semibold ${isSelected ? 'text-blue-900' : isDisabled ? 'text-gray-500' : 'text-gray-900'}`}>
+                                                                        {eletricista.name || 'Sem nome'}
+                                                                    </p>
+                                                                    {isDisabled && (
+                                                                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
+                                                                            Em outra equipe
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className={`text-xs mt-1 ${isSelected ? 'text-blue-700' : isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                                    {eletricista.email || 'Sem email'}
                                                                 </p>
-                                                            )}
+                                                                {isDisabled && nomeEquipe && (
+                                                                    <p className="text-xs text-orange-600 mt-1 font-medium">
+                                                                        Equipe: {nomeEquipe}
+                                                                    </p>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        
+                                        {/* Mensagem se não houver eletricistas disponíveis */}
+                                        {eletricistas.filter(e => {
+                                            const { emOutraEquipe } = isEletricistaEmOutraEquipe(e.id);
+                                            // Ao editar, mostrar todos; ao criar, mostrar apenas disponíveis
+                                            return !emOutraEquipe || equipeToEdit;
+                                        }).length === 0 && !loadingEletricistas && (
+                                            <div className="text-center py-4 text-sm text-gray-500 bg-yellow-50 rounded-lg border border-yellow-200">
+                                                <p>⚠️ Todos os eletricistas já estão em equipes ativas.</p>
+                                                <p className="text-xs mt-1">Desative uma equipe ou remova membros para liberar eletricistas.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
-                                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>Selecionados: <strong>{formState.membrosIds.length}</strong> eletricista(s)</span>
-                                </div>
                             </div>
 
                             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">

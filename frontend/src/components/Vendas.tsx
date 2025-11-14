@@ -205,12 +205,9 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
 
     const formasPagamento = [
         'À vista',
-        '2x sem juros',
-        '3x sem juros',
-        '6x com juros',
-        '12x com juros',
-        'Financiamento',
-        'Cartão de crédito'
+        'Cartão de crédito',
+        'Boleto integral',
+        'Boleto parcelado'
     ];
 
     const handleSubmitVenda = async (e: React.FormEvent) => {
@@ -266,13 +263,30 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 const errorMsg = response.error || 'Erro ao registrar venda';
                 console.warn('⚠️ Erro ao realizar venda:', errorMsg);
                 setError(errorMsg);
+                
+                // Verificar se é erro de venda duplicada
+                if (errorMsg.includes('Já existe uma venda')) {
+                    toast.error('Venda Duplicada', {
+                        description: errorMsg,
+                        duration: 7000
+                    });
+                } else {
+                    toast.error(`❌ ${errorMsg}`);
+                }
+            }
+        } catch (err: any) {
+            console.error('❌ Erro crítico ao realizar venda:', err);
+            const errorMsg = err?.response?.data?.error || err?.message || 'Erro de conexão ao registrar venda';
+            setError(errorMsg);
+            
+            if (errorMsg.includes('Já existe uma venda')) {
+                toast.error('Venda Duplicada', {
+                    description: errorMsg,
+                    duration: 7000
+                });
+            } else {
                 toast.error(`❌ ${errorMsg}`);
             }
-        } catch (err) {
-            console.error('❌ Erro crítico ao realizar venda:', err);
-            const errorMsg = 'Erro de conexão ao registrar venda';
-            setError(errorMsg);
-            toast.error(`❌ ${errorMsg}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -565,7 +579,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                             {orcamentoSelecionado.items.map((item: any, index: number) => (
                                                 <div key={index} className="px-6 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50 transition-colors">
                                                     <div className="col-span-5">
-                                                        <p className="font-semibold text-gray-900">{item.nome || item.descricao || item.material?.nome || 'Item'}</p>
+                                                        <p className="font-semibold text-gray-900">{item.nome || item.descricao || item.material?.nome || item.material?.descricao || item.servicoNome || 'Material'}</p>
                                                         {item.descricao && item.nome && (
                                                             <p className="text-xs text-gray-500 mt-1">{item.descricao}</p>
                                                         )}
@@ -573,6 +587,13 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                                             <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
                                                                 SKU: {item.sku}
                                                             </span>
+                                                        )}
+                                                        {/* Flag de Banco Frio */}
+                                                        {(item.tipo === 'COTACAO' || item.cotacaoId) && (
+                                                            <div className="mt-1 inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">
+                                                                <span>❄️</span>
+                                                                <span>Banco Frio</span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                     <div className="col-span-2 text-center">
@@ -585,12 +606,12 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="col-span-2 text-right text-gray-900">
-                                                        R$ {(item.valorUnitario || item.precoUnitario || item.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    <div className="col-span-2 text-right text-gray-900 font-semibold">
+                                                        R$ {(item.precoUnit || item.valorUnitario || item.precoUnitario || item.preco || item.custoUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </div>
                                                     <div className="col-span-3 text-right">
                                                         <span className="font-bold text-green-700 text-lg">
-                                                            R$ {((item.quantidade || item.quantity || 0) * (item.valorUnitario || item.precoUnitario || item.preco || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            R$ {(item.subtotal || ((item.quantidade || item.quantity || 0) * (item.precoUnit || item.valorUnitario || item.precoUnitario || item.preco || item.custoUnit || 0))).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
                                                 </div>
