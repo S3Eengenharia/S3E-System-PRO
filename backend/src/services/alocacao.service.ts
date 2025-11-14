@@ -124,6 +124,29 @@ export class AlocacaoService {
    * Atualiza uma equipe
    */
   async atualizarEquipe(id: string, data: Partial<CriarEquipeDTO>) {
+    // Verificar se a equipe existe
+    const equipeExistente = await prisma.equipe.findUnique({
+      where: { id }
+    });
+
+    if (!equipeExistente) {
+      throw new Error('Equipe não encontrada');
+    }
+
+    // Se estiver atualizando o nome, verificar se já existe outra equipe com o mesmo nome
+    if (data.nome && data.nome !== equipeExistente.nome) {
+      const equipeComMesmoNome = await prisma.equipe.findFirst({
+        where: {
+          nome: data.nome,
+          id: { not: id } // Excluir a própria equipe da verificação
+        }
+      });
+
+      if (equipeComMesmoNome) {
+        throw new Error(`Já existe uma equipe com o nome "${data.nome}". Por favor, escolha outro nome.`);
+      }
+    }
+
     // Se estiver atualizando membros, validar
     if (data.membros && Array.isArray(data.membros)) {
       // Filtrar valores nulos, undefined e strings vazias

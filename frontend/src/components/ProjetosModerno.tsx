@@ -9,6 +9,7 @@ import { etapasAdminService, type EtapaAdmin } from '../services/etapasAdminServ
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { AuthContext } from '../contexts/AuthContext';
+import ViewToggle from './ui/ViewToggle';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -126,6 +127,7 @@ interface Usuario {
     nome: string;
     email: string;
     funcao: string;
+    role?: string;
 }
 
 interface ProjetosProps {
@@ -159,6 +161,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     const [statusFilter, setStatusFilter] = useState<string>('Todos');
     const [responsavelFilter, setResponsavelFilter] = useState<string>('Todos');
     const [mostrarCancelados, setMostrarCancelados] = useState(false);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     // Modais
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -508,8 +511,6 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 toast.success('⚠️ Projeto excluído permanentemente!', {
                     description: `"${projetoToDelete.titulo}" foi removido do banco de dados.`
                 });
-                
-                console.log('📊 Auditoria:', response.data?.audit);
             } else {
                 // Soft delete (marca como CANCELADO)
                 await projetosService.desativar(projetoToDelete.id);
@@ -663,6 +664,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
 
     // Gestão de Equipe/Usuários
     const handleOpenTeamModal = () => {
+        console.log('👥 Abrindo modal de equipe. Usuários disponíveis:', usuarios.length);
         setTeamManagementMode('view');
         setIsTeamModalOpen(true);
     };
@@ -719,11 +721,27 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
         }
     };
 
-    const calcularProgresso = (projeto: Projeto): number => {
-        // Calcular baseado nas etapas
-        if (etapas.length === 0) return 0;
-        const concluidas = etapas.filter(e => e.status === 'Concluído').length;
-        return Math.round((concluidas / etapas.length) * 100);
+    const calcularProgressoProjeto = (projeto: Projeto): number => {
+        // Este é um cálculo simplificado para os cards
+        // O cálculo real completo é feito no modal quando o projeto é aberto
+        // Aqui usamos uma estimativa baseada no status do projeto
+        
+        switch (projeto.status) {
+            case 'PROPOSTA':
+                return 10; // Proposta inicial
+            case 'VALIDADO':
+                return 25; // Validado tecnicamente
+            case 'APROVADO':
+                return 40; // Aprovado pelo cliente
+            case 'EXECUCAO':
+                return 60; // Em execução (valor médio, será calculado precisamente no modal)
+            case 'CONCLUIDO':
+                return 100; // Concluído
+            case 'CANCELADO':
+                return 0; // Cancelado
+            default:
+                return 0;
+        }
     };
 
     // ==================== RENDER ====================
@@ -822,6 +840,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                         Exibindo <span className="font-bold text-gray-900">{filteredProjetos.length}</span> de <span className="font-bold text-gray-900">{projetos.length}</span> projetos
                     </p>
                     <div className="flex items-center gap-3">
+                        <ViewToggle view={viewMode} onViewChange={setViewMode} />
                         {/* Toggle Mostrar Cancelados */}
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -865,10 +884,11 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                         </button>
                     )}
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredProjetos.map((projeto) => {
-                        const progresso = Math.random() * 100; // Pode ser calculado baseado nas etapas
+                        // Calcular progresso real do projeto (mesmo cálculo do modal)
+                        const progresso = calcularProgressoProjeto(projeto);
                         
                         return (
                             <div key={projeto.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all duration-200 hover:border-blue-300 relative group">
@@ -964,6 +984,55 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                             </div>
                         );
                     })}
+                </div>
+            ): (
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-soft">
+                    <table className="w-full">
+                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Projeto</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Cliente</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {filteredProjetos.map((projeto) => (
+                                <tr key={projeto.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <p className="font-semibold text-gray-900">{projeto.titulo}</p>
+                                        <p className="text-xs text-gray-500">{projeto.descricao || 'Sem descrição'}</p>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <p className="text-sm text-gray-700">{projeto.cliente?.nome || 'N/A'}</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <p className="text-lg font-bold text-blue-700">
+                                            R$ {(projeto.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <p className="text-sm text-gray-700">
+                                            {new Date(projeto.dataInicio).toLocaleDateString('pt-BR')}
+                                        </p>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`px-3 py-1 text-xs font-bold rounded-lg ${getStatusColor(projeto.status)}`}>
+                                            {projeto.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            onClick={() => handleOpenViewModal(projeto)}
+                                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                                        >
+                                            <EyeIcon className="w-4 h-4 inline mr-2" />
+                                            Visualizar
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
@@ -1135,7 +1204,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                     </div>
                 </div>
             )}
-
+            
             {/* MODAL DE VISUALIZAÇÃO DE PROJETO (Hub Completo) */}
             {isViewModalOpen && projetoToView && (
                 <ModalVizualizacaoProjeto
@@ -1143,6 +1212,8 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                     isOpen={isViewModalOpen}
                     onClose={() => setIsViewModalOpen(false)}
                     onRefresh={loadData}
+                    onViewBudget={onViewBudget}
+                    onNavigate={onNavigate}
                     initialTab={
                         viewModalActiveTab === 'geral' ? 'Visão Geral' :
                         viewModalActiveTab === 'materiais' ? 'Materiais' :
@@ -1151,600 +1222,6 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                     }
                 />
             )}
-            {false && (<>
-            {/* MODAL DE TAREFA/ETAPA */}
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                    <h2 className="text-3xl font-bold text-gray-900 mb-2">{projetoToView.titulo}</h2>
-                                    <div className="flex items-center gap-4 flex-wrap">
-                                        <span className={`px-3 py-1.5 text-sm font-bold rounded-lg ${getStatusColor(projetoToView.status)}`}>
-                                            {projetoToView.status}
-                                        </span>
-                                        <span className="text-sm text-gray-600">
-                                            Cliente: <strong>{projetoToView.cliente?.nome}</strong>
-                                        </span>
-                                        <span className="text-sm text-gray-600">
-                                            Tipo: <strong>{projetoToView.tipo}</strong>
-                                        </span>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setIsViewModalOpen(false)}
-                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-                                >
-                                    <XMarkIcon className="w-6 h-6" />
-                                </button>
-                            </div>
-
-                            {/* Tabs */}
-                            <div className="mt-6 border-b border-gray-200">
-                                <nav className="-mb-px flex space-x-8">
-                                    {(['geral', 'etapasAdmin', 'materiais', 'etapas', 'qualidade'] as ViewModalTab[]).map((tab) => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setViewModalActiveTab(tab)}
-                                            className={`py-3 px-1 border-b-2 font-semibold text-sm transition-colors capitalize ${
-                                                viewModalActiveTab === tab
-                                                    ? 'border-blue-600 text-blue-600'
-                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            {tab === 'geral' && '📋 Visão Geral'}
-                                            {tab === 'etapasAdmin' && '⚡ Etapas Admin'}
-                                            {tab === 'materiais' && '📦 Materiais'}
-                                            {tab === 'etapas' && '📊 Etapas (Kanban)'}
-                                            {tab === 'qualidade' && '✅ Qualidade'}
-                                        </button>
-                                    ))}
-                                </nav>
-                            </div>
-                        {/* </div> */}
-
-                        {/* Conteúdo das Tabs */}
-                        <div className="p-6">
-                            {/* ABA: VISÃO GERAL */}
-                            {viewModalActiveTab === 'geral' && (
-                                <div className="space-y-6">
-                                    {/* Informações Principais */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                                            <h3 className="font-bold text-gray-900 mb-4">Informações do Projeto</h3>
-                                            <dl className="space-y-3">
-                                                <div>
-                                                    <dt className="text-xs text-gray-500 font-medium">Descrição</dt>
-                                                    <dd className="text-sm text-gray-900 mt-1">{projetoToView.descricao}</dd>
-                                                </div>
-                                                <div>
-                                                    <dt className="text-xs text-gray-500 font-medium">Tipo</dt>
-                                                    <dd className="text-sm text-gray-900 mt-1">{projetoToView.tipo}</dd>
-                                                </div>
-                                                <div>
-                                                    <dt className="text-xs text-gray-500 font-medium">Responsável</dt>
-                                                    <dd className="text-sm text-gray-900 mt-1">
-                                                        {projetoToView?.responsavel?.nome || 'N/A'}
-                                                    </dd>
-                                                </div>
-                                                {projetoToView.orcamentoId && (
-                                                    <div>
-                                                        <dt className="text-xs text-gray-500 font-medium">Orçamento</dt>
-                                                        <dd className="text-sm mt-1">
-                                                            <button
-                                                                onClick={() => onViewBudget(projetoToView.orcamentoId!)}
-                                                                className="text-blue-600 hover:text-blue-700 font-medium"
-                                                            >
-                                                                Ver Orçamento →
-                                                            </button>
-                                                        </dd>
-                                                    </div>
-                                                )}
-                                            </dl>
-                                        </div>
-
-                                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                                            <h3 className="font-bold text-gray-900 mb-4">Cronograma</h3>
-                                            <dl className="space-y-3">
-                                                <div>
-                                                    <dt className="text-xs text-gray-500 font-medium">Data de Início</dt>
-                                                    <dd className="text-sm text-gray-900 mt-1">
-                                                        {new Date(projetoToView.dataInicio).toLocaleDateString('pt-BR')}
-                                                    </dd>
-                                                </div>
-                                                <div>
-                                                    <dt className="text-xs text-gray-500 font-medium">Previsão de Término</dt>
-                                                    <dd className="text-sm text-gray-900 mt-1">
-                                                        {new Date(projetoToView.dataPrevisao).toLocaleDateString('pt-BR')}
-                                                    </dd>
-                                                </div>
-                                                {projetoToView.dataConclusao && (
-                                                    <div>
-                                                        <dt className="text-xs text-gray-500 font-medium">Data de Conclusão</dt>
-                                                        <dd className="text-sm text-gray-900 mt-1">
-                                                            {new Date(projetoToView.dataConclusao).toLocaleDateString('pt-BR')}
-                                                        </dd>
-                                                    </div>
-                                                )}
-                                            </dl>
-                                        </div>
-                                    </div>
-
-                                    {/* Anexos */}
-                                    <div className="bg-white border border-gray-200 rounded-xl p-6">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-gray-900">Anexos e Documentação</h3>
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                multiple
-                                                onChange={handleAttachmentUpload}
-                                                className="hidden"
-                                            />
-                                            <button
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold"
-                                            >
-                                                <PaperClipIcon className="w-4 h-4" />
-                                                Upload
-                                            </button>
-                                        </div>
-                                        
-                                        {anexos.length === 0 ? (
-                                            <div className="text-center py-8 text-gray-500 text-sm">
-                                                Nenhum anexo adicionado
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {anexos.map(anexo => (
-                                                    <div key={anexo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                            <DocumentIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-sm font-medium text-gray-900 truncate">{anexo.nome}</p>
-                                                                <p className="text-xs text-gray-500">
-                                                                    {(anexo.tamanho / 1024).toFixed(2)} KB
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleDeleteAnexo(anexo.id)}
-                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Ação: Gerar Obra */}
-                                    {projetoToView.status !== 'Concluído' && projetoToView.status !== 'Cancelado' && (
-                                        <div className="bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-6">
-                                            <h3 className="font-bold text-purple-900 mb-2">Iniciar Obra</h3>
-                                            <p className="text-sm text-purple-700 mb-4">
-                                                Este projeto está pronto para iniciar a obra? Isso mudará o status para "Em Execução" e criará uma nova entrada na gestão de obras.
-                                            </p>
-                                            <button
-                                                onClick={handleGerarObra}
-                                                className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all shadow-medium font-semibold"
-                                            >
-                                                🚀 Gerar Obra
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* ABA: ETAPAS ADMIN */}
-                            {viewModalActiveTab === 'etapasAdmin' && (
-                                <div className="space-y-6">
-                                    {/* Header com Resumo */}
-                                    {resumoEtapasAdmin && (
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                                                <p className="text-xs font-medium text-blue-600 mb-1">Total</p>
-                                                <p className="text-2xl font-bold text-blue-900">{resumoEtapasAdmin.total}</p>
-                                            </div>
-                                            <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-                                                <p className="text-xs font-medium text-green-600 mb-1">Concluídas</p>
-                                                <p className="text-2xl font-bold text-green-900">{resumoEtapasAdmin.concluidas}</p>
-                                            </div>
-                                            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                                                <p className="text-xs font-medium text-yellow-600 mb-1">No Prazo</p>
-                                                <p className="text-2xl font-bold text-yellow-900">{resumoEtapasAdmin.noPrazo}</p>
-                                            </div>
-                                            <div className="bg-red-50 p-4 rounded-xl border border-red-200">
-                                                <p className="text-xs font-medium text-red-600 mb-1">Atrasadas</p>
-                                                <p className="text-2xl font-bold text-red-900">{resumoEtapasAdmin.atrasadas}</p>
-                                            </div>
-                                            <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
-                                                <p className="text-xs font-medium text-purple-600 mb-1">Progresso</p>
-                                                <p className="text-2xl font-bold text-purple-900">{resumoEtapasAdmin.progresso}%</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Grid de Etapas */}
-                                    <div>
-                                        <h3 className="font-bold text-gray-900 mb-4 text-lg">Fluxo de Trabalho Administrativo</h3>
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                            {etapasAdmin.map((etapa, index) => (
-                                                <div key={etapa.id} className="relative">
-                                                    {/* Caixa da Etapa */}
-                                                    <button
-                                                        onClick={() => !etapa.concluida && handleConcluirEtapaAdmin(etapa)}
-                                                        disabled={etapa.concluida}
-                                                        className={`w-full aspect-square rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center p-4 ${getEtapaAdminColor(etapa)} ${
-                                                            !etapa.concluida ? 'cursor-pointer shadow-md hover:shadow-lg transform hover:scale-105' : 'cursor-default shadow-sm'
-                                                        }`}
-                                                    >
-                                                        {/* Número da Etapa */}
-                                                        <div className={`text-xs font-bold mb-2 px-2 py-1 rounded-full ${
-                                                            etapa.concluida ? 'bg-white/30' :
-                                                            etapa.atrasada ? 'bg-white/30' :
-                                                            'bg-white/20'
-                                                        }`}>
-                                                            #{index + 1}
-                                                        </div>
-                                                        
-                                                        {/* Nome da Etapa */}
-                                                        <p className="text-xs font-bold text-center leading-tight">
-                                                            {etapa.nome}
-                                                        </p>
-                                                        
-                                                        {/* Ícone de Status */}
-                                                        <div className="mt-2">
-                                                            {etapa.concluida ? (
-                                                                <CheckCircleIcon className="w-6 h-6" />
-                                                            ) : etapa.atrasada ? (
-                                                                <XCircleIcon className="w-6 h-6" />
-                                                            ) : (
-                                                                <span className="text-2xl">⏱️</span>
-                                                            )}
-                                                        </div>
-                                                    </button>
-
-                                                    {/* Info de Prazo */}
-                                                    <div className="mt-2 text-center">
-                                                        {etapa.concluida ? (
-                                                            <p className="text-xs text-green-600 font-semibold">
-                                                                ✓ Concluída
-                                                            </p>
-                                                        ) : etapa.atrasada ? (
-                                                            <div>
-                                                                <p className="text-xs text-red-600 font-semibold mb-1">
-                                                                    ⚠️ Atrasada
-                                                                </p>
-                                                                <button
-                                                                    onClick={() => handleOpenExtendPrazoModal(etapa)}
-                                                                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold underline"
-                                                                >
-                                                                    Estender Prazo
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <div>
-                                                                <p className="text-xs text-gray-600 font-medium">
-                                                                    {Math.abs(etapa.horasRestantes)}h restantes
-                                                                </p>
-                                                                <button
-                                                                    onClick={() => handleOpenExtendPrazoModal(etapa)}
-                                                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-1"
-                                                                >
-                                                                    Estender
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Motivação de Extensão (se houver) */}
-                                                    {etapa.motivoExtensao && (
-                                                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                                            <p className="text-xs text-yellow-800 font-medium">
-                                                                📝 {etapa.motivoExtensao}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Legenda */}
-                                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                                        <h4 className="font-bold text-gray-900 mb-4">Legenda</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 bg-gray-300 border-2 border-gray-400 rounded-lg"></div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-gray-900">Pendente</p>
-                                                    <p className="text-xs text-gray-600">Clique para concluir</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 bg-green-500 border-2 border-green-600 rounded-lg flex items-center justify-center">
-                                                    <CheckCircleIcon className="w-6 h-6 text-white" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-green-900">Concluída</p>
-                                                    <p className="text-xs text-green-700">No prazo</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 bg-red-500 border-2 border-red-600 rounded-lg flex items-center justify-center">
-                                                    <XCircleIcon className="w-6 h-6 text-white" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-red-900">Atrasada</p>
-                                                    <p className="text-xs text-red-700">Prazo vencido</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Instruções */}
-                                    <div className="bg-blue-50 p-6 rounded-xl border border-blue-200">
-                                        <h4 className="font-bold text-blue-900 mb-2">💡 Como Usar</h4>
-                                        <ul className="space-y-2 text-sm text-blue-800">
-                                            <li className="flex items-start gap-2">
-                                                <span className="font-bold">1.</span>
-                                                <span>Clique na caixa cinza para marcar a etapa como concluída (ficará verde)</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                                <span className="font-bold">2.</span>
-                                                <span>Cada etapa tem prazo padrão de 24 horas</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                                <span className="font-bold">3.</span>
-                                                <span>Se o prazo vencer sem conclusão, a caixa ficará vermelha (atrasada)</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                                <span className="font-bold">4.</span>
-                                                <span>Clique em "Estender Prazo" para adicionar mais tempo (requer justificativa)</span>
-                                            </li>
-                                            <li className="flex items-start gap-2">
-                                                <span className="font-bold">5.</span>
-                                                <span>O progresso geral é calculado automaticamente</span>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ABA: MATERIAIS */}
-                            {viewModalActiveTab === 'materiais' && (
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-bold text-gray-900">Lista de Materiais (Bill of Materials)</h3>
-                                        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
-                                            + Adicionar Material
-                                        </button>
-                                    </div>
-
-                                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                                        <table className="w-full">
-                                            <thead className="bg-gray-50 border-b border-gray-200">
-                                                <tr>
-                                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Material</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Quantidade</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
-                                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase">Ações</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-200">
-                                                {materiais.map((material) => (
-                                                    <tr key={material.id} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{material.nome}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-700">{material.quantidade}</td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={`px-3 py-1 text-xs font-bold rounded-lg ${
-                                                                material.status === 'Alocado' ? 'bg-green-100 text-green-800 ring-1 ring-green-200' :
-                                                                material.status === 'Em Falta' ? 'bg-red-100 text-red-800 ring-1 ring-red-200' :
-                                                                'bg-gray-100 text-gray-800 ring-1 ring-gray-200'
-                                                            }`}>
-                                                                {material.status}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            {material.status === 'Pendente' && (
-                                                                <button
-                                                                    onClick={() => handleAlocarMaterial(material.id)}
-                                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-semibold transition-colors"
-                                                                >
-                                                                    Alocar
-                                                                </button>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ABA: ETAPAS (KANBAN) */}
-                            {viewModalActiveTab === 'etapas' && (
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-bold text-gray-900">Kanban de Etapas</h3>
-                                        <button
-                                            onClick={() => handleOpenTaskModal()}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold"
-                                        >
-                                            + Nova Tarefa
-                                        </button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {/* Coluna: A Fazer */}
-                                        <div
-                                            onDragOver={(e) => handleDragOver(e, 'A Fazer')}
-                                            onDrop={(e) => handleDrop(e, 'A Fazer')}
-                                            className={`bg-gray-50 rounded-xl p-4 min-h-[400px] border-2 border-dashed transition-all ${
-                                                dragOverColumn === 'A Fazer' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                                            }`}
-                                        >
-                                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                                <span className="w-3 h-3 bg-gray-500 rounded-full"></span>
-                                                A Fazer ({etapas.filter(e => e.status === 'A Fazer').length})
-                                            </h4>
-                                            <div className="space-y-3">
-                                                {etapas.filter(e => e.status === 'A Fazer').map(etapa => (
-                                                    <div
-                                                        key={etapa.id}
-                                                        draggable
-                                                        onDragStart={() => handleDragStart(etapa.id)}
-                                                        className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 cursor-move hover:shadow-md transition-all"
-                                                    >
-                                                        <h5 className="font-semibold text-gray-900 text-sm mb-2">{etapa.titulo}</h5>
-                                                        <p className="text-xs text-gray-600 mb-3">{etapa.descricao}</p>
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-xs text-gray-500">
-                                                                📅 {new Date(etapa.prazo).toLocaleDateString('pt-BR')}
-                                                            </span>
-                                                            <button
-                                                                onClick={() => handleOpenTaskModal(etapa)}
-                                                                className="text-blue-600 hover:text-blue-700"
-                                                            >
-                                                                <PencilIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Coluna: Em Andamento */}
-                                        <div
-                                            onDragOver={(e) => handleDragOver(e, 'Em Andamento')}
-                                            onDrop={(e) => handleDrop(e, 'Em Andamento')}
-                                            className={`bg-blue-50 rounded-xl p-4 min-h-[400px] border-2 border-dashed transition-all ${
-                                                dragOverColumn === 'Em Andamento' ? 'border-blue-500 bg-blue-100' : 'border-blue-200'
-                                            }`}
-                                        >
-                                            <h4 className="font-bold text-blue-900 mb-4 flex items-center gap-2">
-                                                <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                                                Em Andamento ({etapas.filter(e => e.status === 'Em Andamento').length})
-                                            </h4>
-                                            <div className="space-y-3">
-                                                {etapas.filter(e => e.status === 'Em Andamento').map(etapa => (
-                                                    <div
-                                                        key={etapa.id}
-                                                        draggable
-                                                        onDragStart={() => handleDragStart(etapa.id)}
-                                                        className="bg-white p-4 rounded-lg shadow-sm border border-blue-300 cursor-move hover:shadow-md transition-all"
-                                                    >
-                                                        <h5 className="font-semibold text-gray-900 text-sm mb-2">{etapa.titulo}</h5>
-                                                        <p className="text-xs text-gray-600 mb-3">{etapa.descricao}</p>
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-xs text-gray-500">
-                                                                📅 {new Date(etapa.prazo).toLocaleDateString('pt-BR')}
-                                                            </span>
-                                                            <button
-                                                                onClick={() => handleOpenTaskModal(etapa)}
-                                                                className="text-blue-600 hover:text-blue-700"
-                                                            >
-                                                                <PencilIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Coluna: Concluído */}
-                                        <div
-                                            onDragOver={(e) => handleDragOver(e, 'Concluído')}
-                                            onDrop={(e) => handleDrop(e, 'Concluído')}
-                                            className={`bg-green-50 rounded-xl p-4 min-h-[400px] border-2 border-dashed transition-all ${
-                                                dragOverColumn === 'Concluído' ? 'border-green-500 bg-green-100' : 'border-green-200'
-                                            }`}
-                                        >
-                                            <h4 className="font-bold text-green-900 mb-4 flex items-center gap-2">
-                                                <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                                                Concluído ({etapas.filter(e => e.status === 'Concluído').length})
-                                            </h4>
-                                            <div className="space-y-3">
-                                                {etapas.filter(e => e.status === 'Concluído').map(etapa => (
-                                                    <div
-                                                        key={etapa.id}
-                                                        draggable
-                                                        onDragStart={() => handleDragStart(etapa.id)}
-                                                        className="bg-white p-4 rounded-lg shadow-sm border border-green-300 cursor-move hover:shadow-md transition-all"
-                                                    >
-                                                        <h5 className="font-semibold text-gray-900 text-sm mb-2">{etapa.titulo}</h5>
-                                                        <p className="text-xs text-gray-600 mb-3">{etapa.descricao}</p>
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-xs text-gray-500">
-                                                                ✓ Concluído
-                                                            </span>
-                                                            <button
-                                                                onClick={() => handleOpenTaskModal(etapa)}
-                                                                className="text-blue-600 hover:text-blue-700"
-                                                            >
-                                                                <PencilIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ABA: QUALIDADE */}
-                            {viewModalActiveTab === 'qualidade' && (
-                                <div className="space-y-4">
-                                    <h3 className="font-bold text-gray-900">Controle de Qualidade (QC)</h3>
-                                    
-                                    <div className="space-y-3">
-                                        {qualityChecks.map(check => (
-                                            <div key={check.id} className="bg-white border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-colors">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex-1">
-                                                        <h4 className="font-semibold text-gray-900 text-sm mb-1">{check.item}</h4>
-                                                        {check.observacoes && (
-                                                            <p className="text-xs text-gray-600">{check.observacoes}</p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {check.status === 'Pendente' ? (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handleUpdateQualityCheck(check.id, 'Aprovado')}
-                                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-semibold flex items-center gap-1"
-                                                                >
-                                                                    <CheckCircleIcon className="w-4 h-4" />
-                                                                    Aprovar
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleUpdateQualityCheck(check.id, 'Reprovado')}
-                                                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-semibold flex items-center gap-1"
-                                                                >
-                                                                    <XCircleIcon className="w-4 h-4" />
-                                                                    Reprovar
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <span className={`px-4 py-2 text-xs font-bold rounded-lg ${
-                                                                check.status === 'Aprovado' 
-                                                                    ? 'bg-green-100 text-green-800 ring-1 ring-green-200' 
-                                                                    : 'bg-red-100 text-red-800 ring-1 ring-red-200'
-                                                            }`}>
-                                                                {check.status}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    {/* </div> */}
-            </>)}
 
             {/* MODAL DE TAREFA/ETAPA */}
             {isTaskModalOpen && (
@@ -1831,7 +1308,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                 <TeamManagerModal
                     isOpen={isTeamModalOpen}
                     onClose={() => setIsTeamModalOpen(false)}
-                    usuarios={usuarios}
+                    usuarios={Array.isArray(usuarios) ? usuarios : []}
                     onAddUsuario={(usuario) => {
                         setUsuarios(prev => [...prev, usuario]);
                     }}
@@ -2050,6 +1527,16 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     );
 };
 
+const getStatusIcon = (status: string) => {
+    switch (status) {
+        case 'PROPOSTA': return '📋';
+        case 'VALIDADO': return '✅';
+        case 'APROVADO': return '🎉';
+        case 'EXECUCAO': return '🏗️';
+        case 'CONCLUIDO': return '🎊';
+        case 'CANCELADO': return '❌';
+        default: return '';
+    }
+};
+
 export default ProjetosModerno;
-
-

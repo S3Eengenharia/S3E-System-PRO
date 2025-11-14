@@ -191,6 +191,101 @@ export class ProjetosService {
 
     // Regra "Gerar Obra"
     if (novoStatus === 'EXECUCAO') {
+      // 🔍 VALIDAR ESTOQUE ANTES DE PERMITIR EXECUÇÃO
+      console.log('🔍 Validando estoque antes de iniciar execução...');
+      
+      if (!projeto.orcamento) {
+        throw new Error('Projeto sem orçamento vinculado');
+      }
+
+      const materiaisFaltantes: any[] = [];
+
+      // Verificar estoque de todos os items do orçamento
+      for (const item of projeto.orcamento.items) {
+        // Verificar materiais diretos
+        if (item.tipo === 'MATERIAL' && item.materialId) {
+          const material = await prisma.material.findUnique({
+            where: { id: item.materialId }
+          });
+
+          if (!material || material.estoque < item.quantidade) {
+            materiaisFaltantes.push({
+              nome: material?.nome || 'Material desconhecido',
+              necessario: item.quantidade,
+              disponivel: material?.estoque || 0,
+              falta: item.quantidade - (material?.estoque || 0)
+            });
+          }
+        }
+        
+        // Verificar itens de KITS
+        if (item.tipo === 'KIT' && item.kitId) {
+          const kit = await prisma.kit.findUnique({
+            where: { id: item.kitId },
+            include: {
+              items: {
+                include: {
+                  material: true
+                }
+              }
+            }
+          });
+
+          if (kit) {
+            // Verificar itens do banco frio do kit
+            if (kit.temItensCotacao && kit.itensFaltantes) {
+              const itensFrios = Array.isArray(kit.itensFaltantes) ? kit.itensFaltantes : [];
+              itensFrios.forEach((itemFrio: any) => {
+                materiaisFaltantes.push({
+                  nome: `${itemFrio.nome} (do kit ${kit.nome})`,
+                  necessario: itemFrio.quantidade * item.quantidade,
+                  disponivel: 0,
+                  falta: itemFrio.quantidade * item.quantidade,
+                  bancoFrio: true
+                });
+              });
+            }
+
+            // Verificar materiais reais do kit
+            for (const kitItem of kit.items) {
+              const necessario = kitItem.quantidade * item.quantidade;
+              if (kitItem.material.estoque < necessario) {
+                materiaisFaltantes.push({
+                  nome: `${kitItem.material.nome} (do kit ${kit.nome})`,
+                  necessario,
+                  disponivel: kitItem.material.estoque,
+                  falta: necessario - kitItem.material.estoque
+                });
+              }
+            }
+          }
+        }
+
+        // Verificar itens diretos de COTACAO
+        if (item.tipo === 'COTACAO') {
+          materiaisFaltantes.push({
+            nome: item.nome || 'Item de cotação',
+            necessario: item.quantidade,
+            disponivel: 0,
+            falta: item.quantidade,
+            bancoFrio: true
+          });
+        }
+      }
+
+      // Se há materiais faltantes, BLOQUEAR execução
+      if (materiaisFaltantes.length > 0) {
+        const mensagem = `EXECUÇÃO BLOQUEADA! Há ${materiaisFaltantes.length} item(ns) sem estoque suficiente:\n\n` +
+          materiaisFaltantes.map(m => 
+            `• ${m.nome}\n  Necessário: ${m.necessario} | Disponível: ${m.disponivel} | Falta: ${m.falta}${m.bancoFrio ? ' (⚠️ Banco Frio - precisa comprar)' : ''}`
+          ).join('\n\n');
+        
+        console.error('❌ Execução bloqueada por falta de materiais:', materiaisFaltantes);
+        throw new Error(mensagem);
+      }
+
+      console.log('✅ Estoque validado - Permitindo execução');
+
       // Garantir existência de registro de Obra/Alocação placeholder (sem equipe atribuída ainda)
       const jaTemAlocacao = await prisma.alocacaoObra.findFirst({ where: { projetoId } });
       if (!jaTemAlocacao) {

@@ -164,12 +164,13 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const loadInitialData = async () => {
         try {
             setLoading(true);
-            const [clientesRes, materiaisRes, servicosRes, quadrosRes, cotacoesRes] = await Promise.all([
+            const [clientesRes, materiaisRes, servicosRes, quadrosRes, kitsRes, cotacoesRes] = await Promise.all([
                 clientesService.listar(),
                 axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS),
                 servicosService.listar({ ativo: true }),
                 quadrosService.listar(),
-                axiosApiService.get('/api/cotacoes') // Novo: carregar cotações
+                axiosApiService.get(ENDPOINTS.KITS), // Carregar kits
+                axiosApiService.get('/api/cotacoes') // Carregar cotações
             ]);
 
             if (clientesRes.success && clientesRes.data) {
@@ -188,12 +189,25 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 setQuadros(Array.isArray(quadrosRes.data) ? quadrosRes.data : []);
             }
 
+            if (kitsRes.success && kitsRes.data) {
+                const kitsData = Array.isArray(kitsRes.data) ? kitsRes.data : [];
+                // Mapear kits do backend para o formato esperado
+                const kitsMapeados = kitsData.map((kit: any) => ({
+                    id: kit.id,
+                    nome: kit.nome,
+                    descricao: kit.descricao || '',
+                    items: kit.items || [],
+                    custoTotal: kit.preco || 0,
+                    precoSugerido: kit.preco || 0,
+                    ativo: kit.ativo !== false
+                }));
+                setKits(kitsMapeados);
+                console.log(`✅ ${kitsMapeados.length} kits carregados`);
+            }
+
             if (cotacoesRes.success && cotacoesRes.data) {
                 setCotacoes(Array.isArray(cotacoesRes.data) ? cotacoesRes.data : []);
             }
-
-            // TODO: Carregar kits quando endpoint estiver disponível
-            setKits([]);
         } catch (err) {
             console.error('Erro ao carregar dados:', err);
             setError('Erro ao carregar dados iniciais');
@@ -822,12 +836,22 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                             <p className="font-semibold text-gray-900 dark:text-dark-text">{item.nome}</p>
                                             <p className="text-sm text-gray-600 dark:text-dark-text-secondary">{item.unidadeMedida}</p>
                                             {/* Flag de Banco Frio */}
-                                            {(item.tipo === 'COTACAO' || (item as any).cotacao) && (
+                                            {(item.tipo === 'COTACAO' || (item as any).cotacao || (item as any).cotacaoId) && (
                                                 <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-medium">
                                                     <span>📦 Banco Frio</span>
-                                                    <span className="text-blue-600 dark:text-blue-400">
-                                                        • {new Date((item as any).cotacao?.dataAtualizacao || item.dataAtualizacaoCotacao).toLocaleDateString('pt-BR')}
-                                                    </span>
+                                                    {(() => {
+                                                        const dataStr = (item as any).cotacao?.dataAtualizacao || 
+                                                                      item.dataAtualizacaoCotacao || 
+                                                                      (item as any).cotacao?.createdAt ||
+                                                                      (item as any).dataAtualizacao;
+                                                        if (dataStr) {
+                                                            const data = new Date(dataStr);
+                                                            if (!isNaN(data.getTime())) {
+                                                                return <span className="text-blue-600 dark:text-blue-400">• {data.toLocaleDateString('pt-BR')}</span>;
+                                                            }
+                                                        }
+                                                        return <span className="text-blue-600 dark:text-blue-400">• Sem data</span>;
+                                                    })()}
                                                 </div>
                                             )}
                                         </div>

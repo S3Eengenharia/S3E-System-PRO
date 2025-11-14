@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { usePDFCustomization } from '../../hooks/usePDFCustomization';
 import { pdfCustomizationService } from '../../services/pdfCustomizationService';
-import { OrcamentoPDFData, CORNER_DESIGNS, COLOR_TEMPLATES } from '../../types/pdfCustomization';
+import { OrcamentoPDFData, CORNER_DESIGNS } from '../../types/pdfCustomization';
 
 // Icons
 const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -40,22 +40,18 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
 }) => {
     const {
         customization,
-        handleWatermarkChange,
         handleCornerDesignChange,
-        handleColorChange,
         handleContentChange,
-        applyColorTemplate,
         resetToDefault,
         hasUnsavedChanges
     } = usePDFCustomization();
 
-    const [activeTab, setActiveTab] = useState<'watermark' | 'design' | 'content' | 'preview'>('watermark');
+    const [activeTab, setActiveTab] = useState<'design' | 'content' | 'preview'>('design');
     const [generating, setGenerating] = useState(false);
     const [showSaveTemplate, setShowSaveTemplate] = useState(false);
     const [templateName, setTemplateName] = useState('');
     const [previewHTML, setPreviewHTML] = useState<string>('');
     const [loadingPreview, setLoadingPreview] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Gerar preview HTML
     const gerarPreviewHTML = React.useCallback(async () => {
@@ -131,33 +127,6 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
         );
     }
 
-    // Upload de marca d'água (logo)
-    const handleWatermarkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const promise = (async () => {
-            const response = await pdfCustomizationService.uploadWatermark(file);
-            if (response.success && response.data) {
-                handleWatermarkChange({
-                    type: 'logo',
-                    content: response.data.url
-                });
-                // Atualizar preview
-                setTimeout(() => gerarPreviewHTML(), 300);
-                return file.name;
-            } else {
-                throw new Error(response.error || 'Erro ao fazer upload da imagem');
-            }
-        })();
-
-        toast.promise(promise, {
-            loading: 'Fazendo upload da logo...',
-            success: (fileName) => `Logo carregada: ${fileName}`,
-            error: (err) => err.message || 'Erro ao fazer upload'
-        });
-    };
-
     // Gerar PDF personalizado
     const handleGeneratePDF = async () => {
         setGenerating(true);
@@ -230,7 +199,7 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                     <div className="flex justify-between items-center">
                         <div>
                             <h2 className="text-2xl font-bold text-white">🎨 Personalizar PDF</h2>
-                            <p className="text-sm text-white/80 mt-1">Customize marca d'água, cores e layout do seu orçamento</p>
+                            <p className="text-sm text-white/80 mt-1">Customize o design e conteúdo do seu orçamento</p>
                         </div>
                         <button
                             onClick={onClose}
@@ -243,8 +212,7 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                     {/* Tabs */}
                     <div className="flex gap-2 mt-6">
                         {[
-                            { id: 'watermark', label: '💧 Marca d\'Água', icon: '💧' },
-                            { id: 'design', label: '🎨 Design & Cores', icon: '🎨' },
+                            { id: 'design', label: '🎨 Design', icon: '🎨' },
                             { id: 'content', label: '📄 Conteúdo', icon: '📄' },
                             { id: 'preview', label: '👁️ Pré-visualização', icon: '👁️' }
                         ].map(tab => (
@@ -267,261 +235,12 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                 <div className="flex-1 overflow-hidden flex">
                     {/* Painel de Controles */}
                     <div className="w-2/5 p-6 overflow-y-auto border-r border-gray-200 dark:border-dark-border">
-                        {/* TAB: Marca d'Água */}
-                        {activeTab === 'watermark' && (
-                            <div className="space-y-6">
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">💧 Marca d'Água</h3>
-                                    
-                                    {/* Tipo de Marca d'Água */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">Tipo</label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {[
-                                                { value: 'none', label: 'Nenhuma', icon: '🚫' },
-                                                { value: 'logo', label: 'Logo/Imagem', icon: '🖼️' },
-                                                { value: 'text', label: 'Texto', icon: '📝' },
-                                                { value: 'design', label: 'Design', icon: '✨' }
-                                            ].map(option => (
-                                                <button
-                                                    key={option.value}
-                                                    type="button"
-                                                    onClick={() => handleWatermarkChange({ type: option.value as any })}
-                                                    className={`p-3 rounded-lg border-2 transition-all ${
-                                                        customization.watermark.type === option.value
-                                                            ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/30'
-                                                            : 'border-gray-200 dark:border-dark-border hover:border-purple-300'
-                                                    }`}
-                                                >
-                                                    <div className="text-2xl mb-1">{option.icon}</div>
-                                                    <div className="text-xs font-semibold text-gray-700 dark:text-dark-text">{option.label}</div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Upload de Imagem */}
-                                    {customization.watermark.type === 'logo' && (
-                                        <div className="mb-6">
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Upload da Imagem</label>
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleWatermarkUpload}
-                                                className="input-field"
-                                            />
-                                            {customization.watermark.content && (
-                                                <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
-                                                    <p className="text-sm text-green-800 dark:text-green-300">✅ Imagem carregada</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Texto da Marca d'Água */}
-                                    {customization.watermark.type === 'text' && (
-                                        <div className="mb-6">
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Texto</label>
-                                            <input
-                                                type="text"
-                                                value={customization.watermark.content}
-                                                onChange={(e) => handleWatermarkChange({ content: e.target.value })}
-                                                className="input-field"
-                                                placeholder="Ex: CONFIDENCIAL, RASCUNHO, S3E Engenharia..."
-                                            />
-                                            <div className="mt-3">
-                                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Cor do Texto</label>
-                                                <input
-                                                    type="color"
-                                                    value={customization.watermark.color || '#cccccc'}
-                                                    onChange={(e) => handleWatermarkChange({ color: e.target.value })}
-                                                    className="w-full h-12 rounded-lg border border-gray-300 dark:border-dark-border cursor-pointer"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Posição */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Posição</label>
-                                        <select
-                                            value={customization.watermark.position}
-                                            onChange={(e) => handleWatermarkChange({ position: e.target.value as any })}
-                                            className="select-field"
-                                        >
-                                            <option value="center">Centro</option>
-                                            <option value="diagonal">Diagonal</option>
-                                            <option value="header">Cabeçalho</option>
-                                            <option value="footer">Rodapé</option>
-                                            <option value="corners">Cantos</option>
-                                            <option value="full-page">Página Inteira</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Tamanho */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">Tamanho</label>
-                                        <div className="flex gap-2">
-                                            {['small', 'medium', 'large'].map(size => (
-                                                <button
-                                                    key={size}
-                                                    type="button"
-                                                    onClick={() => handleWatermarkChange({ size: size as any })}
-                                                    className={`flex-1 py-2 rounded-lg border-2 transition-all ${
-                                                        customization.watermark.size === size
-                                                            ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                                                            : 'border-gray-200 dark:border-dark-border text-gray-700 dark:text-dark-text'
-                                                    }`}
-                                                >
-                                                    {size === 'small' ? 'P' : size === 'medium' ? 'M' : 'G'}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Opacidade */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                            Opacidade: {Math.round(customization.watermark.opacity * 100)}%
-                                        </label>
-                                        <input
-                                            type="range"
-                                            min="0.05"
-                                            max="0.5"
-                                            step="0.05"
-                                            value={customization.watermark.opacity}
-                                            onChange={(e) => handleWatermarkChange({ opacity: parseFloat(e.target.value) })}
-                                            className="w-full"
-                                        />
-                                    </div>
-
-                                    {/* Rotação */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                            Rotação: {customization.watermark.rotation}°
-                                        </label>
-                                        <input
-                                            type="range"
-                                            min="-45"
-                                            max="45"
-                                            step="5"
-                                            value={customization.watermark.rotation}
-                                            onChange={(e) => handleWatermarkChange({ rotation: parseInt(e.target.value) })}
-                                            className="w-full"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TAB: Design & Cores */}
+                        {/* TAB: Design */}
                         {activeTab === 'design' && (
                             <div className="space-y-6">
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">🎨 Design & Cores</h3>
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">🎨 Design</h3>
                                     
-                                    {/* Templates de Cores Predefinidos */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">Templates de Cores</label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {Object.entries(COLOR_TEMPLATES).map(([key, template]) => (
-                                                <button
-                                                    key={key}
-                                                    type="button"
-                                                    onClick={() => applyColorTemplate(template.colors)}
-                                                    className="p-3 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-purple-300 transition-all"
-                                                >
-                                                    <div className="flex gap-1 mb-2">
-                                                        {Object.values(template.colors).slice(0, 4).map((color, i) => (
-                                                            <div
-                                                                key={i}
-                                                                className="w-6 h-6 rounded"
-                                                                style={{ backgroundColor: color }}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                    <div className="text-xs font-semibold text-gray-700 dark:text-dark-text">{template.name}</div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Cores Personalizadas */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">Cores Personalizadas</label>
-                                        <div className="space-y-3">
-                                            {[
-                                                { key: 'primary', label: 'Primária' },
-                                                { key: 'secondary', label: 'Secundária' },
-                                                { key: 'accent', label: 'Destaque' }
-                                            ].map(({ key, label }) => (
-                                                <div key={key} className="flex items-center gap-3">
-                                                    <input
-                                                        type="color"
-                                                        value={customization.design.colors[key as keyof typeof customization.design.colors]}
-                                                        onChange={(e) => handleColorChange(key as any, e.target.value)}
-                                                        className="w-16 h-10 rounded border border-gray-300 dark:border-dark-border cursor-pointer"
-                                                    />
-                                                    <span className="text-sm font-medium text-gray-700 dark:text-dark-text flex-1">{label}</span>
-                                                    <code className="text-xs bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded">
-                                                        {customization.design.colors[key as keyof typeof customization.design.colors]}
-                                                    </code>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Designs de Cantos */}
-                                    <div className="mb-6">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text">Designs nos Cantos</label>
-                                            <input
-                                                type="checkbox"
-                                                checked={customization.design.corners.enabled}
-                                                onChange={(e) => handleCornerDesignChange({ enabled: e.target.checked })}
-                                                className="w-5 h-5 text-purple-600 rounded"
-                                            />
-                                        </div>
-
-                                        {customization.design.corners.enabled && (
-                                            <>
-                                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                                    {Object.entries(CORNER_DESIGNS).map(([key, design]) => (
-                                                        <button
-                                                            key={key}
-                                                            type="button"
-                                                            onClick={() => handleCornerDesignChange({ design: key as any })}
-                                                            className={`p-4 rounded-lg border-2 transition-all ${
-                                                                customization.design.corners.design === key
-                                                                    ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/30'
-                                                                    : 'border-gray-200 dark:border-dark-border'
-                                                            }`}
-                                                        >
-                                                            <div className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">{design.name}</div>
-                                                            <div className="text-xs text-gray-500 dark:text-dark-text-secondary">{design.description}</div>
-                                                        </button>
-                                                    ))}
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                                                        Opacidade dos Cantos: {Math.round(customization.design.corners.opacity * 100)}%
-                                                    </label>
-                                                    <input
-                                                        type="range"
-                                                        min="0.1"
-                                                        max="1"
-                                                        step="0.1"
-                                                        value={customization.design.corners.opacity}
-                                                        onChange={(e) => handleCornerDesignChange({ opacity: parseFloat(e.target.value) })}
-                                                        className="w-full"
-                                                    />
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-
                                     {/* Upload de Folha Timbrada Personalizada */}
                                     <div className="mb-6">
                                         <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">
@@ -544,10 +263,6 @@ const PDFCustomizationModal: React.FC<PDFCustomizationModalProps> = ({
                                                             image: reader.result as string 
                                                         });
                                                         toast.success('Folha timbrada carregada!');
-                                                        // Atualizar preview
-                                                        if (activeTab === 'preview') {
-                                                            gerarPreviewHTML();
-                                                        }
                                                     };
                                                     reader.readAsDataURL(file);
                                                 }

@@ -17,7 +17,15 @@ import {
 type ProjetoStatus = 'PROPOSTA' | 'VALIDADO' | 'APROVADO' | 'EXECUCAO' | 'CONCLUIDO';
 
 interface ClienteRef { id: string; nome: string }
-interface OrcamentoItemRef { id: string; material?: { nome: string; sku: string } | null; kit?: { nome: string } | null; quantidade?: number; subtotal?: number }
+interface OrcamentoItemRef { 
+  id: string; 
+  material?: { nome: string; sku: string } | null; 
+  kit?: { nome: string } | null; 
+  servico?: { nome: string } | null;
+  quantidade?: number; 
+  subtotal?: number;
+  tipo?: string;
+}
 interface OrcamentoRef { id: string; status: string; precoVenda?: number; items?: OrcamentoItemRef[] }
 
 export interface ProjetoDetalhe {
@@ -39,11 +47,13 @@ interface ModalVizualizacaoProjetoProps {
   onClose: () => void;
   initialTab?: Aba;
   onRefresh?: () => void; // chamado após alterações (ex: mudança de status)
+  onViewBudget?: (budgetId: string) => void; // navegar para orçamento
+  onNavigate?: (view: string) => void; // navegar para outras páginas
 }
 
 const TABS: Aba[] = ['Visão Geral', 'Materiais', 'EtapasAdmin', 'Kanban', 'Qualidade'];
 
-const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ projeto, isOpen, onClose, initialTab = 'Visão Geral', onRefresh }) => {
+const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ projeto, isOpen, onClose, initialTab = 'Visão Geral', onRefresh, onViewBudget, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<Aba>(initialTab);
   const [loadingAcao, setLoadingAcao] = useState(false);
 
@@ -51,6 +61,9 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   const [etapasResp, setEtapasResp] = useState<ListaEtapasResponse | null>(null);
   const [loadingEtapas, setLoadingEtapas] = useState(false);
   const [erroEtapas, setErroEtapas] = useState<string | null>(null);
+  const [etapaModalOpen, setEtapaModalOpen] = useState(false);
+  const [etapaEditando, setEtapaEditando] = useState<EtapaAdmin | null>(null);
+  const [etapaForm, setEtapaForm] = useState({ nome: '', dataPrevista: '', tipo: '' });
 
   // Modal adiar
   const [adiarAberto, setAdiarAberto] = useState<{ etapa: EtapaAdmin | null; novaData: string; justificativa: string }>({ etapa: null, novaData: '', justificativa: '' });
@@ -74,6 +87,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   // Documentos
   const [documentos, setDocumentos] = useState<Array<{ id: string; nome: string; tipo: string; url: string }>>([]);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [documentoVisualizar, setDocumentoVisualizar] = useState<{ id: string; nome: string; tipo: string; url: string } | null>(null);
 
   // AlertDialog
   const [alertOpen, setAlertOpen] = useState(false);
@@ -119,7 +133,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
       setLoadingEtapas(true);
       setErroEtapas(null);
       const res = await etapasAdminService.listar(projeto.id);
-      if (res.success) {
+      if (res.success && res.data) {
         setEtapasResp(res.data);
       } else {
         setErroEtapas('Falha ao carregar etapas');
@@ -228,6 +242,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   async function handleConcluirEtapa(etapa: EtapaAdmin) {
     await etapasAdminService.concluir(projeto.id, etapa.id);
     await carregarEtapas();
+    if (onRefresh) onRefresh(); // Atualizar progresso do projeto
   }
 
   async function handleAdiarEnviar() {
@@ -240,6 +255,68 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     );
     setAdiarAberto({ etapa: null, novaData: '', justificativa: '' });
     await carregarEtapas();
+  }
+
+  // CRUD de Etapas Admin
+  async function handleCriarEtapa() {
+    setEtapaEditando(null);
+    setEtapaForm({ nome: '', dataPrevista: '', tipo: '' });
+    setEtapaModalOpen(true);
+  }
+
+  async function handleEditarEtapa(etapa: EtapaAdmin) {
+    setEtapaEditando(etapa);
+    setEtapaForm({
+      nome: etapa.nome || etapa.tipo,
+      dataPrevista: new Date(etapa.dataPrevista).toISOString().slice(0, 16),
+      tipo: etapa.tipo
+    });
+    setEtapaModalOpen(true);
+  }
+
+  async function handleSalvarEtapa(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      if (etapaEditando) {
+        // Editar etapa existente
+        await etapasAdminService.atualizar(projeto.id, etapaEditando.id, {
+          nome: etapaForm.nome,
+          dataPrevista: etapaForm.dataPrevista
+        });
+        toast.success('✅ Etapa atualizada com sucesso!');
+      } else {
+        // Criar nova etapa
+        await etapasAdminService.criar(projeto.id, {
+          nome: etapaForm.nome,
+          dataPrevista: etapaForm.dataPrevista,
+          tipo: etapaForm.tipo || 'PERSONALIZADA'
+        });
+        toast.success('✅ Etapa criada com sucesso!');
+      }
+      setEtapaModalOpen(false);
+      await carregarEtapas();
+      if (onRefresh) onRefresh();
+    } catch (error: any) {
+      toast.error(`❌ Erro ao salvar etapa: ${error?.message || 'Erro desconhecido'}`);
+    }
+  }
+
+  async function handleExcluirEtapa(etapa: EtapaAdmin) {
+    setAlertConfig({
+      title: '🗑️ Excluir Etapa',
+      description: `Deseja realmente excluir a etapa "${etapa.nome || etapa.tipo}"? Esta ação não pode ser desfeita.`,
+      onConfirm: async () => {
+        try {
+          await etapasAdminService.excluir(projeto.id, etapa.id);
+          toast.success('✅ Etapa excluída com sucesso!');
+          await carregarEtapas();
+          if (onRefresh) onRefresh();
+        } catch (error: any) {
+          toast.error(`❌ Erro ao excluir etapa: ${error?.message || 'Erro desconhecido'}`);
+        }
+      }
+    });
+    setAlertOpen(true);
   }
 
   // Funções de Tasks
@@ -672,9 +749,16 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                     </h3>
                     <div className="space-y-3">
                       {projeto.orcamento && (
-                        <a
-                          href={`#orcamento-${projeto.orcamento.id}`}
-                          className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+                        <button
+                          onClick={() => {
+                            if (onViewBudget) {
+                              onViewBudget(projeto.orcamento!.id);
+                              onClose(); // Fechar o modal atual
+                            } else {
+                              toast.info('📋 Navegando para orçamento...');
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all text-left"
                         >
                           <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -686,10 +770,17 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
-                        </a>
+                        </button>
                       )}
                       <button
-                        onClick={() => toast.info('📋 Navegando para página do cliente...')}
+                        onClick={() => {
+                          if (onNavigate) {
+                            onNavigate('Clientes');
+                            onClose(); // Fechar modal
+                          } else {
+                            toast.info('📋 Navegando para página do cliente...');
+                          }
+                        }}
                         className="w-full flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
                       >
                         <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -733,12 +824,36 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                     ) : (
                       <div className="space-y-2">
                         {documentos.map(doc => (
-                          <div key={doc.id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                            <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div key={doc.id} className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-dark-bg rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors">
+                            <svg className="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            <span className="flex-1 text-sm text-gray-900 dark:text-white">{doc.nome}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">{doc.tipo}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{doc.nome}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{doc.tipo}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setDocumentoVisualizar(doc)}
+                                className="p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                                title="Visualizar documento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                              <a
+                                href={doc.url}
+                                download={doc.nome}
+                                className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+                                title="Baixar documento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </a>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -915,7 +1030,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                   </h3>
                   <div className="flex items-center gap-3">
                     <button 
-                      onClick={() => toast.info('🔨 Funcionalidade de criar etapa será implementada em breve')} 
+                      onClick={handleCriarEtapa} 
                       className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all shadow-medium flex items-center gap-2"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -952,7 +1067,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                 {etapasResp?.etapas.map((etapa) => {
                   const atrasada = etapa.atrasada;
                       const realizada = etapa.concluida;
-                      const tempoDecorrido = calcularTempoDecorrido(etapa.dataCriacao || etapa.dataPrevista);
+                      const tempoDecorrido = calcularTempoDecorrido(etapa.createdAt || etapa.dataPrevista);
                       
                   return (
                         <div 
@@ -965,9 +1080,34 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                               : 'border-gray-200 dark:border-dark-border bg-white dark:bg-dark-card'
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-bold text-gray-900 dark:text-white">{etapa.nome || etapa.tipo}</h4>
-                            <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
+                          <div className="flex items-start justify-between mb-3 gap-3">
+                            <div className="flex items-start gap-3 flex-1">
+                              {/* Checkbox para concluir */}
+                              <input
+                                type="checkbox"
+                                checked={realizada}
+                                onChange={() => {
+                                  if (!realizada) {
+                                    setAlertConfig({
+                                      title: '✅ Concluir Etapa',
+                                      description: `Deseja marcar a etapa "${etapa.nome || etapa.tipo}" como concluída?`,
+                                      onConfirm: async () => {
+                                        await handleConcluirEtapa(etapa);
+                                        toast.success('✅ Etapa concluída com sucesso!');
+                                      }
+                                    });
+                                    setAlertOpen(true);
+                                  }
+                                }}
+                                disabled={realizada}
+                                className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                                title={realizada ? 'Etapa concluída' : 'Marcar como concluída'}
+                              />
+                              <div className="flex-1">
+                                <h4 className="font-bold text-gray-900 dark:text-white">{etapa.nome || etapa.tipo}</h4>
+                              </div>
+                            </div>
+                            <span className={`text-xs px-3 py-1.5 rounded-full font-semibold whitespace-nowrap ${
                               realizada 
                                 ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' 
                                 : atrasada 
@@ -1001,34 +1141,27 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                       <div className="flex items-center gap-2">
                         <button
                           disabled={realizada}
-                              onClick={() => {
-                                setAlertConfig({
-                                  title: '✅ Concluir Etapa',
-                                  description: `Deseja marcar a etapa "${etapa.nome || etapa.tipo}" como concluída?`,
-                                  onConfirm: async () => {
-                                    await handleConcluirEtapa(etapa);
-                                    toast.success('✅ Etapa concluída com sucesso!');
-                                  }
-                                });
-                                setAlertOpen(true);
-                              }}
-                              className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white text-sm font-semibold rounded-lg hover:from-green-700 hover:to-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              ✓ Concluir
-                        </button>
-                        <button
-                          disabled={realizada}
                           onClick={() => setAdiarAberto({ etapa, novaData: '', justificativa: '' })}
-                              className="px-4 py-2 bg-white dark:bg-dark-card border-2 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 text-sm font-semibold rounded-lg hover:bg-blue-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex-1 px-3 py-2 bg-white dark:bg-dark-card border-2 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 text-sm font-semibold rounded-lg hover:bg-blue-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Adiar prazo"
                             >
-                              ⏰
+                              ⏰ Adiar
                             </button>
                             <button
                               disabled={realizada}
-                              onClick={() => toast.info('🔨 Editar etapa será implementado em breve')}
-                              className="px-4 py-2 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-dark-border text-gray-600 dark:text-gray-400 text-sm font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => handleEditarEtapa(etapa)}
+                              className="px-3 py-2 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-dark-border text-gray-600 dark:text-gray-400 text-sm font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Editar etapa"
                             >
                               ✏️
+                            </button>
+                            <button
+                              disabled={realizada}
+                              onClick={() => handleExcluirEtapa(etapa)}
+                              className="px-3 py-2 bg-white dark:bg-dark-card border-2 border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 text-sm font-semibold rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Excluir etapa"
+                            >
+                              🗑️
                         </button>
                       </div>
                     </div>
@@ -1730,6 +1863,180 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                     📤 Fazer Upload
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Criar/Editar Etapa Admin */}
+        {etapaModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="w-full max-w-lg bg-white dark:bg-dark-card rounded-2xl shadow-strong overflow-hidden">
+              {/* Header */}
+              <div className="relative px-6 py-4 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-green-600 to-emerald-600">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-white">
+                    {etapaEditando ? '✏️ Editar Etapa' : '➕ Nova Etapa'}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setEtapaModalOpen(false)} 
+                  className="absolute top-4 right-4 p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleSalvarEtapa} className="p-6 space-y-4">
+                {/* Nome da Etapa */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    📋 Nome da Etapa *
+                  </label>
+                  <input
+                    type="text"
+                    value={etapaForm.nome}
+                    onChange={(e) => setEtapaForm({ ...etapaForm, nome: e.target.value })}
+                    required
+                    placeholder="Ex: Aprovação de Documentação"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-green-500 dark:bg-dark-bg dark:text-white"
+                  />
+                </div>
+
+                {/* Data Prevista */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    📅 Data/Hora Prevista *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={etapaForm.dataPrevista}
+                    onChange={(e) => setEtapaForm({ ...etapaForm, dataPrevista: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-green-500 dark:bg-dark-bg dark:text-white"
+                  />
+                </div>
+
+                {/* Tipo (apenas para criação) */}
+                {!etapaEditando && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      🏷️ Tipo
+                    </label>
+                    <select
+                      value={etapaForm.tipo}
+                      onChange={(e) => setEtapaForm({ ...etapaForm, tipo: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-green-500 dark:bg-dark-bg dark:text-white"
+                    >
+                      <option value="PERSONALIZADA">Personalizada</option>
+                      <option value="DOCUMENTACAO">Documentação</option>
+                      <option value="TECNICA">Técnica</option>
+                      <option value="FINANCEIRA">Financeira</option>
+                      <option value="APROVACAO">Aprovação</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Botões */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-dark-border">
+                  <button 
+                    type="button"
+                    onClick={() => setEtapaModalOpen(false)} 
+                    className="px-6 py-2.5 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-dark-border text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-dark-hover transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all shadow-medium"
+                  >
+                    💾 {etapaEditando ? 'Atualizar' : 'Criar'} Etapa
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Visualizar Documento */}
+        {documentoVisualizar && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="w-full max-w-6xl h-[90vh] bg-white dark:bg-dark-card rounded-2xl shadow-strong overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="relative px-6 py-4 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <h3 className="text-lg font-bold text-white">{documentoVisualizar.nome}</h3>
+                </div>
+                <button 
+                  onClick={() => setDocumentoVisualizar(null)} 
+                  className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Visualizador de Documento */}
+              <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-900">
+                {documentoVisualizar.tipo.includes('pdf') ? (
+                  <iframe 
+                    src={documentoVisualizar.url} 
+                    className="w-full h-full"
+                    title={documentoVisualizar.nome}
+                  />
+                ) : documentoVisualizar.tipo.includes('image') ? (
+                  <div className="w-full h-full flex items-center justify-center p-4">
+                    <img 
+                      src={documentoVisualizar.url} 
+                      alt={documentoVisualizar.nome}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="text-center">
+                      <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="text-gray-600 dark:text-gray-400 mb-4">
+                        Visualização não disponível para este tipo de arquivo
+                      </p>
+                      <a 
+                        href={documentoVisualizar.url} 
+                        download={documentoVisualizar.nome}
+                        className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all inline-block"
+                      >
+                        📥 Baixar Arquivo
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer com Ações */}
+              <div className="px-6 py-4 border-t border-gray-200 dark:border-dark-border flex items-center justify-between">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Tipo: {documentoVisualizar.tipo}
+                </div>
+                <a 
+                  href={documentoVisualizar.url} 
+                  download={documentoVisualizar.nome}
+                  className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all"
+                >
+                  📥 Baixar
+                </a>
               </div>
             </div>
           </div>

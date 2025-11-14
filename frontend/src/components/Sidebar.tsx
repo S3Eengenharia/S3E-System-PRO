@@ -117,7 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
     };
 
     return (
-        <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex flex-col bg-white/95 dark:bg-dark-card/95 backdrop-blur-xl border-r border-gray-200 dark:border-dark-border fixed inset-y-0 left-0 z-40 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 shadow-xl lg:shadow-none ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex flex-col bg-white/95 dark:bg-dark-card/95 backdrop-blur-xl border-r border-gray-200 dark:border-dark-border fixed inset-y-0 left-0 z-40 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 shadow-xl lg:shadow-none ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
             <div className={`p-5 border-b border-gray-100 dark:border-dark-border flex justify-between items-center bg-gradient-to-r from-white to-gray-50 dark:from-dark-card dark:to-dark-bg ${isCollapsed ? 'flex-col gap-3' : ''}`}>
                 <div className={`flex items-center ${isCollapsed ? 'flex-col' : 'space-x-3'}`}>
                     {companyLogo ? (

@@ -22,7 +22,7 @@ interface TeamManagerModalProps {
 const TeamManagerModal: React.FC<TeamManagerModalProps> = ({ 
   isOpen, 
   onClose, 
-  usuarios,
+  usuarios = [],
   onAddUsuario,
   onUpdateUsuario,
   onDeleteUsuario
@@ -37,34 +37,55 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
   // Não precisa mais carregar users - usa os usuarios recebidos via props
 
   const filtered = useMemo(() => {
+    if (!Array.isArray(usuarios)) {
+      console.warn('TeamManagerModal: usuarios não é um array', usuarios);
+      return [];
+    }
     const s = search.toLowerCase();
-    return usuarios.filter(u => u.nome.toLowerCase().includes(s) || u.email.toLowerCase().includes(s) || u.funcao.toLowerCase().includes(s));
+    return usuarios.filter(u => 
+      u && u.nome && u.email && u.funcao &&
+      (u.nome.toLowerCase().includes(s) || 
+       u.email.toLowerCase().includes(s) || 
+       u.funcao.toLowerCase().includes(s))
+    );
   }, [usuarios, search]);
 
   if (!isOpen) return null;
 
+  // Debug log
+  useEffect(() => {
+    if (isOpen) {
+      console.log('TeamManagerModal aberto. Usuários:', usuarios?.length || 0);
+    }
+  }, [isOpen, usuarios]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === 'add') {
-      const newUsuario: TeamUser = {
-        id: Date.now().toString(), // ID temporário
-        nome: form.nome,
-        email: form.email,
-        funcao: form.funcao
-      };
-      onAddUsuario?.(newUsuario);
-    } else if (mode === 'edit' && editingId) {
-      const updatedUsuario: TeamUser = {
-        id: editingId,
-        nome: form.nome,
-        email: form.email,
-        funcao: form.funcao
-      };
-      onUpdateUsuario?.(updatedUsuario);
+    try {
+      if (mode === 'add') {
+        const newUsuario: TeamUser = {
+          id: Date.now().toString(), // ID temporário
+          nome: form.nome,
+          email: form.email,
+          funcao: form.funcao
+        };
+        onAddUsuario?.(newUsuario);
+      } else if (mode === 'edit' && editingId) {
+        const updatedUsuario: TeamUser = {
+          id: editingId,
+          nome: form.nome,
+          email: form.email,
+          funcao: form.funcao
+        };
+        onUpdateUsuario?.(updatedUsuario);
+      }
+      setMode('view');
+      setEditingId(null);
+      setForm({ nome: '', email: '', funcao: '' });
+    } catch (err: any) {
+      console.error('Erro ao salvar usuário:', err);
+      setError(err.message || 'Erro ao salvar usuário');
     }
-    setMode('view');
-    setEditingId(null);
-    setForm({ nome: '', email: '', funcao: '' });
   };
 
   return (
@@ -128,7 +149,14 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
                   ))}
                   {!loading && filtered.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-dark-text-secondary">Nenhum usuário encontrado</td>
+                      <td colSpan={4} className="px-4 py-6 text-center">
+                        <div className="text-gray-500 dark:text-dark-text-secondary">
+                          <p className="mb-2">Nenhum usuário técnico encontrado</p>
+                          <p className="text-xs">
+                            Certifique-se de que existem usuários com as funções: Admin, Gerente, Engenheiro ou Orçamentista
+                          </p>
+                        </div>
+                      </td>
                     </tr>
                   )}
                 </tbody>

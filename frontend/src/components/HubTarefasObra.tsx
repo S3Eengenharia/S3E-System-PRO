@@ -2,6 +2,10 @@ import React, { useState, useEffect, useContext } from 'react';
 import { toast } from 'sonner';
 import { axiosApiService } from '../services/axiosApi';
 import { AuthContext } from '../contexts/AuthContext';
+import { equipeService, type EquipeDTO } from '../services/EquipeService';
+import { alocacaoService, type AlocacaoEquipeDTO } from '../services/AlocacaoService';
+import CalendarioAlocacoes from './CalendarioAlocacoes';
+import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 
 // Types
 interface Obra {
@@ -20,8 +24,12 @@ interface TarefaObra {
   descricao: string;
   atribuidoA?: string;
   atribuidoNome?: string;
+  equipeId?: string;
+  equipeNome?: string;
+  alocacaoId?: string;
   progresso: number;
   dataPrevista?: string;
+  dataPrevistaFim?: string;
   dataConclusaoReal?: string;
   observacoes?: string;
   createdAt: string;
@@ -116,14 +124,19 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
   const [obra, setObra] = useState<Obra | null>(null);
   const [tarefas, setTarefas] = useState<TarefaObra[]>([]);
   const [eletricistas, setEletricistas] = useState<Usuario[]>([]);
+  const [equipes, setEquipes] = useState<EquipeDTO[]>([]);
+  const [alocacoes, setAlocacoes] = useState<AlocacaoEquipeDTO[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal de Nova Tarefa
   const [modalNovaTarefa, setModalNovaTarefa] = useState(false);
+  const [tipoAtribuicao, setTipoAtribuicao] = useState<'equipe' | 'individual'>('equipe');
   const [formTarefa, setFormTarefa] = useState({
     descricao: '',
     atribuidoA: '',
+    equipeId: '',
     dataPrevista: '',
+    dataPrevistaFim: '',
     observacoes: ''
   });
 
@@ -140,9 +153,20 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
   const [imagensVisualizacao, setImagensVisualizacao] = useState<string[]>([]);
   const [imagemAtual, setImagemAtual] = useState(0);
 
+  // Modal de Gestão de Equipes
+  const [modalEquipes, setModalEquipes] = useState(false);
+
   useEffect(() => {
     carregarDados();
   }, [obraId]);
+
+  // Recarregar equipes quando o modal de nova tarefa abrir
+  useEffect(() => {
+    if (modalNovaTarefa) {
+      console.log('🔄 Modal de nova tarefa aberto, recarregando equipes...');
+      carregarEquipes();
+    }
+  }, [modalNovaTarefa]);
 
   const carregarDados = async () => {
     try {
@@ -150,7 +174,9 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
       await Promise.all([
         carregarObra(),
         carregarTarefas(),
-        carregarEletricistas()
+        carregarEletricistas(),
+        carregarEquipes(),
+        carregarAlocacoes()
       ]);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -188,6 +214,44 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
     }
   };
 
+  const carregarEquipes = async () => {
+    try {
+      console.log('🔍 Carregando equipes para seleção no modal...');
+      
+      // Tentar primeiro com o endpoint de obras
+      let response = await axiosApiService.get<any>('/api/obras/equipes');
+      
+      // Se não funcionar, tentar com o serviço padrão
+      if (!response.success) {
+        response = await equipeService.getAllEquipes();
+      }
+      
+      if (response.success && response.data) {
+        const equipesArray = Array.isArray(response.data) ? response.data : [];
+        const equipesAtivas = equipesArray.filter((eq: any) => eq.ativa !== false);
+        console.log('✅ Equipes carregadas para seleção:', equipesAtivas.length);
+        setEquipes(equipesAtivas);
+      } else {
+        console.warn('⚠️ Resposta sem equipes:', response);
+        setEquipes([]);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar equipes:', error);
+      setEquipes([]);
+    }
+  };
+
+  const carregarAlocacoes = async () => {
+    try {
+      const response = await alocacaoService.buscarPorObra(obraId);
+      if (response.success && response.data) {
+        setAlocacoes(response.data);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar alocações:', error);
+    }
+  };
+
   const handleCriarTarefa = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -196,15 +260,90 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
       return;
     }
 
+    // Validar datas se equipe for selecionada
+    if (tipoAtribuicao === 'equipe' && formTarefa.equipeId) {
+      if (!formTarefa.dataPrevista || !formTarefa.dataPrevistaFim) {
+        toast.error('Data de início e fim são obrigatórias para alocação de equipe');
+        return;
+      }
+    }
+
     try {
-      await axiosApiService.post('/api/obras/tarefas', {
+      // Verificar conflitos de alocação se for equipe
+      if (tipoAtribuicao === 'equipe' && formTarefa.equipeId && formTarefa.dataPrevista && formTarefa.dataPrevistaFim) {
+        const conflitosRes = await alocacaoService.verificarConflitos(
+          formTarefa.equipeId,
+          formTarefa.dataPrevista,
+          formTarefa.dataPrevistaFim
+        );
+
+        if (conflitosRes.success && conflitosRes.data?.temConflito) {
+          const conflitos = conflitosRes.data.conflitos;
+          toast.error('⚠️ Conflito de Alocação', {
+            description: `Esta equipe já está alocada em ${conflitos.length} tarefa(s) neste período.`,
+            duration: 5000
+          });
+          
+          // Mostrar detalhes dos conflitos
+          conflitos.forEach(c => {
+            console.warn(`Conflito: ${c.equipeNome} - ${c.tarefaDescricao} (${c.dataInicio} - ${c.dataFim})`);
+          });
+          
+          return;
+        }
+      }
+
+      // Criar a tarefa
+      const tarefaData: any = {
         obraId,
-        ...formTarefa
-      });
-      toast.success('✅ Tarefa criada com sucesso!');
+        descricao: formTarefa.descricao,
+        dataPrevista: formTarefa.dataPrevista,
+        dataPrevistaFim: formTarefa.dataPrevistaFim,
+        observacoes: formTarefa.observacoes
+      };
+
+      if (tipoAtribuicao === 'equipe' && formTarefa.equipeId) {
+        tarefaData.equipeId = formTarefa.equipeId;
+      } else if (tipoAtribuicao === 'individual' && formTarefa.atribuidoA) {
+        tarefaData.atribuidoA = formTarefa.atribuidoA;
+      }
+
+      const tarefaRes = await axiosApiService.post('/api/obras/tarefas', tarefaData);
+      
+      // O axiosApiService já retorna { success, data }, então acessamos diretamente
+      if (!tarefaRes.success || !tarefaRes.data) {
+        throw new Error(tarefaRes.error || 'Erro ao criar tarefa');
+      }
+      
+      const tarefaCriada = tarefaRes.data;
+      
+      if (!tarefaCriada.id) {
+        throw new Error('Resposta inválida do servidor: tarefa criada sem ID');
+      }
+
+      // Se for equipe, criar alocação
+      if (tipoAtribuicao === 'equipe' && formTarefa.equipeId && formTarefa.dataPrevista && formTarefa.dataPrevistaFim) {
+        await alocacaoService.criar({
+          tarefaId: tarefaCriada.id,
+          obraId: obraId,
+          equipeId: formTarefa.equipeId,
+          dataInicio: formTarefa.dataPrevista,
+          dataFim: formTarefa.dataPrevistaFim,
+          observacoes: formTarefa.observacoes
+        });
+
+        const equipe = equipes.find(e => e.id === formTarefa.equipeId);
+        toast.success('✅ Tarefa criada e equipe alocada!', {
+          description: `Equipe "${equipe?.nome}" alocada de ${new Date(formTarefa.dataPrevista).toLocaleDateString('pt-BR')} até ${new Date(formTarefa.dataPrevistaFim).toLocaleDateString('pt-BR')}`
+        });
+      } else {
+        toast.success('✅ Tarefa criada com sucesso!');
+      }
+      
       setModalNovaTarefa(false);
-      setFormTarefa({ descricao: '', atribuidoA: '', dataPrevista: '', observacoes: '' });
+      setFormTarefa({ descricao: '', atribuidoA: '', equipeId: '', dataPrevista: '', dataPrevistaFim: '', observacoes: '' });
       carregarTarefas();
+      carregarAlocacoes();
     } catch (error: any) {
       console.error('Erro ao criar tarefa:', error);
       toast.error(error?.response?.data?.error || 'Erro ao criar tarefa');
@@ -364,13 +503,24 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
                   {tarefas.length} {tarefas.length === 1 ? 'tarefa' : 'tarefas'} cadastradas
                 </p>
               </div>
-              <button
-                onClick={() => setModalNovaTarefa(true)}
-                className="btn-primary flex items-center gap-2"
-              >
-                <PlusIcon className="w-5 h-5" />
-                Nova Tarefa
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setModalEquipes(true)}
+                  className="px-4 py-2 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-xl hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-all font-semibold flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Gerenciar Equipes
+                </button>
+                <button
+                  onClick={() => setModalNovaTarefa(true)}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  Nova Tarefa
+                </button>
+              </div>
             </div>
 
             {/* Lista de Tarefas */}
@@ -393,18 +543,34 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
                       <div className="flex-1">
                         <h4 className="font-bold text-gray-900 dark:text-dark-text mb-1">{tarefa.descricao}</h4>
                         <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-dark-text-secondary">
-                          {tarefa.atribuidoNome && (
+                          {/* Mostrar equipe alocada */}
+                          {tarefa.equipeNome && (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-lg font-semibold">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                              </svg>
+                              👥 {tarefa.equipeNome}
+                            </span>
+                          )}
+                          {/* Mostrar eletricista individual */}
+                          {!tarefa.equipeNome && tarefa.atribuidoNome && (
                             <span className="flex items-center gap-1">
                               <UserIcon className="w-4 h-4" />
                               {tarefa.atribuidoNome}
                             </span>
                           )}
-                          {tarefa.dataPrevista && (
+                          {/* Datas - mostrar período se tiver data fim */}
+                          {tarefa.dataPrevista && tarefa.dataPrevistaFim ? (
+                            <span className="flex items-center gap-1">
+                              <ClockIcon className="w-4 h-4" />
+                              {new Date(tarefa.dataPrevista).toLocaleDateString('pt-BR')} - {new Date(tarefa.dataPrevistaFim).toLocaleDateString('pt-BR')}
+                            </span>
+                          ) : tarefa.dataPrevista ? (
                             <span className="flex items-center gap-1">
                               <ClockIcon className="w-4 h-4" />
                               {new Date(tarefa.dataPrevista).toLocaleDateString('pt-BR')}
                             </span>
-                          )}
+                          ) : null}
                           {tarefa.dataConclusaoReal && (
                             <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
                               <CheckCircleIcon className="w-4 h-4" />
@@ -497,6 +663,23 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
                 ))}
               </div>
             )}
+
+            {/* Calendário de Alocações */}
+            <div className="mt-8 pt-8 border-t-2 border-gray-200 dark:border-dark-border">
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text flex items-center gap-2">
+                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Calendário de Alocações de Equipes
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
+                  Visualize quando cada equipe está alocada nesta obra
+                </p>
+              </div>
+              
+              <CalendarioAlocacoes obraId={obraId} />
+            </div>
           </div>
         </div>
       </div>
@@ -529,35 +712,166 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
                 />
               </div>
 
+              {/* Toggle de Tipo de Atribuição */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                  Atribuir a Eletricista
+                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">
+                  Tipo de Atribuição
                 </label>
-                <select
-                  value={formTarefa.atribuidoA}
-                  onChange={(e) => setFormTarefa({ ...formTarefa, atribuidoA: e.target.value })}
-                  className="select-field"
-                >
-                  <option value="">Não atribuído</option>
-                  {eletricistas.map((eletricista) => (
-                    <option key={eletricista.id} value={eletricista.id}>
-                      {eletricista.name} ({eletricista.email})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTipoAtribuicao('equipe')}
+                    className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                      tipoAtribuicao === 'equipe'
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg'
+                        : 'bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Atribuir Equipe
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoAtribuicao('individual')}
+                    className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                      tipoAtribuicao === 'individual'
+                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+                        : 'bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Atribuir Individual
+                    </div>
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
-                  Data Prevista
-                </label>
-                <input
-                  type="date"
-                  value={formTarefa.dataPrevista}
-                  onChange={(e) => setFormTarefa({ ...formTarefa, dataPrevista: e.target.value })}
-                  className="input-field"
-                />
-              </div>
+              {/* Seletor de Equipe */}
+              {tipoAtribuicao === 'equipe' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                    Selecionar Equipe *
+                  </label>
+                  <select
+                    value={formTarefa.equipeId}
+                    onChange={(e) => setFormTarefa({ ...formTarefa, equipeId: e.target.value })}
+                    className="select-field"
+                    required={tipoAtribuicao === 'equipe'}
+                    disabled={equipes.length === 0}
+                  >
+                    <option value="">
+                      {equipes.length === 0 ? 'Carregando equipes...' : 'Selecione uma equipe'}
+                    </option>
+                    {equipes.map((equipe) => (
+                      <option key={equipe.id} value={equipe.id}>
+                        {equipe.nome} - {equipe.tipo} ({equipe.membros?.length || 0} {equipe.membros?.length === 1 ? 'membro' : 'membros'})
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {equipes.length === 0 && (
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      Nenhuma equipe disponível. Crie equipes na página de Gestão de Obras.
+                    </p>
+                  )}
+                  
+                  {/* Mostrar membros da equipe selecionada */}
+                  {formTarefa.equipeId && (
+                    <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-2">
+                        👥 Membros da Equipe:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {equipes.find(e => e.id === formTarefa.equipeId)?.membros.map((membro) => (
+                          <span
+                            key={membro.id}
+                            className="px-2 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 rounded-lg text-xs font-medium"
+                          >
+                            {membro.nome} • {membro.funcao}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {equipes.length === 0 && (
+                    <p className="text-xs text-orange-600 mt-2">
+                      ⚠️ Nenhuma equipe disponível. Crie equipes primeiro na gestão de equipes.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Seletor Individual de Eletricista */}
+              {tipoAtribuicao === 'individual' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                    Atribuir a Eletricista
+                  </label>
+                  <select
+                    value={formTarefa.atribuidoA}
+                    onChange={(e) => setFormTarefa({ ...formTarefa, atribuidoA: e.target.value })}
+                    className="select-field"
+                  >
+                    <option value="">Não atribuído</option>
+                    {eletricistas.map((eletricista) => (
+                      <option key={eletricista.id} value={eletricista.id}>
+                        {eletricista.name} ({eletricista.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Datas - Se for equipe, mostrar início e fim */}
+              {tipoAtribuicao === 'equipe' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                      Data de Início *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={formTarefa.dataPrevista}
+                      onChange={(e) => setFormTarefa({ ...formTarefa, dataPrevista: e.target.value })}
+                      className="input-field"
+                      required={tipoAtribuicao === 'equipe'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                      Data de Término *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={formTarefa.dataPrevistaFim}
+                      onChange={(e) => setFormTarefa({ ...formTarefa, dataPrevistaFim: e.target.value })}
+                      className="input-field"
+                      required={tipoAtribuicao === 'equipe'}
+                      min={formTarefa.dataPrevista}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                    Data Prevista
+                  </label>
+                  <input
+                    type="date"
+                    value={formTarefa.dataPrevista}
+                    onChange={(e) => setFormTarefa({ ...formTarefa, dataPrevista: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
@@ -829,6 +1143,15 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
           </div>
         </div>
       )}
+
+      {/* Modal de Gestão de Equipes */}
+      <ModalEquipesDeObra
+        isOpen={modalEquipes}
+        onClose={() => {
+          setModalEquipes(false);
+          carregarEquipes(); // Recarregar equipes após fechar modal
+        }}
+      />
     </>
   );
 };

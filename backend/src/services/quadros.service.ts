@@ -17,6 +17,8 @@ export interface QuadroConfig {
   parafusos?: { materialId: string; quantidade: number }[];
   trilhos?: { materialId: string; quantidade: number; unidade: 'METROS' | 'CM' }[];
   componentes: { materialId: string; quantidade: number }[];
+  fonteDados?: 'ESTOQUE' | 'COTACOES';
+  temItensCotacao?: boolean;
 }
 
 export class QuadrosService {
@@ -25,11 +27,19 @@ export class QuadrosService {
       // Buscar materiais da configuração
       const materiais = await this.buscarMateriaisConfig(config);
       
+      // Validar estoque e identificar itens faltantes
+      const validacao = await this.validarEstoque(config, materiais);
+      
       // Calcular preço total baseado nos materiais
       const precoTotal = this.calcularPrecoTotal(materiais, config);
       
-      // Montar itens do kit
+      // Montar itens do kit (apenas os que NÃO são de cotações)
       const itensKit = this.montarItensKit(config);
+      
+      // Determinar status do estoque
+      const statusEstoque = validacao.itensFaltantes.length > 0 
+        ? 'PENDENTE' 
+        : 'COMPLETO';
       
       // Criar Kit com metadata JSON
       const kit = await prisma.kit.create({
@@ -41,6 +51,11 @@ export class QuadrosService {
           }),
           preco: precoTotal,
           tipo: 'quadro-eletrico',
+          temItensCotacao: config.temItensCotacao || false,
+          itensFaltantes: validacao.itensFaltantes.length > 0 
+            ? JSON.parse(JSON.stringify(validacao.itensFaltantes)) 
+            : null,
+          statusEstoque,
           items: {
             create: itensKit
           }
@@ -52,10 +67,169 @@ export class QuadrosService {
         }
       });
       
+      console.log(`✅ Quadro criado - Status: ${statusEstoque}, Itens faltantes: ${validacao.itensFaltantes.length}`);
       return kit;
     } catch (error) {
       console.error('Erro ao criar quadro:', error);
       throw error;
+    }
+  }
+
+  // Validar estoque dos materiais do quadro
+  private static async validarEstoque(config: QuadroConfig, materiais: any[]) {
+    const itensFaltantes: any[] = [];
+    
+    // Se for do banco frio, todos os itens estão "faltantes"
+    if (config.fonteDados === 'COTACOES' || config.temItensCotacao) {
+      // Extrair todos os IDs e quantidades
+      const todosItens = this.extrairTodosItens(config);
+      
+      todosItens.forEach(item => {
+        // Itens de cotação começam com 'cotacao_'
+        if (item.materialId.startsWith('cotacao_')) {
+          const material = materiais.find(m => m.id === item.materialId);
+          if (material) {
+            itensFaltantes.push({
+              materialId: item.materialId,
+              quantidade: item.quantidade,
+              nome: material.nome || material.descricao,
+              tipo: 'COTACAO'
+            });
+          }
+        }
+      });
+      
+      return { itensFaltantes, statusEstoque: 'PENDENTE' };
+    }
+    
+    // Se for do estoque, validar disponibilidade
+    const todosItens = this.extrairTodosItens(config);
+    
+    for (const item of todosItens) {
+      const material = materiais.find(m => m.id === item.materialId);
+      if (material && material.estoque < item.quantidade) {
+        itensFaltantes.push({
+          materialId: item.materialId,
+          quantidade: item.quantidade,
+          quantidadeFaltante: item.quantidade - material.estoque,
+          nome: material.nome || material.descricao,
+          tipo: 'ESTOQUE_INSUFICIENTE'
+        });
+      }
+    }
+    
+    return { itensFaltantes, statusEstoque: itensFaltantes.length > 0 ? 'PENDENTE' : 'COMPLETO' };
+  }
+
+  // Extrair todos os itens da configuração
+  private static extrairTodosItens(config: QuadroConfig) {
+    const itens: { materialId: string; quantidade: number }[] = [];
+    
+    // Caixas
+    config.caixas.forEach(c => itens.push({ materialId: c.materialId, quantidade: c.quantidade }));
+    
+    // Disjuntor Geral
+    if (config.disjuntorGeral) {
+      itens.push({ materialId: config.disjuntorGeral.materialId, quantidade: config.disjuntorGeral.quantidade });
+    }
+    
+    // Barramento
+    if (config.barramento) {
+      itens.push({ materialId: config.barramento.materialId, quantidade: config.barramento.quantidade });
+    }
+    
+    // Medidores
+    config.medidores.forEach(m => {
+      itens.push({ materialId: m.disjuntorId, quantidade: m.quantidade });
+      if (m.medidorId) {
+        itens.push({ materialId: m.medidorId, quantidade: m.quantidade });
+      }
+    });
+    
+    // Cabos
+    config.cabos.forEach(c => {
+      const qty = c.unidade === 'CM' ? c.quantidade / 100 : c.quantidade;
+      itens.push({ materialId: c.materialId, quantidade: qty });
+    });
+    
+    // DPS
+    if (config.dps) {
+      config.dps.items.forEach(d => itens.push({ materialId: d.materialId, quantidade: d.quantidade }));
+    }
+    
+    // Born
+    if (config.born) {
+      config.born.forEach(b => itens.push({ materialId: b.materialId, quantidade: b.quantidade }));
+    }
+    
+    // Parafusos
+    if (config.parafusos) {
+      config.parafusos.forEach(p => itens.push({ materialId: p.materialId, quantidade: p.quantidade }));
+    }
+    
+    // Trilhos
+    if (config.trilhos) {
+      config.trilhos.forEach(t => {
+        const qty = t.unidade === 'CM' ? t.quantidade / 100 : t.quantidade;
+        itens.push({ materialId: t.materialId, quantidade: qty });
+      });
+    }
+    
+    // Componentes
+    config.componentes.forEach(c => itens.push({ materialId: c.materialId, quantidade: c.quantidade }));
+    
+    return itens;
+  }
+
+  // Revalidar estoque de um quadro (chamado após entrada de materiais)
+  static async revalidarEstoque(kitId: string) {
+    try {
+      const kit = await prisma.kit.findUnique({
+        where: { id: kitId },
+        include: { items: { include: { material: true } } }
+      });
+      
+      if (!kit || kit.tipo !== 'quadro-eletrico') {
+        return { success: false, message: 'Quadro não encontrado' };
+      }
+      
+      // Extrair configuração
+      const metadata = JSON.parse(kit.descricao || '{}');
+      const config: QuadroConfig = metadata.configuracao;
+      
+      if (!config) {
+        return { success: false, message: 'Configuração inválida' };
+      }
+      
+      // Buscar materiais atualizados
+      const materiais = await this.buscarMateriaisConfig(config);
+      
+      // Revalidar estoque
+      const validacao = await this.validarEstoque(config, materiais);
+      
+      // Atualizar kit
+      const kitAtualizado = await prisma.kit.update({
+        where: { id: kitId },
+        data: {
+          itensFaltantes: validacao.itensFaltantes.length > 0 
+            ? JSON.parse(JSON.stringify(validacao.itensFaltantes)) 
+            : null,
+          statusEstoque: validacao.statusEstoque
+        }
+      });
+      
+      console.log(`✅ Quadro ${kitId} revalidado - Status: ${validacao.statusEstoque}`);
+      
+      return { 
+        success: true, 
+        data: kitAtualizado,
+        itensFaltantes: validacao.itensFaltantes,
+        statusAnterior: kit.statusEstoque,
+        statusNovo: validacao.statusEstoque
+      };
+    } catch (error) {
+      console.error('Erro ao revalidar estoque:', error);
+      return { success: false, message: 'Erro ao revalidar estoque' };
     }
   }
 

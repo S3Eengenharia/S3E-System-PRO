@@ -13,6 +13,7 @@ export interface Projeto {
   dataPrevisao: string;
   dataConclusao?: string;
   orcamentoId?: string;
+  valorTotal?: number;
   createdAt: string;
   updatedAt: string;
   cliente?: {

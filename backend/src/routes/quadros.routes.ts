@@ -35,5 +35,12 @@ router.get('/:id', QuadrosController.buscarQuadro);
  */
 router.delete('/:id', QuadrosController.desativarQuadro);
 
+/**
+ * @route POST /api/quadros/:id/revalidar-estoque
+ * @desc Revalidar estoque de um quadro elétrico
+ * @access Private
+ */
+router.post('/:id/revalidar-estoque', QuadrosController.revalidarEstoque);
+
 export default router;
 

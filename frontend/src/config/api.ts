@@ -28,10 +28,12 @@ export const ENDPOINTS = {
   NFE: '/api/nfe',
   EMPRESAS: '/api/empresas',
   MATERIAIS: '/api/materiais',
+  KITS: '/api/kits',
   CATALOGO: {
     // Usando materiais como base para o catálogo
     ITENS: '/api/materiais',
     SERVICOS: '/api/servicos',
+    KITS: '/api/kits',
   },
   DASHBOARD: {
     ESTATISTICAS: '/api/dashboard/estatisticas',

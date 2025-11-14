@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { orcamentosService, type Orcamento as ApiOrcamento, type CreateOrcamentoData } from '../services/orcamentosService';
 import { clientesService, type Cliente } from '../services/clientesService';
 import { axiosApiService } from '../services/axiosApi';
+import ViewToggle from './ui/ViewToggle';
 import { ENDPOINTS } from '../config/api';
 import JoditEditorComponent from './JoditEditor';
 import { generateOrcamentoPDF, type OrcamentoPDFData as OrcamentoPDFDataOld } from '../utils/pdfGenerator';
@@ -117,6 +118,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
     const [statusFilter, setStatusFilter] = useState<string>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [shouldLoadEditor, setShouldLoadEditor] = useState(false);
@@ -155,6 +157,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const [itemSearchTerm, setItemSearchTerm] = useState('');
     const [tipoItemSelecionado, setTipoItemSelecionado] = useState<'material' | 'kit' | 'servico' | 'quadro' | 'cotacao' | 'extra'>('material');
     const [cotacoes, setCotacoes] = useState<any[]>([]);
+    const [kits, setKits] = useState<any[]>([]);
+    const [servicos, setServicos] = useState<any[]>([]);
+    const [quadrosProntos, setQuadrosProntos] = useState<any[]>([]);
 
     // Carregar dados iniciais usando os serviços adequados
     const loadData = async () => {
@@ -164,11 +169,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
             console.log('🔍 Carregando dados de orçamentos via serviços...');
 
-            const [orcamentosRes, clientesRes, materiaisRes, cotacoesRes] = await Promise.all([
+            const [orcamentosRes, clientesRes, materiaisRes, cotacoesRes, kitsRes, servicosRes] = await Promise.all([
                 orcamentosService.listar(),
                 clientesService.listar(),
                 axiosApiService.get<Material[]>(ENDPOINTS.MATERIAIS),
-                axiosApiService.get('/api/cotacoes')
+                axiosApiService.get('/api/cotacoes'),
+                axiosApiService.get(ENDPOINTS.KITS),
+                axiosApiService.get(ENDPOINTS.SERVICOS)
             ]);
 
             console.log('📊 Resposta do serviço - Orçamentos:', orcamentosRes);
@@ -215,12 +222,35 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 setCotacoes([]);
             }
 
+            // Tratar kits
+            if (kitsRes.success && kitsRes.data) {
+                const kitsData = Array.isArray(kitsRes.data) ? kitsRes.data : [];
+                setKits(kitsData);
+                console.log(`✅ ${kitsData.length} kits carregados`);
+            } else {
+                console.warn('⚠️ Erro ao carregar kits:', kitsRes.error);
+                setKits([]);
+            }
+
+            // Tratar serviços
+            if (servicosRes.success && servicosRes.data) {
+                const servicosData = Array.isArray(servicosRes.data) ? servicosRes.data : [];
+                setServicos(servicosData);
+                console.log(`✅ ${servicosData.length} serviços carregados`);
+            } else {
+                console.warn('⚠️ Erro ao carregar serviços:', servicosRes.error);
+                setServicos([]);
+            }
+
         } catch (err) {
             console.error('❌ Erro crítico ao carregar dados:', err);
             setError('Erro de conexão ao carregar dados');
             setOrcamentos([]);
             setClientes([]);
             setMateriais([]);
+            setCotacoes([]);
+            setKits([]);
+            setServicos([]);
         } finally {
             setLoading(false);
         }
@@ -254,6 +284,42 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 cotacao.fornecedorNome?.toLowerCase().includes(itemSearchTerm.toLowerCase())
             );
     }, [cotacoes, itemSearchTerm]);
+
+    // Filtrar kits para seleção
+    const filteredKits = useMemo(() => {
+        if (!Array.isArray(kits)) return [];
+
+        return kits
+            .filter(kit => kit.ativo)
+            .filter(kit =>
+                kit.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                kit.descricao?.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [kits, itemSearchTerm]);
+
+    // Filtrar serviços para seleção
+    const filteredServicos = useMemo(() => {
+        if (!Array.isArray(servicos)) return [];
+
+        return servicos
+            .filter(servico => servico.ativo)
+            .filter(servico =>
+                servico.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                servico.descricao?.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [servicos, itemSearchTerm]);
+
+    // Filtrar quadros prontos para seleção (será implementado quando houver backend)
+    const filteredQuadrosProntos = useMemo(() => {
+        if (!Array.isArray(quadrosProntos)) return [];
+
+        return quadrosProntos
+            .filter(quadro => quadro.ativo)
+            .filter(quadro =>
+                quadro.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
+                quadro.descricao?.toLowerCase().includes(itemSearchTerm.toLowerCase())
+            );
+    }, [quadrosProntos, itemSearchTerm]);
 
     // Filtrar orçamentos
     const filteredOrcamentos = useMemo(() => {
@@ -451,6 +517,67 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         toast.success(`Cotação adicionada do banco frio`);
     };
 
+    // Adicionar kit ao orçamento
+    const handleAddKit = (kit: any) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'KIT',
+            kitId: kit.id,
+            nome: kit.nome,
+            descricao: kit.descricao || kit.nome,
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: kit.precoVenda || kit.custoTotal || 0,
+            precoUnit: (kit.precoVenda || kit.custoTotal || 0) * (1 + formState.bdi / 100),
+            subtotal: (kit.precoVenda || kit.custoTotal || 0) * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Kit adicionado ao orçamento');
+    };
+
+    // Adicionar serviço ao orçamento
+    const handleAddServico = (servico: any) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'SERVICO',
+            servicoId: servico.id,
+            servicoNome: servico.nome,
+            nome: servico.nome,
+            descricao: servico.descricao || servico.nome,
+            unidadeMedida: servico.unidadeMedida || 'UN',
+            quantidade: 1,
+            custoUnit: servico.precoUnitario || servico.preco || 0,
+            precoUnit: (servico.precoUnitario || servico.preco || 0) * (1 + formState.bdi / 100),
+            subtotal: (servico.precoUnitario || servico.preco || 0) * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Serviço adicionado ao orçamento');
+    };
+
+    // Adicionar quadro pronto ao orçamento
+    const handleAddQuadroPronto = (quadro: any) => {
+        const newItem: OrcamentoItem = {
+            tipo: 'QUADRO_PRONTO',
+            quadroId: quadro.id,
+            nome: quadro.nome,
+            descricao: quadro.descricao || quadro.nome,
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: quadro.precoVenda || quadro.custoTotal || 0,
+            precoUnit: (quadro.precoVenda || quadro.custoTotal || 0) * (1 + formState.bdi / 100),
+            subtotal: (quadro.precoVenda || quadro.custoTotal || 0) * (1 + formState.bdi / 100)
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        toast.success('Quadro pronto adicionado ao orçamento');
+    };
+
     // Remover item
     const handleRemoveItem = (index: number) => {
         setItems(prev => prev.filter((_, i) => i !== index));
@@ -603,13 +730,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             ).join('\n');
                             
                             toast.warning('⚠️ Orçamento aprovado com restrições', {
-                                description: `${itemsFrios.length} item(ns) sem estoque suficiente:\n${listaItemsFrios}\n\n📦 Realize a compra destes materiais antes de aprovar o projeto.`,
+                                description: `${itemsFrios.length} item(ns) sem estoque suficiente:\n${listaItemsFrios}\n\n📦 Realize a compra destes materiais antes de iniciar o projeto.`,
                                 duration: 10000,
                                 action: {
-                                    label: 'Ver Detalhes',
-                                    onClick: () => {
-                                        alert(`Items sem estoque:\n\n${listaItemsFrios}\n\n⚠️ O projeto foi criado mas não pode ser aprovado até que todos os materiais estejam em estoque.`);
-                                    }
+                                    label: 'Entendi',
+                                    onClick: () => {}
                                 }
                             });
                         } else {
@@ -936,6 +1061,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         Exibindo <span className="font-bold text-gray-900">{filteredOrcamentos.length}</span> de <span className="font-bold text-gray-900">{orcamentos.length}</span> orçamentos
                     </p>
                     <div className="flex items-center gap-4">
+                        <ViewToggle view={viewMode} onViewChange={setViewMode} />
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                             <span className="text-xs text-gray-600">Pendente: {orcamentos.filter(o => o.status === 'Pendente').length}</span>
@@ -980,7 +1106,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         </button>
                     )}
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredOrcamentos.map((orcamento) => (
                         <div key={orcamento.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-purple-300 transition-all duration-200">
@@ -1084,6 +1210,83 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
                     ))}
+                </div>
+            ) : (
+                /* Visualização em Lista */
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-soft">
+                    <table className="w-full">
+                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Cliente</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Título</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Valor</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Validade</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {filteredOrcamentos.map((orcamento) => (
+                                <tr key={orcamento.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <p className="font-semibold text-gray-900">{orcamento.cliente?.nome || 'N/A'}</p>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <p className="font-medium text-gray-900">{orcamento.titulo}</p>
+                                        <p className="text-xs text-gray-500">#{orcamento.numero || orcamento.id.substring(0, 8)}</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <p className="text-lg font-bold text-purple-700">
+                                            R$ {(orcamento.precoVenda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <p className="text-sm text-gray-600">{new Date(orcamento.validade).toLocaleDateString('pt-BR')}</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`px-3 py-1 text-xs font-bold rounded-lg ${getStatusClass(orcamento.status)}`}>
+                                            {orcamento.status === 'Pendente' && '⏳ '}
+                                            {orcamento.status === 'Aprovado' && '✅ '}
+                                            {orcamento.status === 'Recusado' && '❌ '}
+                                            {orcamento.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => setOrcamentoToView(orcamento)}
+                                                className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                                                title="Visualizar"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => setOrcamentoToEdit(orcamento)}
+                                                className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                                                title="Editar"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleGerarPDFProfissional(orcamento)}
+                                                className="p-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                                                title="PDF"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
@@ -1351,12 +1554,22 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                                             <p className="font-semibold text-gray-900">{item.nome}</p>
                                                             <p className="text-sm text-gray-600">{item.unidadeMedida}</p>
                                                             {/* Flag de Banco Frio */}
-                                                            {(item.tipo === 'COTACAO' || (item as any).cotacao) && (
+                                                            {(item.tipo === 'COTACAO' || (item as any).cotacao || (item as any).cotacaoId) && (
                                                                 <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
                                                                     <span>📦 Banco Frio</span>
-                                                                    <span className="text-blue-600">
-                                                                        • {new Date((item as any).cotacao?.dataAtualizacao || item.dataAtualizacaoCotacao).toLocaleDateString('pt-BR')}
-                                                                    </span>
+                                                                    {(() => {
+                                                                        const dataStr = (item as any).cotacao?.dataAtualizacao || 
+                                                                                      item.dataAtualizacaoCotacao || 
+                                                                                      (item as any).cotacao?.createdAt ||
+                                                                                      (item as any).dataAtualizacao;
+                                                                        if (dataStr) {
+                                                                            const data = new Date(dataStr);
+                                                                            if (!isNaN(data.getTime())) {
+                                                                                return <span className="text-blue-600">• {data.toLocaleDateString('pt-BR')}</span>;
+                                                                            }
+                                                                        }
+                                                                        return <span className="text-blue-600">• Sem data</span>;
+                                                                    })()}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1764,19 +1977,160 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     )
                                 )}
 
-                                {/* Mensagem para outros tipos (ainda não implementados) */}
-                                {['servico', 'kit', 'quadro', 'extra'].includes(tipoItemSelecionado) && (
+                                {/* Lista de Kits */}
+                                {tipoItemSelecionado === 'kit' && (
+                                    filteredKits.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">🎁</span>
+                                            </div>
+                                            <p className="text-gray-500 font-medium">Nenhum kit disponível</p>
+                                            <p className="text-gray-400 text-sm mt-1">Cadastre kits na página de Catálogo</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {filteredKits.map((kit) => (
+                                                <div
+                                                    key={kit.id}
+                                                    className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-2 border-indigo-200 dark:border-indigo-800 p-4 rounded-xl hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-lg transition-all cursor-pointer group"
+                                                    onClick={() => handleAddKit(kit)}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <h4 className="font-bold text-lg text-gray-900 dark:text-dark-text group-hover:text-indigo-900 dark:group-hover:text-indigo-400">
+                                                                    {kit.nome}
+                                                                </h4>
+                                                            </div>
+                                                            {kit.descricao && (
+                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">
+                                                                    {kit.descricao}
+                                                                </p>
+                                                            )}
+                                                            {kit.items && (
+                                                                <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                                                                    📦 {kit.items.length} {kit.items.length === 1 ? 'item' : 'itens'}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right ml-4">
+                                                            <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-lg text-xs font-bold mb-2 inline-block">
+                                                                🎁 Kit
+                                                            </span>
+                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                                                                R$ {(kit.precoVenda || kit.custoTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Lista de Serviços */}
+                                {tipoItemSelecionado === 'servico' && (
+                                    filteredServicos.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">🔧</span>
+                                            </div>
+                                            <p className="text-gray-500 font-medium">Nenhum serviço disponível</p>
+                                            <p className="text-gray-400 text-sm mt-1">Cadastre serviços na página de Catálogo</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {filteredServicos.map((servico) => (
+                                                <div
+                                                    key={servico.id}
+                                                    className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-2 border-blue-200 dark:border-blue-800 p-4 rounded-xl hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg transition-all cursor-pointer group"
+                                                    onClick={() => handleAddServico(servico)}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <h4 className="font-bold text-lg text-gray-900 dark:text-dark-text group-hover:text-blue-900 dark:group-hover:text-blue-400">
+                                                                    {servico.nome}
+                                                                </h4>
+                                                            </div>
+                                                            {servico.descricao && (
+                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">
+                                                                    {servico.descricao}
+                                                                </p>
+                                                            )}
+                                                            <p className="text-xs text-blue-600 dark:text-blue-400">
+                                                                📏 Unidade: {servico.unidadeMedida || 'UN'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="text-right ml-4">
+                                                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-bold mb-2 inline-block">
+                                                                🔧 Serviço
+                                                            </span>
+                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                                                                R$ {(servico.precoUnitario || servico.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Lista de Quadros Prontos */}
+                                {tipoItemSelecionado === 'quadro' && (
+                                    filteredQuadrosProntos.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">⚡</span>
+                                            </div>
+                                            <p className="text-gray-500 font-medium">Nenhum quadro pronto disponível</p>
+                                            <p className="text-gray-400 text-sm mt-1">Funcionalidade será implementada em breve</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {filteredQuadrosProntos.map((quadro) => (
+                                                <div
+                                                    key={quadro.id}
+                                                    className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-2 border-yellow-200 dark:border-yellow-800 p-4 rounded-xl hover:border-yellow-400 dark:hover:border-yellow-600 hover:shadow-lg transition-all cursor-pointer group"
+                                                    onClick={() => handleAddQuadroPronto(quadro)}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <h4 className="font-bold text-lg text-gray-900 dark:text-dark-text group-hover:text-yellow-900 dark:group-hover:text-yellow-400">
+                                                                    {quadro.nome}
+                                                                </h4>
+                                                            </div>
+                                                            {quadro.descricao && (
+                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">
+                                                                    {quadro.descricao}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right ml-4">
+                                                            <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-lg text-xs font-bold mb-2 inline-block">
+                                                                ⚡ Quadro Pronto
+                                                            </span>
+                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                                                                R$ {(quadro.precoVenda || quadro.custoTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Mensagem para custos extras (ainda não implementado) */}
+                                {tipoItemSelecionado === 'extra' && (
                                     <div className="text-center py-12">
                                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                             <span className="text-2xl">⚙️</span>
                                         </div>
                                         <p className="text-gray-500 font-medium">Funcionalidade em desenvolvimento</p>
-                                        <p className="text-gray-400 text-sm mt-1">
-                                            {tipoItemSelecionado === 'servico' && 'Serviços serão implementados em breve'}
-                                            {tipoItemSelecionado === 'kit' && 'Kits serão implementados em breve'}
-                                            {tipoItemSelecionado === 'quadro' && 'Quadros prontos serão implementados em breve'}
-                                            {tipoItemSelecionado === 'extra' && 'Custos extras serão implementados em breve'}
-                                        </p>
+                                        <p className="text-gray-400 text-sm mt-1">Custos extras serão implementados em breve</p>
                                     </div>
                                 )}
                             </div>
@@ -1789,7 +2143,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             {orcamentoToView && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-blue-700">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border bg-[#0a1a2f]">
                             <div>
                                 <h2 className="text-2xl font-bold text-white">Detalhes do Orçamento</h2>
                                 <p className="text-sm text-white/80 mt-1">Visualização completa do orçamento</p>
@@ -1840,18 +2194,28 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                                 <div className="flex justify-between items-start">
                                                     <div className="flex-1">
                                                         <p className="font-semibold text-gray-900">
-                                                            {(item as any).nome || 'Item'}
+                                                            {(item as any).nome || (item as any).descricao || (item as any).material?.nome || (item as any).material?.descricao || (item as any).servicoNome || 'Material sem nome'}
                                                         </p>
                                                         <p className="text-sm text-gray-600 mt-1">
-                                                            {item.quantidade} {(item as any).unidadeMedida || 'UN'} × R$ {((item as any).precoUnit || (item as any).precoUnitario)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                                                            {item.quantidade} {(item as any).unidadeMedida || 'UN'} × R$ {((item as any).precoUnit || (item as any).precoUnitario || item.precoUnit)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
                                                         </p>
                                                         {/* Flag de Banco Frio */}
-                                                        {((item as any).tipo === 'COTACAO' || (item as any).cotacao) && (
+                                                        {((item as any).tipo === 'COTACAO' || (item as any).cotacao || (item as any).cotacaoId) && (
                                                             <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
                                                                 <span>📦 Banco Frio</span>
-                                                                <span className="text-blue-600">
-                                                                    • {new Date((item as any).cotacao?.dataAtualizacao || (item as any).dataAtualizacaoCotacao).toLocaleDateString('pt-BR')}
-                                                                </span>
+                                                                {(() => {
+                                                                    const dataStr = (item as any).cotacao?.dataAtualizacao || 
+                                                                                  (item as any).dataAtualizacaoCotacao || 
+                                                                                  (item as any).cotacao?.createdAt ||
+                                                                                  (item as any).dataAtualizacao;
+                                                                    if (dataStr) {
+                                                                        const data = new Date(dataStr);
+                                                                        if (!isNaN(data.getTime())) {
+                                                                            return <span className="text-blue-600">• {data.toLocaleDateString('pt-BR')}</span>;
+                                                                        }
+                                                                    }
+                                                                    return <span className="text-blue-600">• Sem data</span>;
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </div>
