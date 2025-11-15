@@ -91,7 +91,7 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-3xl bg-white dark:bg-dark-card rounded-2xl shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-gray-200 dark:border-dark-border flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-700">
+        <div className="p-6 border-b border-gray-200 dark:border-dark-border flex items-center justify-between" style={{ backgroundColor: '#0a1a2f' }}>
           <div className="flex items-center gap-3">
             <h3 className="text-xl font-bold text-white">Gerenciar Equipe</h3>
             <span className="text-xs px-2 py-1 rounded bg-white/20 text-white">{mode.toUpperCase()}</span>
@@ -110,7 +110,10 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
               />
               <button
                 onClick={() => { setMode('add'); setForm({ nome: '', email: '', funcao: '' }); }}
-                className="ml-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+                className="ml-3 px-4 py-2 text-white rounded-lg font-semibold"
+                style={{ backgroundColor: '#0a1a2f' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0d2847'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0a1a2f'}
               >
                 + Adicionar
               </button>
@@ -138,7 +141,10 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
                       <td className="px-4 py-2 text-right">
                         <button
                           onClick={() => { setEditingId(u.id); setForm({ nome: u.nome, email: u.email, funcao: u.funcao }); setMode('edit'); }}
-                          className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-dark-card hover:bg-gray-200 dark:hover:bg-dark-border rounded-lg mr-2 text-gray-900 dark:text-dark-text"
+                          className="px-3 py-1.5 text-sm text-white rounded-lg mr-2"
+                          style={{ backgroundColor: '#0a1a2f' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0d2847'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0a1a2f'}
                         >Editar</button>
                         <button
                           onClick={() => onDeleteUsuario?.(u.id)}
@@ -153,7 +159,7 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
                         <div className="text-gray-500 dark:text-dark-text-secondary">
                           <p className="mb-2">Nenhum usuário técnico encontrado</p>
                           <p className="text-xs">
-                            Certifique-se de que existem usuários com as funções: Admin, Gerente, Engenheiro ou Orçamentista
+                            Certifique-se de que existem usuários com as funções: Engenheiro, Técnico, Orçamentista, Compras ou Gerente
                           </p>
                         </div>
                       </td>
@@ -201,7 +207,13 @@ const TeamManagerModal: React.FC<TeamManagerModalProps> = ({
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-dark-border">
               <button type="button" onClick={() => { setMode('view'); setEditingId(null); }} className="px-6 py-3 text-gray-700 dark:text-dark-text bg-gray-100 dark:bg-dark-card rounded-xl hover:bg-gray-200 dark:hover:bg-dark-border font-semibold">Cancelar</button>
-              <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold">Salvar</button>
+              <button 
+                type="submit" 
+                className="px-6 py-3 text-white rounded-xl font-semibold"
+                style={{ backgroundColor: '#0a1a2f' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0d2847'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0a1a2f'}
+              >Salvar</button>
             </div>
           </form>
         )}

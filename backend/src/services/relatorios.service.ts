@@ -10,12 +10,22 @@ interface DadosFinanceirosMensais {
 }
 
 interface ResumoFinanceiro {
-    totalReceitas: number;
-    totalDespesas: number;
-    lucroTotal: number;
-    contasReceberPendentes: number;
-    contasPagarPendentes: number;
-    contasEmAtraso: number;
+    receitaTotal: number;
+    despesaTotal: number;
+    lucroLiquido: number;
+    contasReceber: number;
+    contasPagar: number;
+    saldoAtual: number;
+    receitaMes: number;
+    despesaMes: number;
+    lucroMes: number;
+    // Campos extras para compatibilidade
+    totalReceitas?: number;
+    totalDespesas?: number;
+    lucroTotal?: number;
+    contasReceberPendentes?: number;
+    contasPagarPendentes?: number;
+    contasEmAtraso?: number;
 }
 
 export class RelatoriosService {
@@ -123,13 +133,16 @@ export class RelatoriosService {
      */
     static async getResumoFinanceiro(): Promise<ResumoFinanceiro> {
         const hoje = new Date();
+        const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        inicioMes.setHours(0, 0, 0, 0);
 
         // Buscar todas as contas a receber
         const contasReceber = await prisma.contaReceber.findMany({
             select: {
                 valorParcela: true,
                 status: true,
-                dataVencimento: true
+                dataVencimento: true,
+                dataPagamento: true
             }
         });
 
@@ -138,30 +151,62 @@ export class RelatoriosService {
             select: {
                 valorParcela: true,
                 status: true,
-                dataVencimento: true
+                dataVencimento: true,
+                dataPagamento: true
             }
         });
 
-        // Calcular totais de receitas
-        const totalReceitas = contasReceber
+        // ========== TOTAIS (todas as receitas e despesas já realizadas) ==========
+        // Total de receitas REALIZADAS (contas a receber pagas)
+        const receitaTotal = contasReceber
             .filter(c => c.status === 'Pago')
             .reduce((sum, c) => sum + c.valorParcela, 0);
 
-        // Calcular totais de despesas
-        const totalDespesas = contasPagar
+        // Total de despesas REALIZADAS (contas a pagar pagas)
+        const despesaTotal = contasPagar
             .filter(c => c.status === 'Pago')
             .reduce((sum, c) => sum + c.valorParcela, 0);
 
-        // Contas a receber pendentes
-        const contasReceberPendentes = contasReceber
+        // Lucro líquido (receitas realizadas - despesas realizadas)
+        const lucroLiquido = receitaTotal - despesaTotal;
+
+        // ========== PENDENTES (valores que ainda serão recebidos/pagos) ==========
+        // Contas a receber PENDENTES (valor que ainda será recebido)
+        const totalContasReceber = contasReceber
             .filter(c => c.status === 'Pendente')
             .reduce((sum, c) => sum + c.valorParcela, 0);
 
-        // Contas a pagar pendentes
-        const contasPagarPendentes = contasPagar
+        // Contas a pagar PENDENTES (valor que ainda será pago)
+        const totalContasPagar = contasPagar
             .filter(c => c.status === 'Pendente')
             .reduce((sum, c) => sum + c.valorParcela, 0);
 
+        // Saldo previsto (o que tem a receber - o que tem a pagar)
+        const saldoAtual = totalContasReceber - totalContasPagar;
+
+        // ========== DADOS DO MÊS ATUAL ==========
+        // Receitas do mês atual (contas a receber pagas no mês atual)
+        const receitaMes = contasReceber
+            .filter(c => {
+                if (c.status !== 'Pago' || !c.dataPagamento) return false;
+                const dataPagamento = new Date(c.dataPagamento);
+                return dataPagamento >= inicioMes;
+            })
+            .reduce((sum, c) => sum + c.valorParcela, 0);
+
+        // Despesas do mês atual (contas a pagar pagas no mês atual)
+        const despesaMes = contasPagar
+            .filter(c => {
+                if (c.status !== 'Pago' || !c.dataPagamento) return false;
+                const dataPagamento = new Date(c.dataPagamento);
+                return dataPagamento >= inicioMes;
+            })
+            .reduce((sum, c) => sum + c.valorParcela, 0);
+
+        // Lucro do mês (receitas do mês - despesas do mês)
+        const lucroMes = receitaMes - despesaMes;
+
+        // ========== DADOS DE COMPATIBILIDADE (opcionais) ==========
         // Contas em atraso (receitas e despesas)
         const contasReceberAtrasadas = contasReceber.filter(c => {
             const vencimento = new Date(c.dataVencimento);
@@ -177,11 +222,21 @@ export class RelatoriosService {
         const valorPagarAtrasado = contasPagarAtrasadas.reduce((sum, c) => sum + c.valorParcela, 0);
 
         return {
-            totalReceitas: Number(totalReceitas.toFixed(2)),
-            totalDespesas: Number(totalDespesas.toFixed(2)),
-            lucroTotal: Number((totalReceitas - totalDespesas).toFixed(2)),
-            contasReceberPendentes: Number(contasReceberPendentes.toFixed(2)),
-            contasPagarPendentes: Number(contasPagarPendentes.toFixed(2)),
+            receitaTotal: Number(receitaTotal.toFixed(2)),
+            despesaTotal: Number(despesaTotal.toFixed(2)),
+            lucroLiquido: Number(lucroLiquido.toFixed(2)),
+            contasReceber: Number(totalContasReceber.toFixed(2)),
+            contasPagar: Number(totalContasPagar.toFixed(2)),
+            saldoAtual: Number(saldoAtual.toFixed(2)),
+            receitaMes: Number(receitaMes.toFixed(2)),
+            despesaMes: Number(despesaMes.toFixed(2)),
+            lucroMes: Number(lucroMes.toFixed(2)),
+            // Campos de compatibilidade
+            totalReceitas: Number(receitaTotal.toFixed(2)),
+            totalDespesas: Number(despesaTotal.toFixed(2)),
+            lucroTotal: Number(lucroLiquido.toFixed(2)),
+            contasReceberPendentes: Number(totalContasReceber.toFixed(2)),
+            contasPagarPendentes: Number(totalContasPagar.toFixed(2)),
             contasEmAtraso: Number((valorReceberAtrasado + valorPagarAtrasado).toFixed(2))
         };
     }

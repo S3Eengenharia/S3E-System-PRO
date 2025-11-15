@@ -3,7 +3,7 @@ import { configuracoesService, type ConfiguracaoSistema, type Usuario } from '..
 import { ThemeContext } from '../contexts/ThemeContext';
 import { AuthContext } from '../contexts/AuthContext';
 import { toast } from 'sonner';
-import { API_CONFIG } from '../config/api';
+import { API_CONFIG, getUploadUrl } from '../config/api';
 import {
   Dialog,
   DialogContent,
@@ -123,6 +123,9 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
     });
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [logoPreview, setLogoPreview] = useState<string>('');
+    const [logosDisponiveis, setLogosDisponiveis] = useState<Array<{ filename: string; url: string }>>([]);
+    const [logoSelecionada, setLogoSelecionada] = useState<string>('');
+    const [loadingLogos, setLoadingLogos] = useState(false);
     
     // Estados de Configuração Fiscal
     const [certificadoPFX, setCertificadoPFX] = useState<string>('');
@@ -138,6 +141,13 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
     
     // Estados do Modal de Criar Usuário
     const [isModalUsuarioOpen, setIsModalUsuarioOpen] = useState(false);
+    const [isModalEditarUsuarioOpen, setIsModalEditarUsuarioOpen] = useState(false);
+    const [usuarioParaEditar, setUsuarioParaEditar] = useState<Usuario | null>(null);
+    const [editarUsuarioForm, setEditarUsuarioForm] = useState({
+        email: '',
+        name: '',
+        senhaNova: ''
+    });
     const [novoUsuario, setNovoUsuario] = useState({
         email: '',
         password: '',
@@ -162,7 +172,17 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         if (abaAtiva === 'usuarios') {
             loadUsuarios();
         }
-    }, [abaAtiva, isEletricista]);
+        
+        // Carregar logos quando a aba empresa for ativada e usuário for admin
+        if (abaAtiva === 'empresa' && user?.role?.toLowerCase() === 'admin') {
+            loadLogos();
+            // Carregar logo atual se existir
+            if (config?.logoUrl) {
+                setLogoSelecionada(config.logoUrl);
+                setLogoPreview(config.logoUrl);
+            }
+        }
+    }, [abaAtiva, isEletricista, config?.logoUrl, user?.role]);
 
     const loadConfiguracoes = async () => {
         try {
@@ -208,6 +228,25 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         }
     };
 
+    const loadLogos = async () => {
+        try {
+            setLoadingLogos(true);
+            const response = await configuracoesService.listarLogos();
+            
+            if (response.success && response.data) {
+                setLogosDisponiveis(Array.isArray(response.data) ? response.data : []);
+            } else {
+                setLogosDisponiveis([]);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar logos:', error);
+            setLogosDisponiveis([]);
+            toast.error('❌ Erro ao carregar logos disponíveis');
+        } finally {
+            setLoadingLogos(false);
+        }
+    };
+
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -225,6 +264,11 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         try {
             setSaving(true);
             
+            // Se houver logo selecionada, atualizar primeiro
+            if (logoSelecionada && user?.role?.toLowerCase() === 'admin') {
+                await configuracoesService.atualizarLogo(logoSelecionada);
+            }
+            
             const response = await configuracoesService.salvarConfiguracoes(formConfig);
             
             if (response.success) {
@@ -236,6 +280,35 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
         } catch (error) {
             console.error('Erro ao salvar configurações:', error);
             toast.error('❌ Erro ao salvar configurações');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAtualizarLogo = async (logoUrl: string) => {
+        try {
+            setSaving(true);
+            const response = await configuracoesService.atualizarLogo(logoUrl);
+            
+            if (response.success) {
+                setLogoSelecionada(logoUrl);
+                setLogoPreview(logoUrl);
+                
+                // Salvar no localStorage para que todos os usuários vejam
+                const fullLogoUrl = getUploadUrl(logoUrl);
+                localStorage.setItem('companyLogo', fullLogoUrl);
+                
+                // Disparar evento customizado para atualizar outros componentes
+                window.dispatchEvent(new CustomEvent('logoUpdated', { detail: { logoUrl: fullLogoUrl } }));
+                
+                toast.success('✅ Logo atualizada com sucesso!');
+                await loadConfiguracoes();
+            } else {
+                toast.error(`❌ ${response.error || 'Erro ao atualizar logo'}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao atualizar logo:', error);
+            toast.error(error?.response?.data?.error || '❌ Erro ao atualizar logo');
         } finally {
             setSaving(false);
         }
@@ -322,6 +395,74 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
             toast.error('❌ Erro ao criar usuário');
         } finally {
             setCreatingUser(false);
+        }
+    };
+
+    const handleOpenModalEditar = (usuario: Usuario) => {
+        // Verificar se o usuário tem permissão (gerente, admin ou desenvolvedor)
+        const userRole = user?.role?.toLowerCase();
+        const rolesPermitidos = ['gerente', 'admin', 'desenvolvedor'];
+        
+        if (!rolesPermitidos.includes(userRole || '')) {
+            toast.error('🚫 Você não tem permissão para editar usuários');
+            return;
+        }
+        
+        setUsuarioParaEditar(usuario);
+        setEditarUsuarioForm({
+            email: usuario.email,
+            name: usuario.name,
+            senhaNova: ''
+        });
+        setIsModalEditarUsuarioOpen(true);
+    };
+
+    const handleCloseModalEditar = () => {
+        setIsModalEditarUsuarioOpen(false);
+        setUsuarioParaEditar(null);
+        setEditarUsuarioForm({
+            email: '',
+            name: '',
+            senhaNova: ''
+        });
+    };
+
+    const handleSalvarEdicaoUsuario = async () => {
+        if (!usuarioParaEditar) return;
+        
+        try {
+            setSaving(true);
+            
+            const dadosAtualizacao: any = {};
+            if (editarUsuarioForm.email !== usuarioParaEditar.email) {
+                dadosAtualizacao.email = editarUsuarioForm.email;
+            }
+            if (editarUsuarioForm.name !== usuarioParaEditar.name) {
+                dadosAtualizacao.name = editarUsuarioForm.name;
+            }
+            if (editarUsuarioForm.senhaNova && editarUsuarioForm.senhaNova.length >= 6) {
+                dadosAtualizacao.senhaNova = editarUsuarioForm.senhaNova;
+            }
+            
+            if (Object.keys(dadosAtualizacao).length === 0) {
+                toast.info('Nenhuma alteração detectada');
+                return;
+            }
+            
+            const response = await configuracoesService.atualizarUsuario(usuarioParaEditar.id, dadosAtualizacao);
+            
+            if (response.success) {
+                toast.success('✅ Usuário atualizado com sucesso!');
+                handleCloseModalEditar();
+                await loadUsuarios();
+            } else {
+                toast.error(`❌ ${response.error || 'Erro ao atualizar usuário'}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao atualizar usuário:', error);
+            toast.error(error?.response?.data?.error || '❌ Erro ao atualizar usuário');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -990,14 +1131,31 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                                             </button>
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                            <button
-                                                                onClick={() => handleOpenModalExcluir(usuario)}
-                                                                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-red-100 text-red-800 ring-1 ring-red-200 hover:bg-red-200 transition-colors"
-                                                                title="Excluir usuário"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                                Excluir
-                                                            </button>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                {/* Botão Editar - Apenas para gerente, admin e desenvolvedor */}
+                                                                {(user?.role?.toLowerCase() === 'gerente' || 
+                                                                  user?.role?.toLowerCase() === 'admin' || 
+                                                                  user?.role?.toLowerCase() === 'desenvolvedor') && (
+                                                                    <button
+                                                                        onClick={() => handleOpenModalEditar(usuario)}
+                                                                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-100 text-blue-800 ring-1 ring-blue-200 hover:bg-blue-200 transition-colors"
+                                                                        title="Editar usuário"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                        </svg>
+                                                                        Editar
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => handleOpenModalExcluir(usuario)}
+                                                                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-red-100 text-red-800 ring-1 ring-red-200 hover:bg-red-200 transition-colors"
+                                                                    title="Excluir usuário"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                    Excluir
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -1168,6 +1326,133 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                 <p className="text-gray-600">Dados básicos de contato e identificação</p>
                             </div>
 
+                            {/* Logo da Empresa - Apenas Admin */}
+                            {user?.role?.toLowerCase() === 'admin' && (
+                                <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-4">Logo da Empresa</h3>
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        Selecione uma logo da pasta de uploads ou faça upload de uma nova. A logo será exibida para todos os usuários.
+                                    </p>
+                                    
+                                    {/* Preview da Logo Atual */}
+                                    {logoPreview && (
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Logo Atual:</label>
+                                            <div className="flex items-center gap-4">
+                                                <img 
+                                                    src={getUploadUrl(logoPreview)} 
+                                                    alt="Logo da empresa" 
+                                                    className="h-20 w-auto object-contain border border-gray-200 rounded-lg p-2 bg-gray-50"
+                                                />
+                                                <div>
+                                                    <p className="text-sm text-gray-600">Logo selecionada</p>
+                                                    <p className="text-xs text-gray-500">{logoSelecionada}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Seleção de Logo Existente */}
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Selecionar Logo Existente:
+                                        </label>
+                                        {loadingLogos ? (
+                                            <div className="text-center py-4">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                                                <p className="text-sm text-gray-500 mt-2">Carregando logos...</p>
+                                            </div>
+                                        ) : logosDisponiveis.length === 0 ? (
+                                            <div className="text-center py-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                                                <p className="text-sm text-gray-500">Nenhuma logo encontrada na pasta uploads/logos</p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-lg border border-gray-200">
+                                                {logosDisponiveis.map((logo) => (
+                                                    <button
+                                                        key={logo.filename}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setLogoSelecionada(logo.url);
+                                                            setLogoPreview(logo.url);
+                                                            handleAtualizarLogo(logo.url);
+                                                        }}
+                                                        className={`relative p-2 border-2 rounded-lg transition-all ${
+                                                            logoSelecionada === logo.url
+                                                                ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200'
+                                                                : 'border-gray-200 hover:border-indigo-300 bg-white'
+                                                        }`}
+                                                    >
+                                                        <img 
+                                                            src={getUploadUrl(logo.url)}
+                                                            alt={logo.filename}
+                                                            className="w-full h-16 object-contain"
+                                                        />
+                                                        {logoSelecionada === logo.url && (
+                                                            <div className="absolute top-1 right-1 bg-indigo-500 text-white rounded-full p-1">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Upload de Nova Logo */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Ou fazer upload de nova logo:
+                                        </label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleLogoChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                        {logoFile && (
+                                            <div className="mt-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        try {
+                                                            setSaving(true);
+                                                            const response = await configuracoesService.uploadLogo(logoFile);
+                                                            if (response.success && response.data) {
+                                                                const logoUrl = response.data.logoUrl;
+                                                                setLogoSelecionada(logoUrl);
+                                                                setLogoPreview(logoUrl);
+                                                                
+                                                                // Salvar no localStorage para que todos os usuários vejam
+                                                                const fullLogoUrl = getUploadUrl(logoUrl);
+                                                                localStorage.setItem('companyLogo', fullLogoUrl);
+                                                                
+                                                                // Disparar evento customizado para atualizar outros componentes
+                                                                window.dispatchEvent(new CustomEvent('logoUpdated', { detail: { logoUrl: fullLogoUrl } }));
+                                                                
+                                                                toast.success('✅ Logo enviada com sucesso!');
+                                                                await loadLogos();
+                                                                await loadConfiguracoes();
+                                                            }
+                                                        } catch (error: any) {
+                                                            toast.error(error?.response?.data?.error || '❌ Erro ao enviar logo');
+                                                        } finally {
+                                                            setSaving(false);
+                                                        }
+                                                    }}
+                                                    disabled={saving}
+                                                    className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                                >
+                                                    {saving ? 'Enviando...' : 'Enviar Logo'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -1327,6 +1612,112 @@ const Configuracoes: React.FC<ConfiguracoesProps> = ({ toggleSidebar }) => {
                                     <>
                                         <CheckIcon className="w-5 h-5 inline mr-2" />
                                         Criar Usuário
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE EDITAR USUÁRIO */}
+            {isModalEditarUsuarioOpen && usuarioParaEditar && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-scale-in">
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                            <h3 className="text-2xl font-bold text-gray-900">Editar Usuário</h3>
+                            <button
+                                onClick={handleCloseModalEditar}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <XMarkIcon className="w-6 h-6 text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-4">
+                            {/* Nome */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nome Completo *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editarUsuarioForm.name}
+                                    onChange={(e) => setEditarUsuarioForm({...editarUsuarioForm, name: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="João da Silva"
+                                />
+                            </div>
+
+                            {/* Email */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Email *
+                                </label>
+                                <input
+                                    type="email"
+                                    value={editarUsuarioForm.email}
+                                    onChange={(e) => setEditarUsuarioForm({...editarUsuarioForm, email: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="joao@s3e.com"
+                                />
+                            </div>
+
+                            {/* Nova Senha */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nova Senha
+                                </label>
+                                <input
+                                    type="password"
+                                    value={editarUsuarioForm.senhaNova}
+                                    onChange={(e) => setEditarUsuarioForm({...editarUsuarioForm, senhaNova: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Deixe em branco para não alterar (mínimo 6 caracteres)"
+                                    minLength={6}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Deixe em branco se não quiser alterar a senha
+                                </p>
+                            </div>
+
+                            {/* Informação */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <p className="text-xs text-blue-800">
+                                    💡 <strong>Nota:</strong> Apenas gerente, admin e desenvolvedor podem editar usuários. 
+                                    Você pode alterar o email e a senha sem precisar da senha atual.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex gap-3 p-6 border-t border-gray-200">
+                            <button
+                                onClick={handleCloseModalEditar}
+                                disabled={saving}
+                                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSalvarEdicaoUsuario}
+                                disabled={saving || !editarUsuarioForm.name.trim() || !editarUsuarioForm.email.trim()}
+                                className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-600 transition-all shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {saving ? (
+                                    <>
+                                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Salvando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckIcon className="w-5 h-5" />
+                                        Salvar Alterações
                                     </>
                                 )}
                             </button>

@@ -155,6 +155,108 @@ export class ConfiguracaoController {
   }
 
   /**
+   * GET /api/configuracoes/logos
+   * Lista todas as logos disponíveis na pasta uploads/logos
+   * Requer: Admin
+   */
+  static async listarLogos(req: Request, res: Response): Promise<void> {
+    try {
+      const cwd = process.cwd();
+      const isBackendFolder = cwd.endsWith('backend');
+      const logosDir = isBackendFolder 
+        ? path.join(cwd, 'uploads', 'logos')
+        : path.join(cwd, 'backend', 'uploads', 'logos');
+      
+      // Criar diretório se não existir
+      if (!fs.existsSync(logosDir)) {
+        fs.mkdirSync(logosDir, { recursive: true });
+        res.status(200).json({ success: true, data: [] });
+        return;
+      }
+
+      // Ler arquivos do diretório
+      const files = fs.readdirSync(logosDir);
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.svg', '.webp', '.gif'];
+      
+      const logos = files
+        .filter(file => {
+          const ext = path.extname(file).toLowerCase();
+          return imageExtensions.includes(ext);
+        })
+        .map(file => ({
+          filename: file,
+          url: `/uploads/logos/${file}`,
+          path: path.join(logosDir, file)
+        }));
+
+      res.status(200).json({ 
+        success: true, 
+        data: logos 
+      });
+    } catch (error: any) {
+      console.error('Erro ao listar logos:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao listar logos', 
+        error: error.message 
+      });
+    }
+  }
+
+  /**
+   * PUT /api/configuracoes/logo
+   * Atualiza a logo da empresa selecionando uma logo existente
+   * Requer: Admin
+   */
+  static async atualizarLogo(req: Request, res: Response): Promise<void> {
+    try {
+      const { logoUrl } = req.body;
+
+      if (!logoUrl) {
+        res.status(400).json({
+          success: false,
+          message: 'URL da logo é obrigatória'
+        });
+        return;
+      }
+
+      // Validar se a logo existe
+      const cwd = process.cwd();
+      const isBackendFolder = cwd.endsWith('backend');
+      const logosDir = isBackendFolder 
+        ? path.join(cwd, 'uploads', 'logos')
+        : path.join(cwd, 'backend', 'uploads', 'logos');
+      
+      const filename = path.basename(logoUrl);
+      const logoPath = path.join(logosDir, filename);
+
+      if (!fs.existsSync(logoPath)) {
+        res.status(404).json({
+          success: false,
+          message: 'Logo não encontrada'
+        });
+        return;
+      }
+
+      // Salvar URL no banco de dados
+      const configuracoes = await configuracaoService.salvarConfiguracoes({ logoUrl });
+
+      res.status(200).json({
+        success: true,
+        data: configuracoes,
+        message: 'Logo atualizada com sucesso'
+      });
+    } catch (error: any) {
+      console.error('Erro ao atualizar logo:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao atualizar logo',
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * GET /api/configuracoes/usuarios
    * Lista todos os usuários (sem senha)
    * Requer: Admin
@@ -477,6 +579,133 @@ export class ConfiguracaoController {
       res.status(500).json({
         success: false,
         error: 'Erro ao atualizar perfil'
+      });
+    }
+  }
+
+  /**
+   * PUT /api/configuracoes/usuarios/:id
+   * Atualiza email e senha de um usuário
+   * Requer: Gerente, Admin ou Desenvolvedor
+   */
+  static async atualizarUsuario(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { email, senhaNova, name } = req.body;
+      const userRole = (req as any).user?.role?.toLowerCase();
+      
+      // Verificar permissão: apenas gerente, admin ou desenvolvedor
+      const rolesPermitidos = ['gerente', 'admin', 'desenvolvedor'];
+      if (!rolesPermitidos.includes(userRole)) {
+        res.status(403).json({
+          success: false,
+          error: '🚫 Você não tem permissão para editar usuários'
+        });
+        return;
+      }
+      
+      const usuario = await prisma.user.findUnique({
+        where: { id }
+      });
+      
+      if (!usuario) {
+        res.status(404).json({
+          success: false,
+          error: 'Usuário não encontrado'
+        });
+        return;
+      }
+      
+      const dadosAtualizacao: any = {};
+      
+      // Atualizar email (se fornecido)
+      if (email && email !== usuario.email) {
+        // Verificar se o email já existe
+        const emailExistente = await prisma.user.findUnique({
+          where: { email }
+        });
+        
+        if (emailExistente && emailExistente.id !== id) {
+          res.status(400).json({
+            success: false,
+            error: 'Este email já está em uso por outro usuário'
+          });
+          return;
+        }
+        
+        dadosAtualizacao.email = email;
+      }
+      
+      // Atualizar nome (se fornecido)
+      if (name) {
+        dadosAtualizacao.name = name;
+      }
+      
+      // Atualizar senha (se fornecida) - sem precisar da senha atual para admin/gerente/desenvolvedor
+      if (senhaNova) {
+        if (senhaNova.length < 6) {
+          res.status(400).json({
+            success: false,
+            error: 'A senha deve ter no mínimo 6 caracteres'
+          });
+          return;
+        }
+        
+        const bcrypt = (await import('bcryptjs')).default;
+        dadosAtualizacao.password = await bcrypt.hash(senhaNova, 10);
+      }
+      
+      // Se não houver nada para atualizar
+      if (Object.keys(dadosAtualizacao).length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Nenhum dado fornecido para atualização'
+        });
+        return;
+      }
+      
+      // Atualizar usuário
+      const usuarioAtualizado = await prisma.user.update({
+        where: { id },
+        data: dadosAtualizacao,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          active: true
+        }
+      });
+      
+      // Audit log
+      const userId = (req as any).user?.userId;
+      await prisma.auditLog.create({
+        data: {
+          userId: userId,
+          action: 'UPDATE_USER',
+          entity: 'User',
+          entityId: id,
+          description: `Usuário atualizado: ${email ? 'email' : ''}${email && senhaNova ? ' e ' : ''}${senhaNova ? 'senha' : ''}${name ? ' e nome' : ''}`,
+          metadata: {
+            emailAlterado: !!email,
+            senhaAlterada: !!senhaNova,
+            nomeAlterado: !!name
+          }
+        }
+      });
+      
+      console.log(`✅ Usuário atualizado: ${usuarioAtualizado.email}`);
+      
+      res.json({
+        success: true,
+        data: usuarioAtualizado,
+        message: '✅ Usuário atualizado com sucesso!'
+      });
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar usuário:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Erro ao atualizar usuário'
       });
     }
   }

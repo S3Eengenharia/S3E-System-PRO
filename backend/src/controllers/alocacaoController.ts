@@ -3,6 +3,7 @@ import {
   alocacaoService, 
   CriarEquipeDTO, 
   AlocarEquipeDTO,
+  AlocarEletricistaDTO,
   AtualizarAlocacaoDTO 
 } from '../services/alocacao.service';
 
@@ -216,17 +217,56 @@ export class AlocacaoController {
   }
 
   /**
+   * Aloca um eletricista individual a um projeto/obra
+   * POST /api/obras/alocar-eletricista
+   */
+  static async alocarEletricista(req: Request, res: Response) {
+    try {
+      const data: AlocarEletricistaDTO = req.body;
+
+      // Validações
+      if (!data.eletricistaId || !data.projetoId || !data.dataInicio || !data.duracaoDias) {
+        return res.status(400).json({
+          error: 'Dados obrigatórios ausentes: eletricistaId, projetoId, dataInicio, duracaoDias'
+        });
+      }
+
+      if (data.duracaoDias <= 0) {
+        return res.status(400).json({
+          error: 'A duração deve ser maior que zero'
+        });
+      }
+
+      const alocacao = await alocacaoService.alocarEletricista(data);
+
+      res.status(201).json({
+        success: true,
+        message: 'Eletricista alocado com sucesso',
+        data: alocacao
+      });
+    } catch (error) {
+      console.error('Erro ao alocar eletricista:', error);
+      const statusCode = error instanceof Error && error.message.includes('Conflito') ? 409 : 500;
+      res.status(statusCode).json({
+        error: 'Erro ao alocar eletricista',
+        message: error instanceof Error ? error.message : 'Erro desconhecido'
+      });
+    }
+  }
+
+  /**
    * Lista todas as alocações com filtros opcionais
    * GET /api/obras/alocacoes
-   * Query params: equipeId, projetoId, status, dataInicio, dataFim
+   * Query params: equipeId, eletricistaId, projetoId, status, dataInicio, dataFim
    */
   static async listarAlocacoes(req: Request, res: Response) {
     try {
-      const { equipeId, projetoId, status, dataInicio, dataFim } = req.query;
+      const { equipeId, eletricistaId, projetoId, status, dataInicio, dataFim } = req.query;
 
       const filtros: any = {};
 
       if (equipeId) filtros.equipeId = equipeId as string;
+      if (eletricistaId) filtros.eletricistaId = eletricistaId as string;
       if (projetoId) filtros.projetoId = projetoId as string;
       if (status) filtros.status = status as string;
       if (dataInicio) filtros.dataInicio = new Date(dataInicio as string);

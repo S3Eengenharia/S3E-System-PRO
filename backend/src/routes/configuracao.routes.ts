@@ -29,6 +29,20 @@ router.put('/', authorize('admin'), ConfiguracaoController.salvarConfiguracoes);
 router.post('/upload-logo', authorize('admin'), uploadLogo, ConfiguracaoController.uploadLogo);
 
 /**
+ * @route GET /api/configuracoes/logos
+ * @desc Lista todas as logos disponíveis na pasta uploads/logos
+ * @access Admin only
+ */
+router.get('/logos', authorize('admin'), ConfiguracaoController.listarLogos);
+
+/**
+ * @route PUT /api/configuracoes/logo
+ * @desc Atualiza a logo da empresa selecionando uma logo existente
+ * @access Admin only
+ */
+router.put('/logo', authorize('admin'), ConfiguracaoController.atualizarLogo);
+
+/**
  * @route GET /api/configuracoes/usuarios
  * @desc Lista todos os usuários
  * @access Admin only
@@ -69,6 +83,13 @@ router.delete('/usuarios/:id', authorize('admin'), ConfiguracaoController.exclui
  * @access Authenticated (próprio usuário ou desenvolvedor)
  */
 router.put('/usuarios/:id/perfil', ConfiguracaoController.atualizarPerfil);
+
+/**
+ * @route PUT /api/configuracoes/usuarios/:id
+ * @desc Atualiza email e senha de um usuário
+ * @access Gerente, Admin ou Desenvolvedor
+ */
+router.put('/usuarios/:id', authorize('admin', 'gerente', 'desenvolvedor'), ConfiguracaoController.atualizarUsuario);
 
 export default router;
 

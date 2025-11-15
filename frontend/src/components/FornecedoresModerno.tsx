@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { fornecedoresService, type Fornecedor, type CreateFornecedorData } from '../services/fornecedoresService';
+import ViewToggle from './ui/ViewToggle';
+import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
 
 // Icons (mesmos do ClientesModerno)
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -48,6 +50,13 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [ativoFilter, setAtivoFilter] = useState<'Todos' | 'Ativo' | 'Inativo'>('Todos');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(loadViewMode('Fornecedores'));
+    
+    // Salvar viewMode no localStorage quando mudar
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        saveViewMode('Fornecedores', mode);
+    };
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [fornecedorToEdit, setFornecedorToEdit] = useState<Fornecedor | null>(null);
@@ -258,11 +267,12 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                     </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
+                <div className="mt-4 flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm text-gray-600">
                         Exibindo <span className="font-bold text-gray-900">{filteredFornecedores.length}</span> de <span className="font-bold text-gray-900">{fornecedores.length}</span> fornecedores
                     </p>
                     <div className="flex items-center gap-4">
+                        <ViewToggle view={viewMode} onViewChange={handleViewModeChange} />
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                             <span className="text-xs text-gray-600">Ativo: {fornecedores.filter(f => f.ativo).length}</span>
@@ -275,7 +285,7 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                 </div>
             </div>
 
-            {/* Grid de Fornecedores */}
+            {/* Grid/Lista de Fornecedores */}
             {filteredFornecedores.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-16 text-center">
                     <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -297,7 +307,7 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                         </button>
                     )}
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredFornecedores.map((fornecedor) => (
                         <div key={fornecedor.id} className={`bg-white border-2 rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all duration-200 ${
@@ -378,6 +388,77 @@ const FornecedoresModerno: React.FC<FornecedoresProps> = ({ toggleSidebar }) => 
                             </div>
                         </div>
                     ))}
+                </div>
+            ) : (
+                <div className="bg-white rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Nome</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">CNPJ</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Telefone</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredFornecedores.map((fornecedor) => (
+                                    <tr key={fornecedor.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="font-bold text-gray-900">{fornecedor.nome}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="font-mono text-sm text-gray-600">{fornecedor.cnpj}</span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-sm text-gray-600">{fornecedor.email || '-'}</span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-sm text-gray-600">{fornecedor.telefone || '-'}</span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm ${
+                                                fornecedor.ativo 
+                                                    ? 'bg-green-100 text-green-800 ring-1 ring-green-200' 
+                                                    : 'bg-red-100 text-red-800 ring-1 ring-red-200'
+                                            }`}>
+                                                {fornecedor.ativo ? '✓ Ativo' : '⚠ Inativo'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-2">
+                                                {fornecedor.ativo ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleOpenModal(fornecedor)}
+                                                            className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
+                                                        >
+                                                            <PencilIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setFornecedorToDelete(fornecedor)}
+                                                            className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleReativar(fornecedor)}
+                                                        className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
+                                                    >
+                                                        <ArrowPathIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 

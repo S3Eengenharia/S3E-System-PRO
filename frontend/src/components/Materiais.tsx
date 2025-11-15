@@ -1,8 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { type MaterialItem, MaterialCategory } from '../types';
 import { materiaisService, Material } from '../services/materiaisService';
 import ViewToggle from './ui/ViewToggle';
+import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+import {
+    generateExampleTemplate,
+    exportToJSON,
+    readJSONFile,
+    validateImportData,
+    type MaterialTemplate,
+    type ImportExportData,
+} from '../utils/importExportTemplates';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -84,7 +93,13 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<MaterialCategory | 'Todos'>('Todos');
     const [stockFilter, setStockFilter] = useState<'Todos' | 'Baixo' | 'Zerado'>('Todos');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(loadViewMode('Materiais'));
+    
+    // Salvar viewMode no localStorage quando mudar
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        saveViewMode('Materiais', mode);
+    };
     
     // Estados do modal
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,6 +117,8 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     const [modalImportarOpen, setModalImportarOpen] = useState(false);
     const [arquivoImportar, setArquivoImportar] = useState<File | null>(null);
     const [processandoImportacao, setProcessandoImportacao] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [formState, setFormState] = useState<MaterialFormState>({
         name: '',
         sku: '',
@@ -557,6 +574,124 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         }
     };
 
+    // Funções de Exportação/Importação JSON
+    const handleExportTemplate = () => {
+        try {
+            setMenuExportarOpen(false);
+            const template = generateExampleTemplate('materiais');
+            exportToJSON(template, `template_materiais_${new Date().toISOString().split('T')[0]}.json`);
+            toast.success('✅ Template exportado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao exportar template:', error);
+            toast.error('❌ Erro ao exportar template');
+        }
+    };
+
+    const handleExportJSON = () => {
+        try {
+            setMenuExportarOpen(false);
+            const template: ImportExportData = {
+                version: '1.0.0',
+                exportDate: new Date().toISOString(),
+                materiais: materials.map(material => ({
+                    codigo: material.sku,
+                    descricao: material.name,
+                    unidade: material.unitOfMeasure,
+                    preco: material.price || 0,
+                    estoque: material.stock,
+                    estoqueMinimo: material.minStock,
+                    categoria: material.type || material.category,
+                    fornecedorId: material.supplierId,
+                    fornecedorNome: material.supplierName || material.supplier?.name,
+                    ativo: material.ativo !== false,
+                })),
+            };
+            exportToJSON(template, `materiais_export_${new Date().toISOString().split('T')[0]}.json`);
+            toast.success(`✅ ${materials.length} material(is) exportado(s) com sucesso!`);
+        } catch (error) {
+            console.error('Erro ao exportar materiais:', error);
+            toast.error('❌ Erro ao exportar materiais');
+        }
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setImporting(true);
+            const data = await readJSONFile(file);
+            
+            // Validar estrutura
+            const validation = validateImportData(data);
+            if (!validation.valid) {
+                toast.error('❌ Erro na validação do arquivo: ' + validation.errors.join(', '));
+                return;
+            }
+
+            if (!data.materiais || data.materiais.length === 0) {
+                toast.error('❌ O arquivo não contém materiais para importar');
+                return;
+            }
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Importar cada material
+            for (const materialTemplate of data.materiais) {
+                try {
+                    // Buscar fornecedor por nome se não tiver ID
+                    let fornecedorId = materialTemplate.fornecedorId;
+                    if (!fornecedorId && materialTemplate.fornecedorNome) {
+                        // Aqui você precisaria buscar o fornecedor pelo nome
+                        // Por enquanto, deixamos como opcional
+                        console.warn(`Fornecedor não encontrado: ${materialTemplate.fornecedorNome}`);
+                    }
+
+                    // Criar material
+                    const materialData = {
+                        codigo: materialTemplate.codigo,
+                        descricao: materialTemplate.descricao,
+                        unidade: materialTemplate.unidade,
+                        preco: materialTemplate.preco,
+                        estoque: materialTemplate.estoque,
+                        estoqueMinimo: materialTemplate.estoqueMinimo || 5,
+                        categoria: materialTemplate.categoria,
+                        fornecedorId,
+                    };
+
+                    const response = await materiaisService.createMaterial(materialData);
+                    if (response.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        console.error('Erro ao criar material:', response.error || response.message);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error('Erro ao importar material:', error);
+                }
+            }
+
+            // Limpar input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+
+            toast.success(`✅ Importação concluída! ${successCount} material(is) importado(s), ${errorCount} erro(s)`);
+            await loadMaterials(); // Recarregar lista
+        } catch (error) {
+            console.error('Erro ao importar arquivo:', error);
+            toast.error('❌ Erro ao importar arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+        } finally {
+            setImporting(false);
+        }
+    };
+
     const getStockStatusClass = (material: MaterialItem) => {
         if (material.stock === 0) {
             return 'bg-red-100 text-red-800 ring-1 ring-red-200';
@@ -675,6 +810,51 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                         <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Visualização impressa</p>
                                     </div>
                                 </button>
+                                <div className="border-t border-gray-200 dark:border-dark-border my-2"></div>
+                                <button
+                                    onClick={handleExportTemplate}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                                >
+                                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">Template JSON</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Exportar template</p>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={handleExportJSON}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                                >
+                                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">Exportar JSON</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Todos os materiais</p>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={handleImportClick}
+                                    disabled={importing}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3 disabled:opacity-50"
+                                >
+                                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-dark-text">{importing ? 'Importando...' : 'Importar JSON'}</p>
+                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary">Importar materiais</p>
+                                    </div>
+                                </button>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".json"
+                                    onChange={handleImportJSON}
+                                    style={{ display: 'none' }}
+                                />
                                 <div className="border-t border-gray-200 dark:border-dark-border my-2"></div>
                                 <button
                                     onClick={() => setModalImportarOpen(true)}
@@ -811,7 +991,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                         Exibindo <span className="font-bold text-gray-900 dark:text-white">{filteredMaterials.length}</span> de <span className="font-bold text-gray-900 dark:text-white">{materials.length}</span> materiais
                     </p>
                     <div className="flex items-center gap-4">
-                        <ViewToggle view={viewMode} onViewChange={setViewMode} />
+                        <ViewToggle view={viewMode} onViewChange={handleViewModeChange} />
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded-full"></div>
                             <span className="text-xs text-gray-600 dark:text-gray-400">Normal: {materials.filter(m => m.stock > m.minStock).length}</span>

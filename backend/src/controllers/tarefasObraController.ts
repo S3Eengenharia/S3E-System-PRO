@@ -48,6 +48,27 @@ export const uploadTarefaImages = multer({
 }).array('imagens', 10); // Máximo 10 imagens por vez
 
 /**
+ * Verifica se um usuário é membro de uma equipe
+ */
+async function verificarSeUsuarioEstaNaEquipe(userId: string, equipeId: string): Promise<boolean> {
+  try {
+    const equipe = await prisma.equipe.findUnique({
+      where: { id: equipeId },
+      select: { membros: true, ativa: true }
+    });
+    
+    if (!equipe || !equipe.ativa) {
+      return false;
+    }
+    
+    return equipe.membros.includes(userId);
+  } catch (error) {
+    console.error('Erro ao verificar membro da equipe:', error);
+    return false;
+  }
+}
+
+/**
  * GET /api/obras/tarefas
  * Lista tarefas do eletricista logado
  */
@@ -84,10 +105,40 @@ export const getTarefasEletricista = async (req: Request, res: Response): Promis
         orderBy: { dataPrevista: 'asc' }
       });
     } else {
-      // Eletricista: apenas tarefas atribuídas a ele
+      // Eletricista: tarefas atribuídas diretamente a ele OU tarefas de equipes onde ele é membro
+      // Primeiro, buscar todas as equipes onde o usuário é membro
+      const equipesDoUsuario = await prisma.equipe.findMany({
+        where: {
+          membros: {
+            has: userId // Verifica se userId está no array membros
+          },
+          ativa: true
+        },
+        select: {
+          id: true,
+          nome: true
+        }
+      });
+      
+      const equipeIds = equipesDoUsuario.map(e => e.id);
+      
+      console.log(`🔍 Eletricista ${userId} está em ${equipeIds.length} equipe(s):`, equipesDoUsuario.map(e => e.nome));
+      
+      // Construir condições OR
+      const condicoesOR: any[] = [
+        // Tarefas atribuídas diretamente ao eletricista
+        { atribuidoA: userId }
+      ];
+      
+      // Adicionar condição de equipes se o usuário estiver em alguma equipe
+      if (equipeIds.length > 0) {
+        condicoesOR.push({ equipeId: { in: equipeIds } });
+      }
+      
+      // Buscar tarefas: atribuídas diretamente OU atribuídas a equipes do usuário
       tarefas = await prisma.tarefaObra.findMany({
         where: {
-          atribuidoA: userId
+          OR: condicoesOR
         },
         include: {
           obra: {
@@ -107,6 +158,8 @@ export const getTarefasEletricista = async (req: Request, res: Response): Promis
         },
         orderBy: { dataPrevista: 'asc' }
       });
+      
+      console.log(`✅ Encontradas ${tarefas.length} tarefa(s) para o eletricista (${tarefas.filter(t => t.atribuidoA === userId).length} diretas, ${tarefas.filter(t => t.equipeId && equipeIds.includes(t.equipeId)).length} de equipes)`);
     }
     
     // Formatar resposta para o frontend
@@ -118,6 +171,7 @@ export const getTarefasEletricista = async (req: Request, res: Response): Promis
         obra: {
           id: tarefa.obra.id,
           nomeObra: tarefa.obra.nomeObra,
+          status: tarefa.obra.status, // ✅ IMPORTANTE: Incluir status da obra
           endereco: tarefa.obra.endereco || '',
           clienteNome: cliente?.nome || 'Cliente não informado'
         }
@@ -286,13 +340,19 @@ export const getTarefaById = async (req: Request, res: Response): Promise<void> 
       return;
     }
     
-    // Verificar permissão (eletricista só vê suas próprias tarefas)
-    if (userRole === 'eletricista' && tarefa.atribuidoA !== userId) {
-      res.status(403).json({ 
-        success: false, 
-        error: '🚫 Você não tem permissão para visualizar esta tarefa' 
-      });
-      return;
+    // Verificar permissão (eletricista só vê suas próprias tarefas ou tarefas de suas equipes)
+    if (userRole === 'eletricista') {
+      const podeVer = 
+        tarefa.atribuidoA === userId || // Tarefa atribuída diretamente a ele
+        (tarefa.equipeId && await verificarSeUsuarioEstaNaEquipe(userId, tarefa.equipeId)); // Tarefa de uma equipe onde ele é membro
+      
+      if (!podeVer) {
+        res.status(403).json({ 
+          success: false, 
+          error: '🚫 Você não tem permissão para visualizar esta tarefa' 
+        });
+        return;
+      }
     }
     
     res.json({ success: true, data: tarefa });
