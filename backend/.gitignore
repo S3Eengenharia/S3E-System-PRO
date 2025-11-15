@@ -8,4 +8,13 @@ coverage/
 .idea/
 
 /src/generated/prisma
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
 .env.production
+.env.producao
+.env.prod
+!.env.example
