@@ -5,6 +5,16 @@ import { clientesService, type Cliente } from '../services/clientesService';
 import { axiosApiService } from '../services/axiosApi';
 import ViewToggle from './ui/ViewToggle';
 import { ENDPOINTS } from '../config/api';
+import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+import {
+    generateEmptyTemplate,
+    generateExampleTemplate,
+    exportToJSON,
+    readJSONFile,
+    validateImportData,
+    type OrcamentoTemplate,
+    type ImportExportData,
+} from '../utils/importExportTemplates';
 import JoditEditorComponent from './JoditEditor';
 import { generateOrcamentoPDF, type OrcamentoPDFData as OrcamentoPDFDataOld } from '../utils/pdfGenerator';
 import NovoOrcamentoPage from '../pages/NovoOrcamentoPage';
@@ -51,6 +61,11 @@ const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const DocumentArrowDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+);
+const DocumentArrowUpIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
     </svg>
 );
 
@@ -118,7 +133,13 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
 
     const [statusFilter, setStatusFilter] = useState<string>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(loadViewMode('Orcamentos'));
+    
+    // Salvar viewMode no localStorage quando mudar
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        saveViewMode('Orcamentos', mode);
+    };
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [shouldLoadEditor, setShouldLoadEditor] = useState(false);
@@ -128,6 +149,17 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     // Estado para PDF Customization
     const [showPDFCustomization, setShowPDFCustomization] = useState(false);
     const [orcamentoForPDF, setOrcamentoForPDF] = useState<Orcamento | null>(null);
+
+    // Estados para importação/exportação
+    const [importing, setImporting] = useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    
+    // Estados para modal de preview de importação
+    const [modalPreviewImportOpen, setModalPreviewImportOpen] = useState(false);
+    const [dadosParaImportar, setDadosParaImportar] = useState<{
+        orcamentos: any[];
+        erros: string[];
+    } | null>(null);
 
     // Form state
     const [formState, setFormState] = useState({
@@ -259,6 +291,25 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     useEffect(() => {
         loadData();
     }, []);
+
+    // Fechar modal de visualização com tecla ESC
+    useEffect(() => {
+        const handleEscapeKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && orcamentoToView) {
+                setOrcamentoToView(null);
+            }
+        };
+
+        // Adicionar listener apenas se o modal estiver aberto
+        if (orcamentoToView) {
+            document.addEventListener('keydown', handleEscapeKey);
+        }
+
+        // Limpar listener quando o componente desmontar ou modal fechar
+        return () => {
+            document.removeEventListener('keydown', handleEscapeKey);
+        };
+    }, [orcamentoToView]);
 
     // Filtrar materiais para seleção
     const filteredMaterials = useMemo(() => {
@@ -474,6 +525,219 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             condicaoPagamento: 'À Vista'
         });
         setItems([]);
+    };
+
+    // Funções de Exportação/Importação
+    const handleExportTemplate = () => {
+        try {
+            const template = generateExampleTemplate('orcamentos');
+            exportToJSON(template, `template_orcamentos_${new Date().toISOString().split('T')[0]}.json`);
+            toast.success('✅ Template exportado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao exportar template:', error);
+            toast.error('❌ Erro ao exportar template');
+        }
+    };
+
+    const handleExportData = () => {
+        try {
+            const template: ImportExportData = {
+                version: '1.0.0',
+                exportDate: new Date().toISOString(),
+                orcamentos: orcamentos.map(orc => ({
+                    clienteId: orc.clienteId,
+                    clienteNome: orc.cliente?.nome,
+                    titulo: orc.titulo,
+                    descricao: orc.descricao,
+                    descricaoProjeto: orc.descricaoProjeto,
+                    validade: orc.validade,
+                    status: orc.status,
+                    bdi: orc.bdi,
+                    observacoes: orc.observacoes,
+                    empresaCNPJ: orc.empresaCNPJ,
+                    enderecoObra: orc.enderecoObra,
+                    cidade: orc.cidade,
+                    bairro: orc.bairro,
+                    cep: orc.cep,
+                    responsavelObra: orc.responsavelObra,
+                    previsaoInicio: orc.previsaoInicio,
+                    previsaoTermino: orc.previsaoTermino,
+                    descontoValor: orc.descontoValor,
+                    impostoPercentual: orc.impostoPercentual,
+                    condicaoPagamento: orc.condicaoPagamento,
+                    items: (orc.items || []).map(item => ({
+                        tipo: item.tipo as any,
+                        materialId: item.materialId,
+                        materialNome: item.nome,
+                        nome: item.nome,
+                        descricao: item.descricao,
+                        unidadeMedida: item.unidadeMedida || 'UN',
+                        quantidade: item.quantidade,
+                        custoUnit: item.custoUnit,
+                        precoUnit: item.precoUnit,
+                        subtotal: item.subtotal,
+                    })),
+                })),
+            };
+            exportToJSON(template, `orcamentos_export_${new Date().toISOString().split('T')[0]}.json`);
+            toast.success(`✅ ${orcamentos.length} orçamento(s) exportado(s) com sucesso!`);
+        } catch (error) {
+            console.error('Erro ao exportar orçamentos:', error);
+            toast.error('❌ Erro ao exportar orçamentos');
+        }
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setImporting(true);
+            const data = await readJSONFile(file);
+            
+            // Validar estrutura
+            const validation = validateImportData(data);
+            if (!validation.valid) {
+                toast.error('❌ Erro na validação do arquivo: ' + validation.errors.join(', '));
+                return;
+            }
+
+            if (!data.orcamentos || data.orcamentos.length === 0) {
+                toast.error('❌ O arquivo não contém orçamentos para importar');
+                return;
+            }
+
+            // Preparar dados para preview
+            const orcamentosPreview: any[] = [];
+            const erros: string[] = [];
+
+            // Validar cada orçamento antes de mostrar no preview
+            for (const orcTemplate of data.orcamentos) {
+                const errosOrcamento: string[] = [];
+                
+                // Buscar cliente por nome se não tiver ID
+                let clienteId = orcTemplate.clienteId;
+                let clienteNome = orcTemplate.clienteNome || '';
+                if (!clienteId && orcTemplate.clienteNome) {
+                    const cliente = clientes.find(c => c.nome.toLowerCase() === orcTemplate.clienteNome?.toLowerCase());
+                    if (cliente) {
+                        clienteId = cliente.id;
+                        clienteNome = cliente.nome;
+                    } else {
+                        errosOrcamento.push(`Cliente ${orcTemplate.clienteNome} não encontrado`);
+                    }
+                }
+
+                if (!clienteId) {
+                    errosOrcamento.push('Cliente não informado ou inválido');
+                }
+
+                // Validar itens
+                const items = (orcTemplate.items || []).map((item: any) => {
+                    let materialId = item.materialId;
+                    if (!materialId && item.materialNome) {
+                        const material = materiais.find(m => m.nome.toLowerCase() === item.materialNome?.toLowerCase());
+                        if (material) materialId = material.id;
+                    }
+
+                    return {
+                        tipo: item.tipo,
+                        materialId,
+                        nome: item.nome,
+                        descricao: item.descricao,
+                        unidadeMedida: item.unidadeMedida,
+                        quantidade: item.quantidade,
+                        precoUnitario: item.precoUnit || item.custoUnit || 0,
+                        subtotal: item.subtotal || (item.quantidade * (item.precoUnit || item.custoUnit || 0)),
+                    };
+                });
+
+                orcamentosPreview.push({
+                    ...orcTemplate,
+                    clienteId,
+                    clienteNome,
+                    items,
+                    errosOrcamento,
+                });
+
+                if (errosOrcamento.length > 0) {
+                    erros.push(`Orçamento ${orcTemplate.titulo || 'sem título'}: ${errosOrcamento.join(', ')}`);
+                }
+            }
+
+            // Mostrar preview
+            setDadosParaImportar({
+                orcamentos: orcamentosPreview,
+                erros,
+            });
+            setModalPreviewImportOpen(true);
+
+            // Limpar input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        } catch (error) {
+            console.error('Erro ao importar arquivo:', error);
+            toast.error('❌ Erro ao importar arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const handleConfirmarImportacao = async () => {
+        if (!dadosParaImportar) return;
+
+        try {
+            setImporting(true);
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Importar apenas orçamentos válidos (sem erros)
+            for (const orcTemplate of dadosParaImportar.orcamentos) {
+                if (orcTemplate.errosOrcamento && orcTemplate.errosOrcamento.length > 0) {
+                    errorCount++;
+                    continue;
+                }
+
+                try {
+                    const createData: CreateOrcamentoData = {
+                        clienteId: orcTemplate.clienteId,
+                        titulo: orcTemplate.titulo,
+                        descricao: orcTemplate.descricao,
+                        validade: orcTemplate.validade,
+                        bdi: orcTemplate.bdi || 20,
+                        observacoes: orcTemplate.observacoes,
+                        items: orcTemplate.items,
+                    };
+
+                    const response = await orcamentosService.criar(createData);
+                    if (response.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        console.error('Erro ao criar orçamento:', response.error);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error('Erro ao importar orçamento:', error);
+                }
+            }
+
+            setModalPreviewImportOpen(false);
+            setDadosParaImportar(null);
+
+            toast.success(`✅ Importação concluída! ${successCount} orçamento(s) importado(s), ${errorCount} erro(s)`);
+            await loadData(); // Recarregar lista
+        } catch (error) {
+            console.error('Erro ao confirmar importação:', error);
+            toast.error('❌ Erro ao confirmar importação');
+        } finally {
+            setImporting(false);
+        }
     };
 
     // Adicionar item ao orçamento
@@ -1001,13 +1265,48 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         </svg>
                         {loading ? 'Carregando...' : 'Atualizar'}
                     </button>
-                    <button
-                        onClick={() => setAbaAtiva('novo')}
-                        className="btn-primary flex items-center gap-2"
-                    >
-                        <PlusIcon className="w-5 h-5" />
-                        Novo Orçamento
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleExportTemplate}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all font-semibold shadow-md"
+                            title="Exportar template vazio para preenchimento"
+                        >
+                            <DocumentArrowDownIcon className="w-5 h-5" />
+                            Template
+                        </button>
+                        <button
+                            onClick={handleExportData}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                            disabled={orcamentos.length === 0}
+                            title="Exportar todos os orçamentos"
+                        >
+                            <DocumentArrowDownIcon className="w-5 h-5" />
+                            Exportar
+                        </button>
+                        <button
+                            onClick={handleImportClick}
+                            disabled={importing}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                            title="Importar orçamentos do arquivo JSON"
+                        >
+                            <DocumentArrowUpIcon className="w-5 h-5" />
+                            {importing ? 'Importando...' : 'Importar'}
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".json"
+                            onChange={handleImportFile}
+                            style={{ display: 'none' }}
+                        />
+                        <button
+                            onClick={() => setAbaAtiva('novo')}
+                            className="btn-primary flex items-center gap-2"
+                        >
+                            <PlusIcon className="w-5 h-5" />
+                            Novo Orçamento
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -1061,7 +1360,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         Exibindo <span className="font-bold text-gray-900">{filteredOrcamentos.length}</span> de <span className="font-bold text-gray-900">{orcamentos.length}</span> orçamentos
                     </p>
                     <div className="flex items-center gap-4">
-                        <ViewToggle view={viewMode} onViewChange={setViewMode} />
+                        <ViewToggle view={viewMode} onViewChange={handleViewModeChange} />
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                             <span className="text-xs text-gray-600">Pendente: {orcamentos.filter(o => o.status === 'Pendente').length}</span>
@@ -1217,17 +1516,21 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     <table className="w-full">
                         <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                             <tr>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase w-16">Nº</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Cliente</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Título</th>
                                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Valor</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Validade</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Ações</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase min-w-[200px]">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filteredOrcamentos.map((orcamento) => (
+                            {filteredOrcamentos.map((orcamento, index) => (
                                 <tr key={orcamento.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 text-center">
+                                        <span className="text-sm font-semibold text-gray-600">{index + 1}</span>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <p className="font-semibold text-gray-900">{orcamento.cliente?.nome || 'N/A'}</p>
                                     </td>
@@ -1264,7 +1567,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                                 </svg>
                                             </button>
                                             <button
-                                                onClick={() => setOrcamentoToEdit(orcamento)}
+                                                onClick={() => handleOpenModal(orcamento)}
                                                 className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
                                                 title="Editar"
                                             >
@@ -1275,10 +1578,19 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                             <button
                                                 onClick={() => handleGerarPDFProfissional(orcamento)}
                                                 className="p-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
-                                                title="PDF"
+                                                title="PDF Rápido"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handlePersonalizarPDF(orcamento)}
+                                                className="p-2 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 rounded-lg hover:from-purple-200 hover:to-indigo-200 transition-all shadow-sm"
+                                                title="Personalizar PDF"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                                                 </svg>
                                             </button>
                                         </div>
@@ -2154,13 +2466,20 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                         </div>
 
                         <div className="p-6 space-y-6">
+                            {/* Informações Principais */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Cliente</h3>
-                                    <p className="text-gray-900 font-medium">{orcamentoToView.cliente?.nome || 'N/A'}</p>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>👤</span>
+                                        Cliente
+                                    </h3>
+                                    <p className="text-gray-900 dark:text-white font-medium">{orcamentoToView.cliente?.nome || 'N/A'}</p>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Status</h3>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>📊</span>
+                                        Status
+                                    </h3>
                                     <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getStatusClass(orcamentoToView.status)}`}>
                                         {orcamentoToView.status === 'Pendente' && '⏳ '}
                                         {orcamentoToView.status === 'Aprovado' && '✅ '}
@@ -2168,20 +2487,87 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                         {orcamentoToView.status}
                                     </span>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Total</h3>
-                                    <p className="text-2xl font-bold text-purple-700">R$ {orcamentoToView.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</p>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>💰</span>
+                                        Total
+                                    </h3>
+                                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">R$ {orcamentoToView.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</p>
                                 </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Validade</h3>
-                                    <p className="text-gray-900 font-medium">{new Date(orcamentoToView.validade).toLocaleDateString('pt-BR')}</p>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>📅</span>
+                                        Validade
+                                    </h3>
+                                    <p className="text-gray-900 dark:text-white font-medium">{new Date(orcamentoToView.validade).toLocaleDateString('pt-BR')}</p>
                                 </div>
                             </div>
 
+                            {/* Data de Geração */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                    <span>📋</span>
+                                    Data de Geração do Orçamento
+                                </h3>
+                                <p className="text-gray-900 dark:text-white font-medium">
+                                    {orcamentoToView.createdAt 
+                                        ? new Date(orcamentoToView.createdAt).toLocaleDateString('pt-BR', { 
+                                            day: '2-digit', 
+                                            month: '2-digit', 
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        })
+                                        : 'Data não disponível'}
+                                </p>
+                            </div>
+
+                            {/* Endereço da Obra */}
+                            {(orcamentoToView.enderecoObra || orcamentoToView.cidade || orcamentoToView.bairro || orcamentoToView.cep) && (
+                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                                        <span>🏗️</span>
+                                        Endereço da Obra
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {orcamentoToView.enderecoObra && (
+                                            <p className="text-gray-900 dark:text-white">
+                                                <span className="font-semibold">Endereço:</span> {orcamentoToView.enderecoObra}
+                                            </p>
+                                        )}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {orcamentoToView.bairro && (
+                                                <p className="text-gray-900 dark:text-white">
+                                                    <span className="font-semibold">Bairro:</span> {orcamentoToView.bairro}
+                                                </p>
+                                            )}
+                                            {orcamentoToView.cidade && (
+                                                <p className="text-gray-900 dark:text-white">
+                                                    <span className="font-semibold">Cidade:</span> {orcamentoToView.cidade}
+                                                </p>
+                                            )}
+                                            {orcamentoToView.cep && (
+                                                <p className="text-gray-900 dark:text-white">
+                                                    <span className="font-semibold">CEP:</span> {orcamentoToView.cep}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {orcamentoToView.responsavelObra && (
+                                            <p className="text-gray-900 dark:text-white mt-2">
+                                                <span className="font-semibold">Responsável pela Obra:</span> {orcamentoToView.responsavelObra}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {orcamentoToView.descricao && (
-                                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Descrição</h3>
-                                    <p className="text-gray-700">{orcamentoToView.descricao}</p>
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>📝</span>
+                                        Descrição
+                                    </h3>
+                                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{orcamentoToView.descricao}</p>
                                 </div>
                             )}
 
@@ -2232,9 +2618,12 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             )}
 
                             {orcamentoToView.observacoes && (
-                                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Observações</h3>
-                                    <p className="text-gray-700">{orcamentoToView.observacoes}</p>
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>💬</span>
+                                        Observações
+                                    </h3>
+                                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{orcamentoToView.observacoes}</p>
                                 </div>
                             )}
 
@@ -2311,6 +2700,173 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 />
             )}
 
+            {/* Modal de Preview de Importação */}
+            {modalPreviewImportOpen && dadosParaImportar && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-blue-500">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <DocumentArrowUpIcon className="w-7 h-7 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">Preview de Importação</h3>
+                                        <p className="text-sm text-blue-100 mt-1">
+                                            {dadosParaImportar.orcamentos.length} orçamento(s) para importar
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setModalPreviewImportOpen(false);
+                                        setDadosParaImportar(null);
+                                    }}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-6">
+                            {/* Resumo */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📊 Resumo da Importação</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-blue-700 dark:text-blue-400">Total:</p>
+                                        <p className="text-lg font-bold text-blue-900 dark:text-blue-300">
+                                            {dadosParaImportar.orcamentos.length}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-green-700 dark:text-green-400">Válidos:</p>
+                                        <p className="text-lg font-bold text-green-900 dark:text-green-300">
+                                            {dadosParaImportar.orcamentos.filter(o => !o.errosOrcamento || o.errosOrcamento.length === 0).length}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-red-700 dark:text-red-400">Com Erros:</p>
+                                        <p className="text-lg font-bold text-red-900 dark:text-red-300">
+                                            {dadosParaImportar.orcamentos.filter(o => o.errosOrcamento && o.errosOrcamento.length > 0).length}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Lista de Orçamentos */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-3">📋 Orçamentos para Importar</h4>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-100 dark:bg-gray-800">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Título
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Cliente
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Validade
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Itens
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Status
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {dadosParaImportar.orcamentos.map((orcamento, index) => {
+                                                const temErros = orcamento.errosOrcamento && orcamento.errosOrcamento.length > 0;
+                                                return (
+                                                    <tr key={index} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${temErros ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {orcamento.titulo || 'Sem título'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {orcamento.clienteNome || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {orcamento.validade ? new Date(orcamento.validade).toLocaleDateString('pt-BR') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {(orcamento.items || []).length} item(s)
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm border border-gray-300 dark:border-gray-600">
+                                                            {temErros ? (
+                                                                <div className="text-red-600 dark:text-red-400">
+                                                                    <p className="font-semibold">❌ Erros</p>
+                                                                    <ul className="text-xs mt-1">
+                                                                        {orcamento.errosOrcamento.map((erro, i) => (
+                                                                            <li key={i}>• {erro}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-green-600 dark:text-green-400 font-semibold">✅ Válido</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Avisos */}
+                            {dadosParaImportar.erros.length > 0 && (
+                                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                                    <h4 className="font-semibold text-amber-900 dark:text-amber-300 mb-2 flex items-center gap-2">
+                                        ⚠️ Avisos
+                                    </h4>
+                                    <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300 max-h-32 overflow-y-auto">
+                                        {dadosParaImportar.erros.map((erro, index) => (
+                                            <li key={index}>• {erro}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3 rounded-b-2xl">
+                            <button
+                                onClick={() => {
+                                    setModalPreviewImportOpen(false);
+                                    setDadosParaImportar(null);
+                                }}
+                                disabled={importing}
+                                className="px-6 py-3 bg-white dark:bg-gray-600 border-2 border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-500 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmarImportacao}
+                                disabled={importing || dadosParaImportar.orcamentos.filter(o => !o.errosOrcamento || o.errosOrcamento.length === 0).length === 0}
+                                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        Importando...
+                                    </>
+                                ) : (
+                                    <>
+                                        ✅ Confirmar Importação
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
