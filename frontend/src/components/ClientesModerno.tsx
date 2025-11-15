@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { clientesService, type Cliente, type CreateClienteData } from '../services/clientesService';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -173,6 +174,10 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
             toast.error('Erro de conexão', { description: 'Não foi possível salvar o cliente' });
         }
     };
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, () => setIsModalOpen(false));
+    useEscapeKey(!!clienteToDelete, () => setClienteToDelete(null));
 
     const handleDelete = async () => {
         if (!clienteToDelete) return;

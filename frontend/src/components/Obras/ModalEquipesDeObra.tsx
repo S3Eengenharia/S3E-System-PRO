@@ -1,6 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { equipeService, type EquipeDTO } from '../../services/EquipeService';
 import { axiosApiService } from '../../services/axiosApi';
+import { toast } from 'sonner';
+import { alocacaoObraService } from '../../services/AlocacaoObraService';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 
 interface EletricistaDTO {
   id: string;
@@ -26,6 +46,15 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [editingEquipeId, setEditingEquipeId] = useState<string | null>(null);
+  
+  // Estados para diálogos
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [equipeParaExcluir, setEquipeParaExcluir] = useState<EquipeDTO | null>(null);
+  const [loadingAlocacoes, setLoadingAlocacoes] = useState(false);
+  const [alocacoesAtivas, setAlocacoesAtivas] = useState<any[]>([]);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [equipeParaRenomear, setEquipeParaRenomear] = useState<EquipeDTO | null>(null);
+  const [novoNome, setNovoNome] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -282,37 +311,136 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
     }
   };
 
-  const excluirEquipe = async (id: string) => {
+  // Verificar alocações ativas antes de excluir
+  const verificarAlocacoesAtivas = async (equipeId: string) => {
     try {
-      setLoading(true);
-      setError(null);
-      const res = await equipeService.deleteEquipe(id);
-      if (res.success) {
-        setEquipes(prev => prev.filter(e => e.id !== id));
-        // Ao excluir, membros ficam disponíveis novamente
-        void Promise.all([loadEletricistas(), loadEquipes()]);
+      setLoadingAlocacoes(true);
+      const response = await alocacaoObraService.getAllAlocacoes();
+      if (response.success && response.data) {
+        const alocacoes = Array.isArray(response.data) ? response.data : [];
+        const ativas = alocacoes.filter((a: any) => 
+          a.equipe?.id === equipeId && 
+          (a.status === 'Planejada' || a.status === 'EmAndamento')
+        );
+        setAlocacoesAtivas(ativas);
+        return ativas;
       }
+      return [];
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao excluir equipe');
+      console.error('Erro ao verificar alocações:', e);
+      return [];
     } finally {
-      setLoading(false);
+      setLoadingAlocacoes(false);
     }
   };
 
-  const renomearEquipe = async (id: string) => {
-    const novoNome = window.prompt('Novo nome da equipe');
-    if (!novoNome || !novoNome.trim()) return;
+  const abrirDialogExcluir = async (id: string) => {
+    const equipe = equipes.find(e => e.id === id);
+    if (!equipe) return;
+    
+    // Verificar alocações ativas
+    const ativas = await verificarAlocacoesAtivas(id);
+    if (ativas.length > 0) {
+      toast.error('Não é possível excluir esta equipe', {
+        description: `A equipe possui ${ativas.length} alocação(ões) em andamento ou planejada(s). Finalize ou cancele as alocações antes de excluir.`,
+        duration: 5000
+      });
+      return;
+    }
+    
+    setEquipeParaExcluir(equipe);
+    setShowDeleteDialog(true);
+  };
+
+  const excluirEquipe = async () => {
+    if (!equipeParaExcluir) return;
+    const id = equipeParaExcluir.id;
+    const nomeEquipe = equipeParaExcluir.nome;
+
     try {
       setLoading(true);
       setError(null);
+      setShowDeleteDialog(false);
+      console.log('🗑️ Excluindo equipe:', id);
+      
+      const res = await equipeService.deleteEquipe(id);
+      console.log('📥 Resposta da exclusão:', res);
+      
+      if (res.success) {
+        console.log('✅ Equipe excluída com sucesso');
+        // Remover da lista local imediatamente
+        setEquipes(prev => prev.filter(e => e.id !== id));
+        // Recarregar dados para garantir sincronização
+        await Promise.all([loadEletricistas(), loadEquipes()]);
+        // Feedback visual de sucesso
+        toast.success('Equipe excluída com sucesso!', {
+          description: `A equipe "${nomeEquipe}" foi removida do sistema.`,
+        });
+      } else {
+        const errorMsg = res.error || 'Erro desconhecido ao excluir equipe';
+        console.error('❌ Erro na resposta:', errorMsg);
+        setError(errorMsg);
+        toast.error('Erro ao excluir equipe', {
+          description: errorMsg,
+        });
+      }
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : 'Erro ao excluir equipe';
+      console.error('❌ Erro ao excluir equipe:', e);
+      setError(errorMsg);
+      toast.error('Erro ao excluir equipe', {
+        description: errorMsg,
+      });
+    } finally {
+      setLoading(false);
+      setEquipeParaExcluir(null);
+    }
+  };
+
+  const abrirDialogRenomear = (equipe: EquipeDTO) => {
+    setEquipeParaRenomear(equipe);
+    setNovoNome(equipe.nome);
+    setShowRenameDialog(true);
+  };
+
+  const renomearEquipe = async () => {
+    if (!equipeParaRenomear || !novoNome || !novoNome.trim()) {
+      toast.error('Nome inválido', {
+        description: 'Por favor, informe um nome válido para a equipe.',
+      });
+      return;
+    }
+    
+    const id = equipeParaRenomear.id;
+    const nomeAnterior = equipeParaRenomear.nome;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      setShowRenameDialog(false);
       const res = await equipeService.updateEquipe(id, { nome: novoNome.trim() });
       if (res.success && res.data) {
         setEquipes(prev => prev.map(e => (e.id === id ? res.data! : e)));
+        toast.success('Equipe renomeada com sucesso!', {
+          description: `A equipe "${nomeAnterior}" foi renomeada para "${novoNome.trim()}".`,
+        });
+      } else {
+        const errorMsg = res.error || 'Erro ao renomear equipe';
+        setError(errorMsg);
+        toast.error('Erro ao renomear equipe', {
+          description: errorMsg,
+        });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao renomear equipe');
+      const errorMsg = e instanceof Error ? e.message : 'Erro ao renomear equipe';
+      setError(errorMsg);
+      toast.error('Erro ao renomear equipe', {
+        description: errorMsg,
+      });
     } finally {
       setLoading(false);
+      setEquipeParaRenomear(null);
+      setNovoNome('');
     }
   };
 
@@ -328,6 +456,25 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">✕</button>
         </div>
+
+        {/* Mensagem de erro */}
+        {error && (
+          <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+              <button 
+                onClick={() => setError(null)} 
+                className="ml-auto text-red-600 hover:text-red-800"
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           <div>
@@ -491,8 +638,8 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => iniciarEdicao(eq)} className="px-3 py-1.5 text-sm bg-white border-2 border-brand-blue text-brand-blue rounded-lg hover:bg-blue-50">Editar membros</button>
-                      <button onClick={() => renomearEquipe(eq.id)} className="px-3 py-1.5 text-sm bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50">Renomear</button>
-                      <button onClick={() => excluirEquipe(eq.id)} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">Excluir</button>
+                      <button onClick={() => abrirDialogRenomear(eq)} className="px-3 py-1.5 text-sm bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50">Renomear</button>
+                      <button onClick={() => abrirDialogExcluir(eq.id)} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">Excluir</button>
                     </div>
                   </div>
                 ))}
@@ -505,6 +652,82 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
           <button onClick={onClose} className="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg">Fechar</button>
         </div>
       </div>
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🗑️ Excluir Equipe</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a equipe <strong>"{equipeParaExcluir?.nome}"</strong>?
+              <br /><br />
+              Esta ação não pode ser desfeita. Todos os membros da equipe ficarão disponíveis novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowDeleteDialog(false);
+              setEquipeParaExcluir(null);
+            }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={excluirEquipe}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={loading}
+            >
+              {loading ? 'Excluindo...' : 'Excluir Equipe'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de Renomear Equipe */}
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>✏️ Renomear Equipe</DialogTitle>
+            <DialogDescription>
+              Informe o novo nome para a equipe <strong>"{equipeParaRenomear?.nome}"</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <input
+              type="text"
+              value={novoNome}
+              onChange={(e) => setNovoNome(e.target.value)}
+              placeholder="Nome da equipe"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  renomearEquipe();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => {
+                setShowRenameDialog(false);
+                setEquipeParaRenomear(null);
+                setNovoNome('');
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={renomearEquipe}
+              disabled={loading || !novoNome.trim()}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Salvando...' : 'Salvar'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

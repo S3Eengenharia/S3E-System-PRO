@@ -1,4 +1,5 @@
 import { PrismaClient, StatusObra } from '@prisma/client';
+import { EstoqueService } from './estoque.service';
 
 const prisma = new PrismaClient();
 
@@ -109,6 +110,7 @@ export class ObraService {
 
   /**
    * Gera uma Obra a partir de um Projeto aprovado
+   * Valida disponibilidade de estoque antes de criar a obra
    */
   async gerarObraAPartirDoProjeto(projetoId: string, nomeObra?: string) {
     try {
@@ -130,6 +132,41 @@ export class ObraService {
       if (obraExistente) {
         throw new Error('Já existe uma obra para este projeto');
       }
+
+      // ✅ VALIDAÇÃO: Verificar disponibilidade de estoque antes de criar obra
+      console.log('🔍 Verificando disponibilidade de estoque para o projeto...');
+      const verificacaoEstoque = await EstoqueService.verificarDisponibilidadeProjeto(projetoId);
+      
+      if (!verificacaoEstoque.disponivel) {
+        const itensFaltantes = verificacaoEstoque.itensSemEstoque;
+        const itensBancoFrio = itensFaltantes.filter((item: any) => item.origem === 'Banco Frio');
+        const itensEstoqueReal = itensFaltantes.filter((item: any) => item.origem === 'Estoque Real');
+        
+        let mensagemErro = 'Não é possível criar a obra. Os seguintes materiais estão faltando em estoque:\n\n';
+        
+        if (itensBancoFrio.length > 0) {
+          mensagemErro += '⚠️ ITENS DO BANCO FRIO (precisam ser comprados):\n';
+          itensBancoFrio.forEach((item: any, idx: number) => {
+            mensagemErro += `${idx + 1}. ${item.nome} - Necessário: ${item.quantidadeNecessaria} ${item.falta > 0 ? `(Faltam: ${item.falta})` : ''}\n`;
+          });
+          mensagemErro += '\n';
+        }
+        
+        if (itensEstoqueReal.length > 0) {
+          mensagemErro += '📦 ITENS DO ESTOQUE REAL (faltam unidades):\n';
+          itensEstoqueReal.forEach((item: any, idx: number) => {
+            mensagemErro += `${idx + 1}. ${item.nome} - Necessário: ${item.quantidadeNecessaria}, Disponível: ${item.quantidadeDisponivel} (Faltam: ${item.falta})\n`;
+          });
+          mensagemErro += '\n';
+        }
+        
+        mensagemErro += 'Por favor, realize as compras necessárias antes de criar a obra.';
+        
+        console.error('❌ Validação de estoque falhou:', mensagemErro);
+        throw new Error(mensagemErro);
+      }
+
+      console.log('✅ Validação de estoque passou. Todos os materiais estão disponíveis.');
 
       // Criar obra
       const obra = await prisma.obra.create({

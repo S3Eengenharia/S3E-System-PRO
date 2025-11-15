@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { toast } from 'sonner';
 import { orcamentosService, type CreateOrcamentoData } from '../services/orcamentosService';
 import { clientesService } from '../services/clientesService';
@@ -9,6 +9,18 @@ import { ENDPOINTS } from '../config/api';
 import JoditEditorComponent from '../components/JoditEditor';
 import PrecoValidadeFlag from '../components/PrecoValidadeFlag';
 import HistoricoPrecosModal from '../components/HistoricoPrecosModal';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { AuthContext } from '../contexts/AuthContext';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 // ==================== ICONS ====================
 const ArrowLeftIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -51,7 +63,9 @@ interface Material {
     nome: string;
     sku: string;
     unidadeMedida: string;
-    preco: number;
+    preco: number; // Preço de custo
+    valorVenda?: number; // Preço de venda (usado em orçamentos)
+    porcentagemLucro?: number; // Porcentagem de lucro
     estoque: number;
     categoria: string;
     ativo: boolean;
@@ -109,6 +123,9 @@ interface NovoOrcamentoPageProps {
 }
 
 const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOrcamentoCriado }) => {
+    const authContext = useContext(AuthContext);
+    const userId = authContext?.user?.id || null;
+    
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [materiais, setMateriais] = useState<Material[]>([]);
     const [servicos, setServicos] = useState<Servico[]>([]);
@@ -118,6 +135,10 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     const [loading, setLoading] = useState(true);
     const [salvando, setSalvando] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // Estados para rascunho
+    const [showRascunhoDialog, setShowRascunhoDialog] = useState(false);
+    const [rascunhoEncontrado, setRascunhoEncontrado] = useState<any>(null);
 
     // Form state
     const [formState, setFormState] = useState({
@@ -186,10 +207,115 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
         tipo: 'MATERIAL' as const
     });
 
-    // Carregar dados iniciais
+    // Funções para gerenciar rascunho
+    const getRascunhoKey = () => {
+        if (!userId) return null;
+        return `orcamento_rascunho_${userId}`;
+    };
+
+    const salvarRascunho = () => {
+        const rascunhoKey = getRascunhoKey();
+        if (!rascunhoKey) {
+            toast.error('Usuário não autenticado', {
+                description: 'Não é possível salvar rascunho sem estar logado'
+            });
+            return;
+        }
+
+        try {
+            const rascunho = {
+                formState,
+                items,
+                dataSalvamento: new Date().toISOString()
+            };
+            
+            localStorage.setItem(rascunhoKey, JSON.stringify(rascunho));
+            toast.success('Rascunho salvo com sucesso!', {
+                description: 'Seus dados foram salvos localmente'
+            });
+        } catch (error) {
+            console.error('Erro ao salvar rascunho:', error);
+            toast.error('Erro ao salvar rascunho', {
+                description: 'Não foi possível salvar o rascunho'
+            });
+        }
+    };
+
+    const carregarRascunho = () => {
+        const rascunhoKey = getRascunhoKey();
+        if (!rascunhoKey) return null;
+
+        try {
+            const rascunhoStr = localStorage.getItem(rascunhoKey);
+            if (!rascunhoStr) return null;
+
+            return JSON.parse(rascunhoStr);
+        } catch (error) {
+            console.error('Erro ao carregar rascunho:', error);
+            return null;
+        }
+    };
+
+    const limparRascunho = () => {
+        const rascunhoKey = getRascunhoKey();
+        if (!rascunhoKey) return;
+
+        try {
+            localStorage.removeItem(rascunhoKey);
+        } catch (error) {
+            console.error('Erro ao limpar rascunho:', error);
+        }
+    };
+
+    const continuarRascunho = () => {
+        if (rascunhoEncontrado) {
+            setFormState(rascunhoEncontrado.formState);
+            setItems(rascunhoEncontrado.items || []);
+            toast.success('Rascunho carregado!', {
+                description: 'Continue editando seu orçamento'
+            });
+        }
+        setShowRascunhoDialog(false);
+        setRascunhoEncontrado(null);
+    };
+
+    const descartarRascunho = () => {
+        limparRascunho();
+        setShowRascunhoDialog(false);
+        setRascunhoEncontrado(null);
+        toast.info('Rascunho descartado', {
+            description: 'Iniciando novo orçamento'
+        });
+    };
+
+    // Carregar dados iniciais e verificar rascunho
     useEffect(() => {
         loadInitialData();
-    }, []);
+        
+        // Verificar se existe rascunho ao carregar a página
+        if (userId) {
+            const rascunho = carregarRascunho();
+            if (rascunho && (rascunho.items?.length > 0 || rascunho.formState?.titulo || rascunho.formState?.clienteId)) {
+                setRascunhoEncontrado(rascunho);
+                setShowRascunhoDialog(true);
+            }
+        }
+    }, [userId]);
+
+    // Salvar rascunho automaticamente ao sair da página
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (userId && (items.length > 0 || formState.titulo || formState.clienteId)) {
+                salvarRascunho();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [userId, items, formState]);
 
     const loadInitialData = async () => {
         try {
@@ -253,73 +379,90 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
     // Filtrar materiais para seleção
     const filteredMaterials = useMemo(() => {
-        return materiais
-            .filter(material => material.ativo && material.estoque > 0)
-            .filter(material =>
-                material.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
-                material.sku.toLowerCase().includes(itemSearchTerm.toLowerCase())
-            );
+        if (!itemSearchTerm.trim()) return (materiais || []).filter(m => m && m.ativo && (m.estoque ?? 0) > 0);
+        const termo = itemSearchTerm.toLowerCase();
+        return (materiais || []).filter(m => 
+            m && m.ativo && (m.estoque ?? 0) > 0 && (
+                (m.nome || '').toLowerCase().includes(termo) ||
+                (m.sku || '').toLowerCase().includes(termo)
+            )
+        );
     }, [materiais, itemSearchTerm]);
 
     // Filtrar serviços para seleção
     const filteredServicos = useMemo(() => {
-        return servicos
-            .filter(servico => servico.ativo)
-            .filter(servico =>
-                servico.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
-                servico.codigo.toLowerCase().includes(itemSearchTerm.toLowerCase())
-            );
+        if (!itemSearchTerm.trim()) return (servicos || []).filter(s => s && s.ativo);
+        const termo = itemSearchTerm.toLowerCase();
+        return (servicos || []).filter(s => 
+            s && s.ativo && (
+                (s.nome || '').toLowerCase().includes(termo) ||
+                (s.codigo || '').toLowerCase().includes(termo) ||
+                (s.descricao || '').toLowerCase().includes(termo)
+            )
+        );
     }, [servicos, itemSearchTerm]);
 
     // Filtrar quadros para seleção
     const filteredQuadros = useMemo(() => {
-        return quadros
-            .filter(quadro => quadro.ativo)
-            .filter(quadro =>
-                quadro.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
-            );
+        if (!itemSearchTerm.trim()) return (quadros || []).filter(q => q && q.ativo);
+        const termo = itemSearchTerm.toLowerCase();
+        return (quadros || []).filter(q => 
+            q && q.ativo && (
+                (q.nome || '').toLowerCase().includes(termo) ||
+                (q.descricao || '').toLowerCase().includes(termo)
+            )
+        );
     }, [quadros, itemSearchTerm]);
 
     // Filtrar kits para seleção
     const filteredKits = useMemo(() => {
-        return kits
-            .filter(kit => kit.ativo)
-            .filter(kit =>
-                kit.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
-            );
+        if (!itemSearchTerm.trim()) return (kits || []).filter(k => k && k.ativo);
+        const termo = itemSearchTerm.toLowerCase();
+        return (kits || []).filter(k => 
+            k && k.ativo && (
+                (k.nome || '').toLowerCase().includes(termo) ||
+                (k.descricao || '').toLowerCase().includes(termo)
+            )
+        );
     }, [kits, itemSearchTerm]);
 
     // Filtrar cotações para seleção
     const filteredCotacoes = useMemo(() => {
-        return cotacoes
-            .filter(cotacao => cotacao.ativo)
-            .filter(cotacao =>
-                cotacao.nome.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
-                cotacao.ncm?.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
-                cotacao.fornecedorNome?.toLowerCase().includes(itemSearchTerm.toLowerCase())
-            );
+        if (!itemSearchTerm.trim()) return (cotacoes || []).filter(c => c && c.ativo !== false);
+        const termo = itemSearchTerm.toLowerCase();
+        return (cotacoes || []).filter(c => 
+            c && c.ativo !== false && (
+                (c.nome || '').toLowerCase().includes(termo) ||
+                (c.ncm || '').toLowerCase().includes(termo) ||
+                (c.fornecedorNome || '').toLowerCase().includes(termo)
+            )
+        );
     }, [cotacoes, itemSearchTerm]);
 
     // Filtrar materiais com estoque para comparação (com busca global ou específica)
     const filteredMateriaisEstoque = useMemo(() => {
         const termoBusca = searchGlobalComparacao || searchEstoque;
-        if (!termoBusca) return materiaisComEstoque;
+        if (!termoBusca) return materiaisComEstoque || [];
         
-        return materiaisComEstoque.filter(material =>
-            material.nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
-            material.sku.toLowerCase().includes(termoBusca.toLowerCase())
+        return (materiaisComEstoque || []).filter(material =>
+            material && (
+                (material.nome || '').toLowerCase().includes(termoBusca.toLowerCase()) ||
+                (material.sku || '').toLowerCase().includes(termoBusca.toLowerCase())
+            )
         );
     }, [materiaisComEstoque, searchEstoque, searchGlobalComparacao]);
 
     // Filtrar cotações para comparação (com busca global ou específica)
     const filteredCotacoesComparacao = useMemo(() => {
         const termoBusca = searchGlobalComparacao || searchCotacoes;
-        if (!termoBusca) return cotacoesBancoFrio;
+        if (!termoBusca) return cotacoesBancoFrio || [];
         
-        return cotacoesBancoFrio.filter(cotacao =>
-            cotacao.nome?.toLowerCase().includes(termoBusca.toLowerCase()) ||
-            cotacao.ncm?.toLowerCase().includes(termoBusca.toLowerCase()) ||
-            cotacao.fornecedorNome?.toLowerCase().includes(termoBusca.toLowerCase())
+        return (cotacoesBancoFrio || []).filter(cotacao =>
+            cotacao && (
+                (cotacao.nome || '').toLowerCase().includes(termoBusca.toLowerCase()) ||
+                (cotacao.ncm || '').toLowerCase().includes(termoBusca.toLowerCase()) ||
+                (cotacao.fornecedorNome || '').toLowerCase().includes(termoBusca.toLowerCase())
+            )
         );
     }, [cotacoesBancoFrio, searchCotacoes, searchGlobalComparacao]);
 
@@ -338,41 +481,41 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
         const termo = buscaGlobal.toLowerCase();
         
-        const materiaisEncontrados = materiais
-            .filter(m => m.ativo && m.estoque > 0)
+        const materiaisEncontrados = (materiais || [])
+            .filter(m => m && m.ativo && (m.estoque ?? 0) > 0)
             .filter(m => 
-                m.nome.toLowerCase().includes(termo) ||
-                m.sku.toLowerCase().includes(termo)
+                (m.nome || '').toLowerCase().includes(termo) ||
+                (m.sku || '').toLowerCase().includes(termo)
             );
 
-        const servicosEncontrados = servicos
-            .filter(s => s.ativo)
+        const servicosEncontrados = (servicos || [])
+            .filter(s => s && s.ativo)
             .filter(s =>
-                s.nome.toLowerCase().includes(termo) ||
-                s.codigo?.toLowerCase().includes(termo) ||
-                s.descricao?.toLowerCase().includes(termo)
+                (s.nome || '').toLowerCase().includes(termo) ||
+                (s.codigo || '').toLowerCase().includes(termo) ||
+                (s.descricao || '').toLowerCase().includes(termo)
             );
 
-        const kitsEncontrados = kits
-            .filter(k => k.ativo)
+        const kitsEncontrados = (kits || [])
+            .filter(k => k && k.ativo)
             .filter(k =>
-                k.nome.toLowerCase().includes(termo) ||
-                k.descricao?.toLowerCase().includes(termo)
+                (k.nome || '').toLowerCase().includes(termo) ||
+                (k.descricao || '').toLowerCase().includes(termo)
             );
 
-        const quadrosEncontrados = quadros
-            .filter(q => q.ativo)
+        const quadrosEncontrados = (quadros || [])
+            .filter(q => q && q.ativo)
             .filter(q =>
-                q.nome.toLowerCase().includes(termo) ||
-                q.descricao?.toLowerCase().includes(termo)
+                (q.nome || '').toLowerCase().includes(termo) ||
+                (q.descricao || '').toLowerCase().includes(termo)
             );
 
-        const cotacoesEncontradas = cotacoes
-            .filter(c => c.ativo)
+        const cotacoesEncontradas = (cotacoes || [])
+            .filter(c => c && c.ativo !== false)
             .filter(c =>
-                c.nome?.toLowerCase().includes(termo) ||
-                c.ncm?.toLowerCase().includes(termo) ||
-                c.fornecedorNome?.toLowerCase().includes(termo)
+                (c.nome || '').toLowerCase().includes(termo) ||
+                (c.ncm || '').toLowerCase().includes(termo) ||
+                (c.fornecedorNome || '').toLowerCase().includes(termo)
             );
 
         setResultadosBuscaGlobal({
@@ -397,6 +540,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 return;
             }
             
+            // Usar valorVenda se disponível, caso contrário usar preco com BDI
+            const precoVenda = material.valorVenda || material.preco;
+            const precoComBDI = material.valorVenda 
+                ? material.valorVenda 
+                : material.preco * (1 + formState.bdi / 100);
+
             const newItem: OrcamentoItem = {
                 tipo: 'MATERIAL',
                 materialId: material.id,
@@ -405,8 +554,8 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 unidadeMedida: material.unidadeMedida,
                 quantidade: qtd,
                 custoUnit: material.preco,
-                precoUnit: material.preco * (1 + formState.bdi / 100),
-                subtotal: material.preco * (1 + formState.bdi / 100) * qtd
+                precoUnit: precoComBDI,
+                subtotal: precoComBDI * qtd
             };
             
             setItems(prev => [...prev, newItem]);
@@ -509,6 +658,11 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
 
     // Adicionar material do estoque ao orçamento
     const handleAddItem = (material: Material, manterModalAberto = false) => {
+        // Usar valorVenda se disponível, caso contrário usar preco com BDI
+        const precoComBDI = material.valorVenda 
+            ? material.valorVenda 
+            : material.preco * (1 + formState.bdi / 100);
+
         const newItem: OrcamentoItem = {
             tipo: 'MATERIAL',
             materialId: material.id,
@@ -517,8 +671,8 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
             unidadeMedida: material.unidadeMedida,
             quantidade: 1,
             custoUnit: material.preco,
-            precoUnit: material.preco * (1 + formState.bdi / 100),
-            subtotal: material.preco * (1 + formState.bdi / 100)
+            precoUnit: precoComBDI,
+            subtotal: precoComBDI
         };
 
         setItems(prev => [...prev, newItem]);
@@ -531,6 +685,12 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
             description: `${material.nome} adicionado ao orçamento`
         });
     };
+
+    // Fechar modais com ESC
+    useEscapeKey(showItemModal, () => {
+        setShowItemModal(false);
+        setModalExpandido(false);
+    });
 
     // Adicionar serviço ao orçamento
     const handleAddServico = (servico: Servico, manterModalAberto = false) => {
@@ -781,6 +941,8 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                 loading: 'Criando orçamento...',
                 success: (response) => {
                     if (response.success) {
+                        // Limpar rascunho após salvar com sucesso
+                        limparRascunho();
                         if (onOrcamentoCriado) onOrcamentoCriado();
                         setTimeout(() => setAbaAtiva('listagem'), 500);
                         return 'Orçamento criado com sucesso!';
@@ -832,7 +994,34 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
     }
 
     return (
-        <div className="min-h-screen p-4 sm:p-8 bg-gray-50 dark:bg-dark-bg">
+        <>
+            {/* Dialog para rascunho encontrado */}
+            <AlertDialog open={showRascunhoDialog} onOpenChange={setShowRascunhoDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Rascunho encontrado</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Foi encontrado um rascunho de orçamento anteriormente salvo.
+                            {rascunhoEncontrado?.dataSalvamento && (
+                                <span className="block mt-2 text-xs text-gray-500">
+                                    Salvo em: {new Date(rascunhoEncontrado.dataSalvamento).toLocaleString('pt-BR')}
+                                </span>
+                            )}
+                            Deseja continuar editando o rascunho ou começar um novo orçamento?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={descartarRascunho}>
+                            Descartar e começar novo
+                        </AlertDialogCancel>
+                        <AlertDialogAction onClick={continuarRascunho}>
+                            Continuar rascunho
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <div className="min-h-screen p-4 sm:p-8 bg-gray-50 dark:bg-dark-bg">
             {/* Header */}
             <header className="mb-8">
                 <div className="flex items-center gap-4 mb-6">
@@ -1284,9 +1473,20 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                             Cancelar
                         </button>
                         <button
+                            type="button"
+                            onClick={salvarRascunho}
+                            className="btn-secondary flex items-center gap-2"
+                            disabled={salvando}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            Salvar Rascunho
+                        </button>
+                        <button
                             type="submit"
                             className="btn-primary disabled:opacity-50"
-                            disabled={salvando}
+                            disabled={salvando || items.length === 0}
                         >
                             {salvando ? (
                                 <>
@@ -1492,7 +1692,14 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                             >
                                                                 <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
                                                                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                                                                    SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida} • Custo: R$ {material.preco.toFixed(2)}
+                                                                    SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida}
+                                                                    <br />
+                                                                    Custo: R$ {(material.preco ?? 0).toFixed(2)}
+                                                                    {material.valorVenda && (
+                                                                        <> • Venda: R$ {(material.valorVenda ?? 0).toFixed(2)} 
+                                                                        {material.porcentagemLucro && ` (${(material.porcentagemLucro ?? 0).toFixed(2)}% lucro)`}
+                                                                        </>
+                                                                    )}
                                                                 </p>
                                                             </button>
                                                         ))}
@@ -1516,7 +1723,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                             >
                                                                 <p className="font-semibold text-gray-900 dark:text-dark-text">{servico.nome}</p>
                                                                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                                                                    Código: {servico.codigo} • Preço: R$ {servico.preco.toFixed(2)}/{servico.unidade}
+                                                                    Código: {servico.codigo || 'N/A'} • Preço: R$ {(servico.preco ?? 0).toFixed(2)}/{servico.unidade || 'un'}
                                                                 </p>
                                                             </button>
                                                         ))}
@@ -1540,7 +1747,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                             >
                                                                 <p className="font-semibold text-gray-900 dark:text-dark-text">{kit.nome}</p>
                                                                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                                                                    {kit.items.length} itens • Preço: R$ {(kit.precoSugerido || kit.custoTotal).toFixed(2)}
+                                                                    {kit.items?.length || 0} itens • Preço: R$ {((kit.precoSugerido ?? kit.custoTotal) ?? 0).toFixed(2)}
                                                                 </p>
                                                             </button>
                                                         ))}
@@ -1564,7 +1771,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                             >
                                                                 <p className="font-semibold text-gray-900 dark:text-dark-text">{quadro.nome}</p>
                                                                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                                                                    Custo: R$ {quadro.custoTotal.toFixed(2)} • Preço: R$ {(quadro.precoSugerido || quadro.custoTotal).toFixed(2)}
+                                                                    Custo: R$ {(quadro.custoTotal ?? 0).toFixed(2)} • Preço: R$ {((quadro.precoSugerido ?? quadro.custoTotal) ?? 0).toFixed(2)}
                                                                 </p>
                                                             </button>
                                                         ))}
@@ -1738,13 +1945,27 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                                     <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
                                                                         SKU: {material.sku}
                                                                     </p>
-                                                                    <div className="mt-2 flex items-center gap-4 text-xs">
-                                                                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded font-semibold">
-                                                                            Estoque: {material.estoque} {material.unidadeMedida}
-                                                                        </span>
-                                                                        <span className="text-gray-600 dark:text-gray-400">
-                                                                            Custo: R$ {material.preco.toFixed(2)}
-                                                                        </span>
+                                                                    <div className="mt-2 flex flex-col gap-2">
+                                                                        <div className="flex items-center gap-4 text-xs">
+                                                                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded font-semibold">
+                                                                                Estoque: {material.estoque} {material.unidadeMedida}
+                                                                            </span>
+                                                                            <span className="text-gray-600 dark:text-gray-400">
+                                                                                Custo: R$ {(material.preco ?? 0).toFixed(2)}
+                                                                            </span>
+                                                                        </div>
+                                                                        {material.valorVenda && (
+                                                                            <div className="flex items-center gap-4 text-xs">
+                                                                                <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded font-semibold">
+                                                                                    Venda: R$ {(material.valorVenda ?? 0).toFixed(2)}
+                                                                                </span>
+                                                                                {material.porcentagemLucro && (
+                                                                                    <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded font-semibold">
+                                                                                        {(material.porcentagemLucro ?? 0).toFixed(2)}% lucro
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 
@@ -1918,7 +2139,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                                 <strong>Estoque:</strong> {materialSelecionadoComparacao.estoque} {materialSelecionadoComparacao.unidadeMedida}
                                                             </p>
                                                             <p className="text-gray-600 dark:text-gray-400">
-                                                                <strong>Custo:</strong> R$ {materialSelecionadoComparacao.preco.toFixed(2)}
+                                                                <strong>Custo:</strong> R$ {(materialSelecionadoComparacao.preco ?? 0).toFixed(2)}
                                                             </p>
                                                             <p className="text-gray-600 dark:text-gray-400">
                                                                 <strong>SKU:</strong> {materialSelecionadoComparacao.sku}
@@ -1970,9 +2191,9 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                         </p>
                                                         {cotacaoSelecionadaComparacao && (
                                                             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                                                <strong>Comparação:</strong> {materialSelecionadoComparacao.preco < (cotacaoSelecionadaComparacao.valorUnitario || 0)
-                                                                    ? `💰 Estoque é mais barato (R$ ${(cotacaoSelecionadaComparacao.valorUnitario - materialSelecionadoComparacao.preco).toFixed(2)} de diferença)`
-                                                                    : `💰 Cotação é mais barata (R$ ${(materialSelecionadoComparacao.preco - cotacaoSelecionadaComparacao.valorUnitario).toFixed(2)} de diferença)`}
+                                                                <strong>Comparação:</strong> {(materialSelecionadoComparacao.preco ?? 0) < (cotacaoSelecionadaComparacao.valorUnitario ?? 0)
+                                                                    ? `💰 Estoque é mais barato (R$ ${((cotacaoSelecionadaComparacao.valorUnitario ?? 0) - (materialSelecionadoComparacao.preco ?? 0)).toFixed(2)} de diferença)`
+                                                                    : `💰 Cotação é mais barata (R$ ${((materialSelecionadoComparacao.preco ?? 0) - (cotacaoSelecionadaComparacao.valorUnitario ?? 0)).toFixed(2)} de diferença)`}
                                                             </p>
                                                         )}
                                                     </div>
@@ -2059,7 +2280,14 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                 >
                                                     <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
                                                     <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
-                                                        SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida} • Custo: R$ {material.preco.toFixed(2)}
+                                                        SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida}
+                                                        <br />
+                                                        Custo: R$ {(material.preco ?? 0).toFixed(2)}
+                                                        {material.valorVenda && (
+                                                            <> • Venda: R$ {(material.valorVenda ?? 0).toFixed(2)} 
+                                                            {material.porcentagemLucro && ` (${(material.porcentagemLucro ?? 0).toFixed(2)}% lucro)`}
+                                                            </>
+                                                        )}
                                                     </p>
                                                 </button>
                                             ))}
@@ -2100,7 +2328,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
                                                 >
                                                     <p className="font-semibold text-gray-900 dark:text-dark-text">{servico.nome}</p>
                                                     <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
-                                                        Código: {servico.codigo} • Tipo: {servico.tipo} • Preço: R$ {servico.preco.toFixed(2)}/{servico.unidade}
+                                                        Código: {servico.codigo || 'N/A'} • Tipo: {servico.tipo || 'N/A'} • Preço: R$ {(servico.preco ?? 0).toFixed(2)}/{servico.unidade || 'un'}
                                                     </p>
                                                     {servico.descricao && (
                                                         <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{servico.descricao}</p>
@@ -2467,6 +2695,7 @@ const NovoOrcamentoPage: React.FC<NovoOrcamentoPageProps> = ({ setAbaAtiva, onOr
             )}
 
         </div>
+        </>
     );
 };
 

@@ -4,6 +4,7 @@ import { type MaterialItem, MaterialCategory } from '../types';
 import { materiaisService, Material } from '../services/materiaisService';
 import ViewToggle from './ui/ViewToggle';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
     generateExampleTemplate,
     exportToJSON,
@@ -13,6 +14,16 @@ import {
     type ImportExportData,
 } from '../utils/importExportTemplates';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -81,7 +92,9 @@ interface MaterialFormState {
     imageUrl?: string;
     supplierId: string;
     supplierName: string;
-    price: string;
+    price: string; // Preço de custo
+    valorVenda: string; // Preço de venda
+    porcentagemLucro: string; // Porcentagem de lucro (calculado automaticamente)
 }
 
 const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
@@ -105,6 +118,8 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToEdit, setItemToEdit] = useState<MaterialItem | null>(null);
     const [itemToDelete, setItemToDelete] = useState<MaterialItem | null>(null);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showCorrigirNomesDialog, setShowCorrigirNomesDialog] = useState(false);
     const [viewModalOpen, setViewModalOpen] = useState(false);
     const [materialParaVisualizar, setMaterialParaVisualizar] = useState<MaterialItem | null>(null);
     const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
@@ -132,7 +147,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         imageUrl: undefined,
         supplierId: '',
         supplierName: '',
-        price: ''
+        price: '', // Preço de custo
+        valorVenda: '', // Preço de venda
+        porcentagemLucro: '' // Porcentagem de lucro
     });
 
 
@@ -157,7 +174,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                     minStock: material.estoqueMinimo,
                     unitOfMeasure: material.unidade,
                     location: 'Estoque', // Campo não disponível na API
-                    price: material.preco,
+                    price: material.preco || 0,
+                    valorVenda: material.valorVenda,
+                    porcentagemLucro: material.porcentagemLucro,
                     supplier: material.fornecedor 
                         ? { id: material.fornecedor.id, name: material.fornecedor.nome } 
                         : { id: '', name: 'Sem fornecedor' }
@@ -200,10 +219,11 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
         // Filtro por busca
         if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
             filtered = filtered.filter(material =>
-                material.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                material.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                material.type.toLowerCase().includes(searchTerm.toLowerCase())
+                (material.name?.toLowerCase() || '').includes(searchLower) ||
+                (material.sku?.toLowerCase() || '').includes(searchLower) ||
+                (material.type?.toLowerCase() || '').includes(searchLower)
             );
         }
 
@@ -219,6 +239,13 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
         return { totalItems, lowStock, outOfStock, totalValue };
     }, [materials]);
+
+    // Função para calcular porcentagem de lucro
+    const calcularPorcentagemLucro = (precoCusto: number, valorVenda: number): number => {
+        if (!precoCusto || precoCusto <= 0) return 0;
+        if (!valorVenda || valorVenda <= 0) return 0;
+        return ((valorVenda - precoCusto) / precoCusto) * 100;
+    };
 
     // Handlers
     const handleOpenModal = (item: MaterialItem | null = null) => {
@@ -237,7 +264,11 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 imageUrl: item.imageUrl,
                 supplierId: item.supplier?.id || item.supplierId || '',
                 supplierName: item.supplier?.name || item.supplierName || '',
-                price: (item.price || 0).toString()
+                price: (item.price || 0).toString(),
+                valorVenda: (item.valorVenda || 0).toString(),
+                porcentagemLucro: (item.porcentagemLucro || (item.valorVenda && item.price 
+                    ? calcularPorcentagemLucro(item.price, item.valorVenda).toFixed(2) 
+                    : '0')).toString()
             });
         } else {
             setItemToEdit(null);
@@ -254,7 +285,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 imageUrl: undefined,
                 supplierId: '',
                 supplierName: '',
-                price: ''
+                price: '',
+                valorVenda: '',
+                porcentagemLucro: ''
             });
         }
         setIsModalOpen(true);
@@ -265,26 +298,54 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         setItemToEdit(null);
     };
 
+    // Função para fechar modal de histórico
+    const handleFecharHistorico = () => {
+        setHistoricoModalOpen(false);
+        setMaterialSelecionado(null);
+        setHistoricoCompras([]);
+    };
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(viewModalOpen, () => {
+        setViewModalOpen(false);
+        setMaterialParaVisualizar(null);
+    });
+    useEscapeKey(historicoModalOpen, handleFecharHistorico);
+    useEscapeKey(showDeleteDialog, () => {
+        setShowDeleteDialog(false);
+        setItemToDelete(null);
+    });
+    useEscapeKey(showCorrigirNomesDialog, () => setShowCorrigirNomesDialog(false));
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         try {
+            const precoCusto = parseFloat(formState.price) || 0;
+            const valorVenda = parseFloat(formState.valorVenda) || 0;
+            const porcentagemLucro = precoCusto > 0 && valorVenda > 0 
+                ? calcularPorcentagemLucro(precoCusto, valorVenda) 
+                : 0;
+
             const materialData = {
                 codigo: formState.sku,
                 descricao: formState.name,
                 unidade: formState.unitOfMeasure,
-                preco: parseFloat(formState.price),
+                preco: precoCusto,
+                valorVenda: valorVenda > 0 ? valorVenda : undefined,
+                porcentagemLucro: porcentagemLucro > 0 ? porcentagemLucro : undefined,
                 estoque: parseFloat(formState.stock),
                 estoqueMinimo: parseFloat(formState.minStock),
                 categoria: formState.type,
-                fornecedorId: formState.supplierId
+                fornecedorId: formState.supplierId || undefined
             };
 
             if (itemToEdit) {
                 // Atualizar material existente
                 const response = await materiaisService.updateMaterial(itemToEdit.id, materialData);
                 if (response.success) {
-                    toast.error('✅ Material atualizado com sucesso!');
+                    toast.success('✅ Material atualizado com sucesso!');
                 } else {
                     toast.error('❌ Erro ao atualizar material');
                 }
@@ -292,7 +353,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 // Criar novo material
                 const response = await materiaisService.createMaterial(materialData);
                 if (response.success) {
-                    toast.error('✅ Material criado com sucesso!');
+                    toast.success('✅ Material criado com sucesso!');
                 } else {
                     toast.error('❌ Erro ao criar material');
                 }
@@ -306,22 +367,36 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         }
     };
 
+    const handleOpenDeleteDialog = (material: MaterialItem) => {
+        setItemToDelete(material);
+        setShowDeleteDialog(true);
+    };
+
     const handleDelete = async () => {
         if (!itemToDelete) return;
         
         try {
+            setShowDeleteDialog(false);
+            const materialNome = itemToDelete.name;
             const response = await materiaisService.deleteMaterial(itemToDelete.id);
             if (response.success) {
-                toast.success('✅ Material removido com sucesso!');
+                toast.success('Material removido com sucesso!', {
+                    description: `O material "${materialNome}" foi removido do sistema.`,
+                });
+                setItemToDelete(null);
+                await loadMaterials();
             } else {
-                toast.error('❌ Erro ao remover material');
+                toast.error('Erro ao remover material', {
+                    description: response.error || 'Não foi possível remover o material.',
+                });
+                setItemToDelete(null);
             }
-            
-            setItemToDelete(null);
-            await loadMaterials();
         } catch (error) {
             console.error('❌ Erro ao remover material:', error);
-            toast.error('❌ Erro ao remover material');
+            toast.error('Erro ao remover material', {
+                description: 'Ocorreu um erro ao tentar remover o material. Tente novamente.',
+            });
+            setItemToDelete(null);
         }
     };
 
@@ -342,30 +417,30 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
         }
     };
 
-    const handleFecharHistorico = () => {
-        setHistoricoModalOpen(false);
-        setMaterialSelecionado(null);
-        setHistoricoCompras([]);
-    };
-
     const handleCorrigirNomesGenericos = async () => {
-        if (!confirm('Deseja atualizar os nomes de todos os produtos importados via XML com os nomes reais das notas fiscais? Esta ação não pode ser desfeita.')) {
-            return;
-        }
-
+        setShowCorrigirNomesDialog(false);
+        
         try {
             setLoading(true);
             const response = await materiaisService.corrigirNomesGenericos();
             
             if ((response as any)?.success) {
-                toast.success(`✅ ${(response as any).corrigidos} materiais atualizados com sucesso!`);
+                const corrigidos = (response as any).corrigidos || 0;
+                toast.success('Nomes corrigidos com sucesso!', {
+                    description: `${corrigidos} material(is) atualizado(s) com os nomes reais das notas fiscais.`,
+                    duration: 5000,
+                });
                 await loadMaterials(); // Recarregar lista
             } else {
-                toast.error('❌ Erro ao atualizar nomes dos materiais');
+                toast.error('Erro ao atualizar nomes dos materiais', {
+                    description: 'Não foi possível atualizar os nomes. Tente novamente.',
+                });
             }
         } catch (error) {
             console.error('Erro ao corrigir nomes:', error);
-            toast.error('❌ Erro ao atualizar nomes dos materiais');
+            toast.error('Erro ao atualizar nomes dos materiais', {
+                description: 'Ocorreu um erro ao tentar atualizar os nomes. Tente novamente.',
+            });
         } finally {
             setLoading(false);
         }
@@ -381,7 +456,9 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
             );
 
             if (materiaisCriticos.length === 0) {
-                toast.error('Não há materiais críticos para exportar');
+                toast.warning('Não há materiais críticos para exportar', {
+                    description: 'Não existem materiais com estoque zerado ou abaixo do mínimo.',
+                });
                 return;
             }
 
@@ -474,11 +551,15 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
 
             // Salvar PDF
             doc.save(`materiais-criticos-${new Date().toISOString().split('T')[0]}.pdf`);
-            toast.success('✅ PDF gerado com sucesso!');
+            toast.success('PDF gerado com sucesso!', {
+                description: `${materiaisCriticos.length} material(is) crítico(s) exportado(s) para PDF.`,
+            });
 
         } catch (error) {
             console.error('Erro ao gerar PDF:', error);
-            toast.error('❌ Erro ao gerar PDF');
+            toast.error('Erro ao gerar PDF', {
+                description: 'Não foi possível gerar o PDF. Tente novamente.',
+            });
         }
     };
 
@@ -527,13 +608,17 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
     // Importar preços atualizados
     const handleImportar = async () => {
         if (!arquivoImportar) {
-            toast.error('Selecione um arquivo para importar');
+            toast.warning('Nenhum arquivo selecionado', {
+                description: 'Por favor, selecione um arquivo XLSX ou CSV para importar.',
+            });
             return;
         }
 
         const extensao = arquivoImportar.name.split('.').pop()?.toLowerCase();
         if (!['xlsx', 'csv'].includes(extensao || '')) {
-            toast.error('Apenas arquivos XLSX ou CSV são permitidos');
+            toast.error('Formato de arquivo inválido', {
+                description: 'Apenas arquivos XLSX ou CSV são permitidos. Selecione um arquivo válido.',
+            });
             return;
         }
 
@@ -553,15 +638,18 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 const total = response.data?.total || 0;
                 
                 if (atualizados > 0) {
-                    toast.success(
-                        `✅ ${atualizados} de ${total} preços atualizados com sucesso! ${erros > 0 ? `\n⚠️ ${erros} erros encontrados` : ''}`,
-                        { duration: 5000 }
-                    );
+                    toast.success('Preços atualizados com sucesso!', {
+                        description: `${atualizados} de ${total} preço(s) atualizado(s).${erros > 0 ? ` ${erros} erro(s) encontrado(s).` : ''}`,
+                        duration: 5000,
+                    });
                     await loadMaterials(); // Recarregar lista
                     setModalImportarOpen(false);
                     setArquivoImportar(null);
                 } else {
-                    toast.warning(`⚠️ Nenhum preço foi atualizado. ${erros} erros encontrados.`, { duration: 5000 });
+                    toast.warning('Nenhum preço foi atualizado', {
+                        description: erros > 0 ? `${erros} erro(s) encontrado(s). Verifique o arquivo e tente novamente.` : 'Nenhum registro válido encontrado no arquivo.',
+                        duration: 5000,
+                    });
                 }
             } else {
                 toast.error(response.error || '❌ Erro ao importar arquivo');
@@ -682,11 +770,23 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 fileInputRef.current.value = '';
             }
 
-            toast.success(`✅ Importação concluída! ${successCount} material(is) importado(s), ${errorCount} erro(s)`);
+            if (successCount > 0) {
+                toast.success('Importação concluída!', {
+                    description: `${successCount} material(is) importado(s) com sucesso.${errorCount > 0 ? ` ${errorCount} erro(s) encontrado(s).` : ''}`,
+                    duration: 5000,
+                });
+            } else {
+                toast.error('Nenhum material foi importado', {
+                    description: errorCount > 0 ? `${errorCount} erro(s) encontrado(s). Verifique o arquivo e tente novamente.` : 'Nenhum registro válido encontrado no arquivo.',
+                    duration: 5000,
+                });
+            }
             await loadMaterials(); // Recarregar lista
         } catch (error) {
             console.error('Erro ao importar arquivo:', error);
-            toast.error('❌ Erro ao importar arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+            toast.error('Erro ao importar arquivo', {
+                description: error instanceof Error ? error.message : 'Ocorreu um erro ao tentar importar o arquivo. Tente novamente.',
+            });
         } finally {
             setImporting(false);
         }
@@ -749,7 +849,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <button
-                        onClick={handleCorrigirNomesGenericos}
+                        onClick={() => setShowCorrigirNomesDialog(true)}
                         className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-medium font-semibold"
                         title="Atualizar nomes de produtos importados via XML"
                     >
@@ -1037,17 +1137,17 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             {/* Header do Card */}
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1 line-clamp-2" title={material.name}>
-                                        {material.name.includes('Produto importado via XML') 
-                                            ? material.description || material.name 
-                                            : material.name}
+                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1 line-clamp-2" title={material.name || ''}>
+                                        {(material.name || '').includes('Produto importado via XML') 
+                                            ? material.description || material.name || 'Sem nome'
+                                            : material.name || 'Sem nome'}
                                     </h3>
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="px-3 py-1 text-xs font-bold rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300 ring-1 ring-teal-200 dark:ring-teal-700">
                                             {getCategoryIcon(material.category)} {material.category}
                                         </span>
                                         <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded font-mono">
-                                            {material.sku}
+                                            {material.sku || 'N/A'}
                                         </span>
                                     </div>
                                 </div>
@@ -1144,7 +1244,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                     Editar
                                 </button>
                                 <button
-                                    onClick={() => setItemToDelete(material)}
+                                    onClick={() => handleOpenDeleteDialog(material)}
                                     className="flex items-center justify-center gap-1 px-3 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/70 transition-colors text-sm font-semibold"
                                 >
                                     <TrashIcon className="w-4 h-4" />
@@ -1175,15 +1275,15 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                 <tr key={material.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <td className="px-6 py-4">
                                         <p className="font-semibold text-gray-900 dark:text-white">
-                                            {material.name.includes('Produto importado via XML') 
-                                                ? material.description || material.name 
-                                                : material.name}
+                                            {(material.name || '').includes('Produto importado via XML') 
+                                                ? material.description || material.name || 'Sem nome'
+                                                : material.name || 'Sem nome'}
                                         </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">{material.type}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{material.type || 'Sem tipo'}</p>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded font-mono">
-                                            {material.sku}
+                                            {material.sku || 'N/A'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
@@ -1241,7 +1341,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                                 <PencilIcon className="w-4 h-4" />
                                             </button>
                                             <button
-                                                onClick={() => setItemToDelete(material)}
+                                                onClick={() => handleOpenDeleteDialog(material)}
                                                 className="p-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 transition-colors"
                                                 title="Remover"
                                             >
@@ -1377,7 +1477,7 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                             </div>
 
                             {/* Estoque e Preço */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Estoque Atual *
@@ -1410,28 +1510,92 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Preço Unitário (R$) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={formState.price}
-                                        onChange={(e) => setFormState({...formState, price: e.target.value})}
-                                        required
-                                        min="0"
-                                        step="0.01"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-
                                 <div className="flex items-end">
                                     <div className="w-full bg-teal-50 border border-teal-200 p-3 rounded-xl">
-                                        <p className="text-sm font-medium text-teal-800">Valor Total:</p>
+                                        <p className="text-sm font-medium text-teal-800">Valor Total em Estoque:</p>
                                         <p className="text-lg font-bold text-teal-900">
                                             R$ {((parseFloat(formState.stock) || 0) * (parseFloat(formState.price) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Preços: Custo, Venda e Lucro */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                                <h3 className="text-lg font-semibold text-blue-900 mb-4">💲 Informações de Preço</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Preço de Custo (R$) *
+                                            <span className="text-xs text-gray-500 font-normal block mt-1">Última compra</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formState.price}
+                                            onChange={(e) => {
+                                                const novoPreco = e.target.value;
+                                                const valorVenda = parseFloat(formState.valorVenda) || 0;
+                                                const novaPorcentagem = valorVenda > 0 && parseFloat(novoPreco) > 0
+                                                    ? calcularPorcentagemLucro(parseFloat(novoPreco) || 0, valorVenda)
+                                                    : 0;
+                                                setFormState({
+                                                    ...formState,
+                                                    price: novoPreco,
+                                                    porcentagemLucro: novaPorcentagem.toFixed(2)
+                                                });
+                                            }}
+                                            required
+                                            min="0"
+                                            step="0.01"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Valor de Venda (R$)
+                                            <span className="text-xs text-gray-500 font-normal block mt-1">Usado em orçamentos</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formState.valorVenda}
+                                            onChange={(e) => {
+                                                const novoValorVenda = e.target.value;
+                                                const precoCusto = parseFloat(formState.price) || 0;
+                                                const novaPorcentagem = precoCusto > 0 && parseFloat(novoValorVenda) > 0
+                                                    ? calcularPorcentagemLucro(precoCusto, parseFloat(novoValorVenda) || 0)
+                                                    : 0;
+                                                setFormState({
+                                                    ...formState,
+                                                    valorVenda: novoValorVenda,
+                                                    porcentagemLucro: novaPorcentagem.toFixed(2)
+                                                });
+                                            }}
+                                            min="0"
+                                            step="0.01"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Porcentagem de Lucro (%)
+                                            <span className="text-xs text-gray-500 font-normal block mt-1">Calculado automaticamente</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formState.porcentagemLucro}
+                                            readOnly
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 cursor-not-allowed"
+                                            placeholder="0,00"
+                                        />
+                                        {parseFloat(formState.porcentagemLucro) > 0 && (
+                                            <p className="text-xs text-green-600 mt-1 font-medium">
+                                                Lucro de R$ {((parseFloat(formState.valorVenda) || 0) - (parseFloat(formState.price) || 0)).toFixed(2)}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1485,32 +1649,62 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                 </div>
             )}
 
-            {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
-            {itemToDelete && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-md w-full p-6">
-                        <h3 className="text-xl font-bold text-gray-900 mb-4">Remover Material</h3>
-                        <p className="text-gray-600 mb-6">
-                            Tem certeza que deseja remover o material <strong>"{itemToDelete.name}"</strong>? 
-                            Esta ação não pode ser desfeita.
-                        </p>
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setItemToDelete(null)}
-                                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-semibold"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold"
-                            >
-                                Remover
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* AlertDialog de Confirmação de Exclusão */}
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>🗑️ Remover Material</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tem certeza que deseja remover o material <strong>"{itemToDelete?.name}"</strong>?
+                            <br /><br />
+                            Esta ação não pode ser desfeita. O material será permanentemente removido do sistema.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => {
+                            setShowDeleteDialog(false);
+                            setItemToDelete(null);
+                        }}>
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            className="bg-red-600 hover:bg-red-700"
+                            disabled={loading}
+                        >
+                            {loading ? 'Removendo...' : 'Remover Material'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* AlertDialog de Confirmação para Corrigir Nomes */}
+            <AlertDialog open={showCorrigirNomesDialog} onOpenChange={setShowCorrigirNomesDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>📝 Corrigir Nomes dos Materiais</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Deseja atualizar os nomes de todos os produtos importados via XML com os nomes reais das notas fiscais?
+                            <br /><br />
+                            <strong>⚠️ Esta ação não pode ser desfeita.</strong>
+                            <br />
+                            Todos os materiais que foram importados via XML terão seus nomes substituídos pelos nomes reais das notas fiscais.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setShowCorrigirNomesDialog(false)}>
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleCorrigirNomesGenericos}
+                            className="bg-blue-600 hover:bg-blue-700"
+                            disabled={loading}
+                        >
+                            {loading ? 'Corrigindo...' : 'Corrigir Nomes'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             {/* MODAL DE HISTÓRICO DE COMPRAS */}
             {historicoModalOpen && materialSelecionado && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -1567,6 +1761,46 @@ const Materiais: React.FC<MateriaisProps> = ({ toggleSidebar }) => {
                                     <p className="text-lg font-bold text-green-600">
                                         R$ {(materialSelecionado.stock * (materialSelecionado.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </p>
+                                </div>
+                            </div>
+
+                            {/* Informações de Preço: Custo, Venda e Lucro */}
+                            <div className="border-t border-gray-200 pt-6 mt-6">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">💲 Informações de Preço</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                        <p className="text-sm text-blue-700 dark:text-blue-300 mb-1">Preço de Custo</p>
+                                        <p className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                                            R$ {(materialSelecionado.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Última compra</p>
+                                    </div>
+                                    <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
+                                        <p className="text-sm text-purple-700 dark:text-purple-300 mb-1">Valor de Venda</p>
+                                        <p className="text-lg font-bold text-purple-900 dark:text-purple-100">
+                                            {materialSelecionado.valorVenda 
+                                                ? `R$ ${materialSelecionado.valorVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                                : <span className="text-gray-400">Não definido</span>
+                                            }
+                                        </p>
+                                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Usado em orçamentos</p>
+                                    </div>
+                                    <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl p-4">
+                                        <p className="text-sm text-green-700 dark:text-green-300 mb-1">Porcentagem de Lucro</p>
+                                        <p className="text-lg font-bold text-green-900 dark:text-green-100">
+                                            {materialSelecionado.porcentagemLucro 
+                                                ? `${materialSelecionado.porcentagemLucro.toFixed(2)}%`
+                                                : materialSelecionado.valorVenda && materialSelecionado.price
+                                                ? `${calcularPorcentagemLucro(materialSelecionado.price, materialSelecionado.valorVenda).toFixed(2)}%`
+                                                : <span className="text-gray-400">Não calculado</span>
+                                            }
+                                        </p>
+                                        {materialSelecionado.valorVenda && materialSelecionado.price && (
+                                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                                Lucro: R$ {((materialSelecionado.valorVenda - materialSelecionado.price)).toFixed(2)}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

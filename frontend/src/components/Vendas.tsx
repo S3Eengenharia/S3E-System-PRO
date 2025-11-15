@@ -6,6 +6,7 @@ import { BudgetStatus } from '../types';
 import { vendasService, type Venda, type DashboardVendas } from '../services/vendasService';
 import { orcamentosService } from '../services/orcamentosService';
 import { clientesService } from '../services/clientesService';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
     generateExampleTemplate,
     exportToJSON,
@@ -207,7 +208,20 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     const abrirModalVisualizarVenda = async (venda: Venda) => {
         setVendaParaVisualizar(venda);
         setModalVisualizarVenda(true);
+    };
+
+    // Fechar modais com ESC
+    useEscapeKey(modalVisualizarVenda, () => {
+        setModalVisualizarVenda(false);
+        setVendaParaVisualizar(null);
+    });
+    useEscapeKey(modalPreviewImportOpen, () => setModalPreviewImportOpen(false));
+
+    const abrirModalVisualizarVendaCompleto = async (venda: Venda) => {
+        setVendaParaVisualizar(venda);
+        setModalVisualizarVenda(true);
         setLoadingDetalhes(true);
+        setDetalhesVenda(null); // Limpar detalhes anteriores
 
         try {
             // Buscar detalhes completos da venda
@@ -234,12 +248,17 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                     orcamento: orcamentoCompleto
                 });
             } else {
-                toast.error('Erro ao carregar detalhes da venda');
+                console.error('Erro na resposta do serviço:', vendaRes);
+                toast.error('Erro ao carregar detalhes da venda', {
+                    description: vendaRes.error || 'Não foi possível carregar os detalhes'
+                });
                 setDetalhesVenda(null);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Erro ao buscar detalhes da venda:', error);
-            toast.error('Erro ao carregar detalhes da venda');
+            toast.error('Erro ao carregar detalhes da venda', {
+                description: error?.message || 'Erro de conexão'
+            });
             setDetalhesVenda(null);
         } finally {
             setLoadingDetalhes(false);
@@ -1224,7 +1243,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                 </div>
                                 <div className="flex justify-end">
                                     <button
-                                        onClick={() => abrirModalVisualizarVenda(venda)}
+                                        onClick={() => abrirModalVisualizarVendaCompleto(venda)}
                                         className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold flex items-center gap-2"
                                         title="Visualizar detalhes da venda"
                                     >

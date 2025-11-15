@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { alocacaoObraService, type AlocacaoDTO } from '../services/AlocacaoObraService';
 import GanttChart, { type GanttItem } from './GanttChart';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { 
     ProjectStatus,
     type User, UserRole,
@@ -396,6 +397,10 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         setIsModalOpen(false);
         setProjectToEdit(null);
     };
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(isAlocacaoModalOpen, () => setIsAlocacaoModalOpen(false));
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -162,7 +162,7 @@ export class PDFOrcamentoService {
             display: none !important;
         }
 
-        /* === SPACER FIXO NO TOPO DE TODAS AS PÁGINAS === */
+        /* === SPACER FIXO NO TOPO E RODAPÉ DE TODAS AS PÁGINAS === */
         .page-top-spacer {
             position: fixed;
             top: 0;
@@ -171,6 +171,20 @@ export class PDFOrcamentoService {
             width: 100%;
             height: 100px;
             min-height: 100px;
+            background: transparent;
+            z-index: -2;
+            pointer-events: none;
+            display: block;
+        }
+
+        .page-bottom-spacer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            height: 80px;
+            min-height: 80px;
             background: transparent;
             z-index: -2;
             pointer-events: none;
@@ -190,6 +204,52 @@ export class PDFOrcamentoService {
                 display: block !important;
             }
 
+            .page-bottom-spacer {
+                position: fixed !important;
+                bottom: 0 !important;
+                height: 80px !important;
+                display: block !important;
+            }
+
+            /* Garantir margin-top de 100px e margin-bottom de 80px em TODAS as páginas */
+            @page {
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            @page :first {
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            /* Garantir que TODAS as páginas subsequentes também tenham as margens */
+            @page :left {
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
+            }
+
+            @page :right {
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
+            }
+
+            /* Mantém o padding-top da div .page para a primeira página */
+            body > .page {
+                padding-top: 110px;
+                padding-bottom: 80px;
+                min-height: calc(100vh - 100px - 80px);
+            }
+
+            /* Quando descrição técnica quebra para nova página, o spacer fixo cuida do espaçamento */
+            .descricoes-wrapper {
+                padding-top: 110px;
+                padding-bottom: 80px;
+            }
+
             /* Garantir que tabelas não quebrem mal */
             table, thead, tbody, tr {
                 page-break-inside: avoid !important;
@@ -201,30 +261,6 @@ export class PDFOrcamentoService {
                 page-break-before: auto !important;
                 page-break-after: auto !important;
             }
-
-            /* Garantir margin-top de 100px em TODAS as páginas (incluindo quebras automáticas) */
-            @page {
-                margin-top: 100px !important;
-                padding-top: 0 !important;
-            }
-
-            @page :first {
-                margin-top: 100px !important;
-                padding-top: 0 !important;
-            }
-
-            /* Mantém o padding-top da div .page para a primeira página */
-            body > .page {
-                padding-top: 110px;
-            }
-
-            /* Quando descrição técnica quebra para nova página, o spacer fixo cuida do espaçamento */
-            .descricoes-wrapper {
-                padding-top: 110px;
-            }
-
-            /* Garantir que quando descrição quebra para nova página, tenha espaçamento */
-            /* O spacer fixo (.page-top-spacer) garante 100px no topo de todas as páginas */
         }
 
         /* Cantos decorativos superiores */
@@ -271,10 +307,10 @@ export class PDFOrcamentoService {
         .page {
             max-width: 100%;
             margin: 0;
-            padding: 110px 10px 20px 10px;
+            padding: 110px 10px 90px 10px;
             position: relative;
             background: transparent;
-            min-height: 100vh;
+            min-height: calc(100vh - 100px - 80px);
         }
 
         /* Adicionar padding-top em elementos que podem começar após quebra de página */
@@ -283,19 +319,32 @@ export class PDFOrcamentoService {
             position: relative;
         }
 
-        /* Garantir padding-top em todas as páginas após quebra de página */
+        /* Garantir padding-top e padding-bottom em todas as páginas após quebra de página */
         @media print {
-            /* Aplicar margin-top de 100px em TODAS as páginas */
+            /* Aplicar margin-top de 100px e margin-bottom de 80px em TODAS as páginas */
             @page {
-                margin-top: 100px;
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
             }
 
-            /* Primeira página também deve ter o margin-top */
+            /* Primeira página também deve ter as margens */
             @page :first {
-                margin-top: 100px;
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
             }
 
-            /* Garantir que qualquer quebra de página tenha padding-top */
+            /* Garantir que TODAS as páginas subsequentes também tenham as margens */
+            @page :left {
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
+            }
+
+            @page :right {
+                margin-top: 100px !important;
+                margin-bottom: 80px !important;
+            }
+
+            /* Garantir que qualquer quebra de página tenha padding-top e padding-bottom */
             * {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
@@ -360,7 +409,9 @@ export class PDFOrcamentoService {
             page-break-before: always;
             break-before: page;
             padding-top: 110px;
+            padding-bottom: 80px;
             position: relative;
+            min-height: calc(100vh - 100px - 80px);
         }
 
         /* Descrições podem quebrar se muito longas */
@@ -370,6 +421,7 @@ export class PDFOrcamentoService {
             orphans: 3;
             widows: 3;
             position: relative;
+            margin-bottom: 20px;
         }
 
         /* Garantir que quando descrição técnica quebra para nova página, tenha padding-top */
@@ -391,9 +443,9 @@ export class PDFOrcamentoService {
             margin-top: 0;
         }
 
-        /* Garantir padding-top em todas as páginas geradas automaticamente */
+        /* Garantir padding-top e padding-bottom em todas as páginas geradas automaticamente */
         @media print {
-            /* O spacer fixo no topo + margin-top do @page garantem o espaçamento em todas as páginas */
+            /* O spacer fixo no topo + margin-top e margin-bottom do @page garantem o espaçamento em todas as páginas */
             
             /* Primeira seção de descrição em nova página tem padding-top do wrapper */
             .descricoes-wrapper > .descricao-section:first-child,
@@ -415,6 +467,12 @@ export class PDFOrcamentoService {
                 height: 100px;
                 margin-top: -100px;
                 visibility: hidden;
+            }
+
+            /* Garantir que todas as seções respeitem o padding-bottom */
+            .descricao-section:last-child,
+            .observacoes-section:last-child {
+                padding-bottom: 80px;
             }
         }
 
@@ -698,9 +756,12 @@ export class PDFOrcamentoService {
         }
     </style>
 </head>
-<body>
+    <body>
     <!-- Spacer fixo no topo de todas as páginas -->
     <div class="page-top-spacer"></div>
+    
+    <!-- Spacer fixo no rodapé de todas as páginas -->
+    <div class="page-bottom-spacer"></div>
 
     <!-- Folha Timbrada / Marca d'água de fundo -->
     <div class="watermark-background${folhaTimbradaUrl ? ' custom-letterhead' : ''}" ${folhaTimbradaUrl ? `style="--letterhead-url: url('${folhaTimbradaUrl}');"` : ''}>

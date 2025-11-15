@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import obraService from '../services/obra.service.js';
+import { EstoqueService } from '../services/estoque.service.js';
 
 const prisma = new PrismaClient();
 
@@ -467,6 +468,37 @@ export class ObraController {
         success: false, 
         message: 'Erro ao buscar alocações de equipes', 
         error: error.message 
+      });
+    }
+  }
+
+  /**
+   * GET /api/obras/verificar-estoque/:projetoId
+   * Verifica disponibilidade de estoque antes de criar obra
+   */
+  static async verificarEstoque(req: Request, res: Response): Promise<void> {
+    try {
+      const { projetoId } = req.params;
+
+      if (!projetoId) {
+        res.status(400).json({
+          success: false,
+          message: 'ID do projeto é obrigatório'
+        });
+        return;
+      }
+
+      const verificacao = await EstoqueService.verificarDisponibilidadeProjeto(projetoId);
+
+      res.status(200).json({
+        success: true,
+        data: verificacao
+      });
+    } catch (error: any) {
+      console.error('Erro ao verificar estoque:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Erro ao verificar estoque'
       });
     }
   }

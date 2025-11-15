@@ -36,6 +36,13 @@ router.get('/kanban', ObraController.getObrasKanban);
 router.get('/projeto/:projetoId', ObraController.getObraPorProjeto);
 
 /**
+ * @route GET /api/obras/verificar-estoque/:projetoId
+ * @desc Verifica disponibilidade de estoque antes de criar obra
+ * @access Authenticated
+ */
+router.get('/verificar-estoque/:projetoId', ObraController.verificarEstoque);
+
+/**
  * @route GET /api/obras/:id
  * @desc Busca uma obra específica por ID
  * @access Authenticated

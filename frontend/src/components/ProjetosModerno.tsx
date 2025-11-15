@@ -11,6 +11,7 @@ import { ENDPOINTS } from '../config/api';
 import { AuthContext } from '../contexts/AuthContext';
 import ViewToggle from './ui/ViewToggle';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -509,6 +510,16 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             toast.error('Erro ao salvar projeto');
         }
     };
+
+    // Fechar modais com ESC
+    useEscapeKey(isCreateModalOpen, () => setIsCreateModalOpen(false));
+    useEscapeKey(isViewModalOpen, () => {
+        setIsViewModalOpen(false);
+        setProjetoToView(null);
+    });
+    useEscapeKey(isTeamModalOpen, () => setIsTeamModalOpen(false));
+    useEscapeKey(isTaskModalOpen, () => setIsTaskModalOpen(false));
+    useEscapeKey(extendPrazoModalOpen, () => setExtendPrazoModalOpen(false));
 
     const handleDelete = async (permanent = false) => {
         if (!projetoToDelete) return;

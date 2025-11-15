@@ -103,15 +103,35 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                 }));
                 
                 // Carregar itens do banco frio
-                const itensBancoFrio: ItemKit[] = (kitParaEditar.itensFaltantes || []).map((item: any) => ({
-                    materialId: `cotacao_${item.cotacaoId}`,
-                    nome: item.nome,
-                    quantidade: item.quantidade,
-                    precoUnit: item.precoUnit || 0,
-                    subtotal: item.quantidade * (item.precoUnit || 0),
-                    unidadeMedida: 'un',
+                // Garantir que itensFaltantes seja um array
+                let itensFaltantesArray: any[] = [];
+                if (kitParaEditar.itensFaltantes) {
+                    if (typeof kitParaEditar.itensFaltantes === 'string') {
+                        try {
+                            itensFaltantesArray = JSON.parse(kitParaEditar.itensFaltantes);
+                        } catch (e) {
+                            console.error('Erro ao fazer parse de itensFaltantes:', e);
+                            itensFaltantesArray = [];
+                        }
+                    } else if (Array.isArray(kitParaEditar.itensFaltantes)) {
+                        itensFaltantesArray = kitParaEditar.itensFaltantes;
+                    }
+                }
+                
+                console.log('📦 Carregando kit para edição:');
+                console.log('   - Itens estoque:', itensEstoque.length);
+                console.log('   - Itens banco frio (itensFaltantes):', itensFaltantesArray.length);
+                console.log('   - Detalhes banco frio:', itensFaltantesArray);
+                
+                const itensBancoFrio: ItemKit[] = itensFaltantesArray.map((item: any) => ({
+                    materialId: `cotacao_${item.cotacaoId || item.id || ''}`,
+                    nome: item.nome || item.materialNome || 'Item do Banco Frio',
+                    quantidade: item.quantidade || 0,
+                    precoUnit: item.precoUnit || item.preco || 0,
+                    subtotal: (item.quantidade || 0) * (item.precoUnit || item.preco || 0),
+                    unidadeMedida: item.unidadeMedida || 'un',
                     isCotacao: true,
-                    dataUltimaCotacao: item.dataUltimaCotacao
+                    dataUltimaCotacao: item.dataUltimaCotacao || item.dataAtualizacao
                 }));
                 
                 setItensKit([...itensEstoque, ...itensBancoFrio]);

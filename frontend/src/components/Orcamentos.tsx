@@ -6,6 +6,7 @@ import { axiosApiService } from '../services/axiosApi';
 import ViewToggle from './ui/ViewToggle';
 import { ENDPOINTS } from '../config/api';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
     generateEmptyTemplate,
     generateExampleTemplate,
@@ -526,6 +527,10 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         });
         setItems([]);
     };
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(showItemModal, () => setShowItemModal(false));
 
     // Funções de Exportação/Importação
     const handleExportTemplate = () => {
@@ -1529,7 +1534,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             {filteredOrcamentos.map((orcamento, index) => (
                                 <tr key={orcamento.id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4 text-center">
-                                        <span className="text-sm font-semibold text-gray-600">{index + 1}</span>
+                                        <span className="text-sm font-semibold text-gray-600">{orcamento.numeroSequencial || index + 1}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <p className="font-semibold text-gray-900">{orcamento.cliente?.nome || 'N/A'}</p>
