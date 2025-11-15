@@ -9,6 +9,12 @@ import {
   criarProjetoDeOrcamento,
   listarProjetosAvancado
 } from '../controllers/projetosController.js';
+import {
+  getTasksByProjeto,
+  createTask,
+  updateTask,
+  deleteTask
+} from '../controllers/tasksController.js';
 import { authenticate } from '../middlewares/auth.js';
 
 const router = Router();
@@ -62,5 +68,33 @@ router.put('/:id/status', updateProjetoStatus);
  * @access Private
  */
 router.delete('/:id', deleteProjeto);
+
+/**
+ * @route GET /api/projetos/:projetoId/tasks
+ * @desc Listar tasks de um projeto
+ * @access Private
+ */
+router.get('/:projetoId/tasks', getTasksByProjeto);
+
+/**
+ * @route POST /api/projetos/:projetoId/tasks
+ * @desc Criar nova task para um projeto
+ * @access Private
+ */
+router.post('/:projetoId/tasks', createTask);
+
+/**
+ * @route PUT /api/projetos/:projetoId/tasks/:taskId
+ * @desc Atualizar task
+ * @access Private
+ */
+router.put('/:projetoId/tasks/:taskId', updateTask);
+
+/**
+ * @route DELETE /api/projetos/:projetoId/tasks/:taskId
+ * @desc Excluir task
+ * @access Private
+ */
+router.delete('/:projetoId/tasks/:taskId', deleteTask);
 
 export default router;

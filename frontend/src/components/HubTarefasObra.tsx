@@ -156,6 +156,17 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
   // Modal de Gestão de Equipes
   const [modalEquipes, setModalEquipes] = useState(false);
 
+  // Sistema de Abas
+  const [abaAtiva, setAbaAtiva] = useState<'visaoGeral' | 'materiais'>('visaoGeral');
+
+  // Materiais vinculados à obra
+  const [materiaisObra, setMateriaisObra] = useState<any[]>([]);
+  const [loadingMateriais, setLoadingMateriais] = useState(false);
+
+  // Modal de Visualização de Tarefa
+  const [tarefaParaVisualizar, setTarefaParaVisualizar] = useState<TarefaObra | null>(null);
+  const [modalVisualizarTarefa, setModalVisualizarTarefa] = useState(false);
+
   useEffect(() => {
     carregarDados();
   }, [obraId]);
@@ -250,6 +261,48 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
     } catch (error: any) {
       console.error('Erro ao carregar alocações:', error);
     }
+  };
+
+  const carregarMateriaisObra = async () => {
+    try {
+      setLoadingMateriais(true);
+      // Buscar movimentações que referenciam esta obra
+      const response = await axiosApiService.get('/api/movimentacoes');
+      if (response.success && response.data) {
+        const movimentacoesArray = Array.isArray(response.data) ? response.data : [];
+        // Filtrar movimentações que referenciam esta obra (campo referencia ou obraId)
+        const materiaisVinculados = movimentacoesArray
+          .filter((mov: any) => {
+            // Verificar se a referência corresponde ao ID da obra ou nome da obra
+            const referencia = mov.referencia || mov.obraId || mov.obraVinculada || '';
+            return referencia === obraId || referencia === obra?.nomeObra;
+          })
+          .map((mov: any) => ({
+            ...mov,
+            material: mov.material || { nome: 'Material não encontrado' }
+          }));
+        
+        setMateriaisObra(materiaisVinculados);
+        console.log(`✅ ${materiaisVinculados.length} materiais encontrados para a obra`);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar materiais da obra:', error);
+      toast.error('Erro ao carregar materiais');
+    } finally {
+      setLoadingMateriais(false);
+    }
+  };
+
+  // Carregar materiais quando a aba de materiais for ativada
+  useEffect(() => {
+    if (abaAtiva === 'materiais' && obraId) {
+      carregarMateriaisObra();
+    }
+  }, [abaAtiva, obraId]);
+
+  const abrirModalVisualizarTarefa = (tarefa: TarefaObra) => {
+    setTarefaParaVisualizar(tarefa);
+    setModalVisualizarTarefa(true);
   };
 
   const handleCriarTarefa = async (e: React.FormEvent) => {
@@ -485,17 +538,45 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
             </div>
           </div>
 
+          {/* Sistema de Abas */}
+          <div className="border-b border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-bg">
+            <nav className="flex px-8">
+              <button
+                onClick={() => setAbaAtiva('visaoGeral')}
+                className={`px-6 py-4 font-semibold text-sm transition-all border-b-2 ${
+                  abaAtiva === 'visaoGeral'
+                    ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-dark-card'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400'
+                }`}
+              >
+                📋 Visão Geral
+              </button>
+              <button
+                onClick={() => setAbaAtiva('materiais')}
+                className={`px-6 py-4 font-semibold text-sm transition-all border-b-2 ${
+                  abaAtiva === 'materiais'
+                    ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-dark-card'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400'
+                }`}
+              >
+                📦 Materiais
+              </button>
+            </nav>
+          </div>
+
           {/* Conteúdo */}
           <div className="p-8 overflow-y-auto max-h-[calc(95vh-280px)]">
-            {/* Descrição da Obra */}
-            {obra.descricao && (
-              <div className="card-primary mb-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-2">Descrição da Obra</h3>
-                <p className="text-gray-700 dark:text-dark-text-secondary whitespace-pre-wrap">{obra.descricao}</p>
-              </div>
-            )}
+            {abaAtiva === 'visaoGeral' && (
+              <>
+                {/* Descrição da Obra */}
+                {obra.descricao && (
+                  <div className="card-primary mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-2">Descrição da Obra</h3>
+                    <p className="text-gray-700 dark:text-dark-text-secondary whitespace-pre-wrap">{obra.descricao}</p>
+                  </div>
+                )}
 
-            {/* Header de Tarefas */}
+                {/* Header de Tarefas */}
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">Tarefas da Obra</h3>
@@ -580,6 +661,16 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
                         </div>
                       </div>
                       <div className="flex gap-2 ml-4">
+                        {/* Botão Visualizar Tarefa - apenas para tarefas atribuídas */}
+                        {(tarefa.equipeNome || tarefa.atribuidoNome) && (
+                          <button
+                            onClick={() => abrirModalVisualizarTarefa(tarefa)}
+                            className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                            title="Visualizar tarefa ativa"
+                          >
+                            <EyeIcon className="w-5 h-5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => abrirModalEditarTarefa(tarefa)}
                           className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
@@ -664,22 +755,105 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
               </div>
             )}
 
-            {/* Calendário de Alocações */}
-            <div className="mt-8 pt-8 border-t-2 border-gray-200 dark:border-dark-border">
-              <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text flex items-center gap-2">
-                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Calendário de Alocações de Equipes
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
-                  Visualize quando cada equipe está alocada nesta obra
-                </p>
+                {/* Calendário de Alocações */}
+                <div className="mt-8 pt-8 border-t-2 border-gray-200 dark:border-dark-border">
+                  <div className="mb-6">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text flex items-center gap-2">
+                      <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Calendário de Alocações de Equipes
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
+                      Visualize quando cada equipe está alocada nesta obra
+                    </p>
+                  </div>
+                  
+                  <CalendarioAlocacoes obraId={obraId} />
+                </div>
+              </>
+            )}
+
+            {abaAtiva === 'materiais' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">Materiais Alocados à Obra</h3>
+                    <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
+                      Materiais que foram alocados a esta obra através de baixas no estoque
+                    </p>
+                  </div>
+                  <button
+                    onClick={carregarMateriaisObra}
+                    className="px-4 py-2 bg-gray-100 dark:bg-dark-card text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-dark-hover transition-all font-semibold flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Atualizar
+                  </button>
+                </div>
+
+                {loadingMateriais ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-gray-400">Carregando materiais...</p>
+                  </div>
+                ) : materiaisObra.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 dark:bg-dark-card rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
+                    <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <p className="text-gray-500 dark:text-dark-text-secondary mb-2">Nenhum material alocado a esta obra</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">
+                      Os materiais aparecerão aqui quando houver baixas no estoque referenciadas a esta obra
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {materiaisObra.map((mov: any) => (
+                      <div key={mov.id} className="card-secondary border-l-4 border-blue-500">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-bold text-gray-900 dark:text-dark-text mb-2">
+                              {mov.material?.nome || 'Material não encontrado'}
+                            </h4>
+                            <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-dark-text-secondary">
+                              <span className={`px-3 py-1 rounded-lg font-semibold ${
+                                mov.tipo === 'SAIDA' 
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' 
+                                  : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              }`}>
+                                {mov.tipo === 'SAIDA' ? '📤 Saída' : '📥 Entrada'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <strong>Quantidade:</strong> {mov.quantidade} {mov.material?.unidadeMedida || 'un'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <ClockIcon className="w-4 h-4" />
+                                {new Date(mov.createdAt || mov.data).toLocaleDateString('pt-BR')}
+                              </span>
+                              {mov.motivo && (
+                                <span>
+                                  <strong>Motivo:</strong> {mov.motivo}
+                                </span>
+                              )}
+                            </div>
+                            {mov.observacoes && (
+                              <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <p className="text-sm text-blue-900 dark:text-blue-300">
+                                  <strong>Observações:</strong> {mov.observacoes}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              
-              <CalendarioAlocacoes obraId={obraId} />
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -1152,6 +1326,245 @@ const HubTarefasObra: React.FC<HubTarefasObraProps> = ({ obraId, onClose }) => {
           carregarEquipes(); // Recarregar equipes após fechar modal
         }}
       />
+
+      {/* Modal de Visualização de Tarefa Ativa */}
+      {modalVisualizarTarefa && tarefaParaVisualizar && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-500 px-6 py-4 flex justify-between items-center rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <CheckCircleIcon className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Visualizar Tarefa Ativa</h3>
+                  <p className="text-green-100 text-sm mt-1">Detalhes completos da tarefa</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setModalVisualizarTarefa(false);
+                  setTarefaParaVisualizar(null);
+                }}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6 space-y-6">
+              {/* Descrição */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-2">
+                  Descrição da Tarefa
+                </h4>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-lg text-gray-900 dark:text-dark-text font-medium">
+                    {tarefaParaVisualizar.descricao}
+                  </p>
+                </div>
+              </div>
+
+              {/* Informações de Atribuição */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {tarefaParaVisualizar.equipeNome && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-1">
+                      Equipe Alocada
+                    </h4>
+                    <p className="text-lg text-purple-900 dark:text-purple-300 font-semibold flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      {tarefaParaVisualizar.equipeNome}
+                    </p>
+                  </div>
+                )}
+                {!tarefaParaVisualizar.equipeNome && tarefaParaVisualizar.atribuidoNome && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-1">
+                      Eletricista Responsável
+                    </h4>
+                    <p className="text-lg text-blue-900 dark:text-blue-300 font-semibold flex items-center gap-2">
+                      <UserIcon className="w-5 h-5" />
+                      {tarefaParaVisualizar.atribuidoNome}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Datas */}
+              {(tarefaParaVisualizar.dataPrevista || tarefaParaVisualizar.dataPrevistaFim) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {tarefaParaVisualizar.dataPrevista && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-1">
+                        Data Prevista Início
+                      </h4>
+                      <p className="text-lg text-gray-900 dark:text-dark-text flex items-center gap-2">
+                        <ClockIcon className="w-5 h-5" />
+                        {new Date(tarefaParaVisualizar.dataPrevista).toLocaleDateString('pt-BR', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  {tarefaParaVisualizar.dataPrevistaFim && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-1">
+                        Data Prevista Fim
+                      </h4>
+                      <p className="text-lg text-gray-900 dark:text-dark-text flex items-center gap-2">
+                        <ClockIcon className="w-5 h-5" />
+                        {new Date(tarefaParaVisualizar.dataPrevistaFim).toLocaleDateString('pt-BR', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  {tarefaParaVisualizar.dataConclusaoReal && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-1">
+                        Data de Conclusão
+                      </h4>
+                      <p className="text-lg text-green-600 dark:text-green-400 flex items-center gap-2">
+                        <CheckCircleIcon className="w-5 h-5" />
+                        {new Date(tarefaParaVisualizar.dataConclusaoReal).toLocaleDateString('pt-BR', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Progresso */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary">
+                    Progresso da Tarefa
+                  </h4>
+                  <span className="text-xl font-bold text-gray-900 dark:text-dark-text">
+                    {tarefaParaVisualizar.progresso}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                  <div
+                    className="bg-gradient-to-r from-green-600 to-green-500 h-4 rounded-full transition-all"
+                    style={{ width: `${tarefaParaVisualizar.progresso}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Observações */}
+              {tarefaParaVisualizar.observacoes && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-2">
+                    Observações
+                  </h4>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-blue-900 dark:text-blue-300 whitespace-pre-wrap">
+                      {tarefaParaVisualizar.observacoes}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Registros de Atividade */}
+              {tarefaParaVisualizar.registrosAtividade && tarefaParaVisualizar.registrosAtividade.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-500 dark:text-dark-text-secondary mb-4">
+                    Registros de Atividade ({tarefaParaVisualizar.registrosAtividade.length})
+                  </h4>
+                  <div className="space-y-3">
+                    {tarefaParaVisualizar.registrosAtividade.map((registro) => (
+                      <div key={registro.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900 dark:text-dark-text mb-2">
+                              {registro.descricaoAtividade}
+                            </p>
+                            <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-dark-text-secondary">
+                              <span>
+                                📅 {new Date(registro.dataRegistro).toLocaleDateString('pt-BR')}
+                              </span>
+                              <span>⏱️ {registro.horasTrabalhadas}h trabalhadas</span>
+                              {registro.eletricistaNome && (
+                                <span>👤 {registro.eletricistaNome}</span>
+                              )}
+                              {registro.imagens && registro.imagens.length > 0 && (
+                                <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                                  <PhotoIcon className="w-4 h-4" />
+                                  {registro.imagens.length} {registro.imagens.length === 1 ? 'foto' : 'fotos'}
+                                </span>
+                              )}
+                            </div>
+                            {registro.observacoes && (
+                              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                                <strong>Observações:</strong> {registro.observacoes}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => {
+                              abrirModalRegistro(registro);
+                              setModalVisualizarTarefa(false);
+                            }}
+                            className="ml-2 p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Ver detalhes completos"
+                          >
+                            <EyeIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(!tarefaParaVisualizar.registrosAtividade || tarefaParaVisualizar.registrosAtividade.length === 0) && (
+                <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+                  <p className="text-gray-500 dark:text-gray-400">Nenhum registro de atividade ainda</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 bg-gray-50 dark:bg-dark-bg border-t border-gray-200 dark:border-dark-border flex justify-end gap-3 rounded-b-2xl">
+              <button
+                onClick={() => {
+                  setModalVisualizarTarefa(false);
+                  setTarefaParaVisualizar(null);
+                }}
+                className="px-6 py-3 bg-white dark:bg-dark-card border-2 border-gray-300 dark:border-dark-border text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-dark-hover transition-all font-semibold"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  setModalVisualizarTarefa(false);
+                  abrirModalEditarTarefa(tarefaParaVisualizar);
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold flex items-center gap-2"
+              >
+                <PencilIcon className="w-5 h-5" />
+                Editar Tarefa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

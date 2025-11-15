@@ -25,9 +25,10 @@ const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 interface ObraKanbanProps {
     onRefresh?: () => void;
+    onNavigate?: (view: string, ...args: any[]) => void;
 }
 
-const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
+const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh, onNavigate }) => {
     const [kanbanData, setKanbanData] = useState<ObraKanbanData>({
         BACKLOG: [],
         A_FAZER: [],
@@ -218,7 +219,15 @@ const ObraKanban: React.FC<ObraKanbanProps> = ({ onRefresh }) => {
             key={obra.id}
             draggable
             onDragStart={(e) => handleDragStart(e, obra)}
-            onClick={() => setHubObraId(obra.id)}
+            onClick={() => {
+                if (onNavigate) {
+                    // Navegar para página de detalhes da obra
+                    onNavigate('DetalhesObra', obra.id);
+                } else {
+                    // Fallback para modal se onNavigate não estiver disponível
+                    setHubObraId(obra.id);
+                }
+            }}
             className="bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-xl p-4 mb-3 cursor-pointer hover:shadow-lg transition-all hover:border-orange-400 dark:hover:border-orange-500 hover:scale-[1.02]"
         >
             {/* Header */}

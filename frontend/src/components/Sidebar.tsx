@@ -5,6 +5,7 @@ import { useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { ThemeToggle } from './theme-toggle';
 import { hasPermission } from '../utils/permissions';
+import { getUploadUrl } from '../config/api';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -75,36 +76,52 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, activeView, on
     }, [user?.role]);
 
     useEffect(() => {
-        // Carregar logo do localStorage
-        const savedLogo = localStorage.getItem('companyLogo');
-        console.log('🖼️ Logo carregada do localStorage:', savedLogo);
-        if (savedLogo) {
-            setCompanyLogo(savedLogo);
-        }
-
-        // Ouvir mudanças na logo
-        const handleStorageChange = () => {
-            const updatedLogo = localStorage.getItem('companyLogo');
-            console.log('🔄 Logo atualizada:', updatedLogo);
-            setCompanyLogo(updatedLogo);
+        // Carregar logo do backend
+        const loadLogoFromBackend = async () => {
+            try {
+                const { configuracoesService } = await import('../services/configuracoesService');
+                const response = await configuracoesService.getConfiguracoes();
+                if (response.success && response.data?.logoUrl) {
+                    const logoUrl = response.data.logoUrl;
+                    const fullLogoUrl = getUploadUrl(logoUrl);
+                    setCompanyLogo(fullLogoUrl);
+                    localStorage.setItem('companyLogo', fullLogoUrl);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar logo do backend:', error);
+                // Fallback: carregar do localStorage
+                const savedLogo = localStorage.getItem('companyLogo');
+                if (savedLogo) {
+                    setCompanyLogo(savedLogo);
+                }
+            }
         };
 
-        // Criar um intervalo para verificar mudanças (fallback)
-        const checkLogoInterval = setInterval(() => {
-            const currentLogo = localStorage.getItem('companyLogo');
-            if (currentLogo !== companyLogo) {
-                console.log('🔄 Logo detectada por intervalo:', currentLogo);
-                setCompanyLogo(currentLogo);
+        loadLogoFromBackend();
+
+        // Ouvir mudanças na logo via localStorage
+        const handleStorageChange = () => {
+            const updatedLogo = localStorage.getItem('companyLogo');
+            if (updatedLogo) {
+                setCompanyLogo(updatedLogo);
             }
-        }, 1000);
+        };
+
+        // Ouvir evento customizado de atualização de logo
+        const handleLogoUpdated = (event: CustomEvent) => {
+            if (event.detail?.logoUrl) {
+                setCompanyLogo(event.detail.logoUrl);
+            }
+        };
 
         window.addEventListener('storage', handleStorageChange);
+        window.addEventListener('logoUpdated', handleLogoUpdated as EventListener);
         
         return () => {
             window.removeEventListener('storage', handleStorageChange);
-            clearInterval(checkLogoInterval);
+            window.removeEventListener('logoUpdated', handleLogoUpdated as EventListener);
         };
-    }, [companyLogo]);
+    }, []);
 
     const handleLogout = () => {
         logout();

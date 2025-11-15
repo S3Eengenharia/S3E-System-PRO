@@ -10,9 +10,7 @@ build/
 
 # Environment files
 .env
-.env.local
-.env.*.local
-*.env
+.env.production
 
 # IDE
 .vscode/
@@ -52,3 +50,4 @@ NUL
 CON
 PRN
 AUX
+test/sprite_tests/

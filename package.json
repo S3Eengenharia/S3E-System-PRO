@@ -22,8 +22,8 @@
     "gestão",
     "erp"
   ],
-  "author": "S3E Engenharia",
-  "license": "UNLICENSED",
+  "author": "Antonio Junior",
+  "license": "Proprietary",
   "dependencies": {
     "@types/node": "^24.10.1",
     "class-variance-authority": "^0.7.1",

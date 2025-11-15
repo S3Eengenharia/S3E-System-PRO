@@ -28,6 +28,7 @@ model User {
   pdfTemplates        PDFTemplate[]
   projetosResponsavel Projeto[]     @relation("ProjetoResponsavel")
   auditLogs           AuditLog[]
+  alocacoes           AlocacaoObra[] @relation("AlocacaoEletricista")
 
   @@map("users")
 }
@@ -727,7 +728,8 @@ enum StatusAlocacao {
 
 model AlocacaoObra {
   id              String    @id @default(uuid())
-  equipeId        String
+  equipeId        String?  // Opcional: pode ser alocação de equipe ou eletricista individual
+  eletricistaId   String?  // Opcional: ID do eletricista individual (se não for equipe)
   projetoId       String // Relacionado com Projeto (Obra)
   dataInicio      DateTime
   dataFimPrevisto DateTime
@@ -737,9 +739,13 @@ model AlocacaoObra {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  equipe  Equipe  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
-  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  equipe      Equipe?  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  eletricista User?    @relation("AlocacaoEletricista", fields: [eletricistaId], references: [id], onDelete: Cascade)
+  projeto     Projeto  @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
+  @@index([equipeId])
+  @@index([eletricistaId])
+  @@index([projetoId])
   @@map("alocacoes_obra")
 }
 

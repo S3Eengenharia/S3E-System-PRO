@@ -96,6 +96,13 @@ class ObrasService {
   }
 
   /**
+   * Inicia execução de uma obra (permite eletricistas iniciarem)
+   */
+  async iniciarExecucao(obraId: string) {
+    return axiosApiService.put(`/api/obras/${obraId}/iniciar-execucao`);
+  }
+
+  /**
    * Busca detalhes de uma tarefa
    */
   async getTarefa(tarefaId: string) {

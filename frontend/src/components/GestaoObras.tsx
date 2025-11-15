@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { axiosApiService } from '../services/axiosApi';
@@ -52,13 +52,21 @@ interface Equipe {
 
 interface Alocacao {
     id: string;
-    equipeId: string;
+    equipeId?: string | null;
+    eletricistaId?: string | null;
     projetoId: string;
     dataInicio: string;
     dataFim: string;
+    dataFimPrevisto?: string;
     status: 'Planejada' | 'EmAndamento' | 'Concluida' | 'Cancelada';
     observacoes?: string;
-    equipe?: Equipe;
+    equipe?: Equipe | null;
+    eletricista?: {
+        id: string;
+        nome: string;
+        email: string;
+        role: string;
+    } | null;
     projeto?: any;
 }
 
@@ -232,23 +240,107 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     };
 
     // Carregar alocações do backend
-    const loadAlocacoes = async () => {
+    const loadAlocacoes = useCallback(async (usarCalendarioEndpoint: boolean = false) => {
         try {
-            console.log('🔍 Carregando alocações do backend...');
-            const response = await axiosApiService.get<Alocacao[]>(ENDPOINTS.OBRAS.ALOCACOES);
+            console.log('🔍 Carregando alocações do backend...', usarCalendarioEndpoint ? '(endpoint calendário)' : '(endpoint geral)');
+            setError(null);
+            
+            // Usar endpoint geral que retorna TODAS as alocações de TODAS as obras
+            // Isso permite visão ampla de todas as equipes e obras
+            let endpoint = ENDPOINTS.OBRAS.ALOCACOES;
+            let params: any = {};
+            
+            // Se estiver na aba de calendário, ainda usar endpoint geral mas pode filtrar por período
+            // Não usar endpoint de calendário específico para manter visão ampla
+            // O endpoint /api/obras/alocacoes retorna todas as alocações sem filtro de projeto
+            
+            const response = await axiosApiService.get<Alocacao[]>(endpoint, params);
+            
+            console.log('📦 Resposta completa:', response);
+            console.log('📊 Tipo da resposta:', typeof response.data, Array.isArray(response.data));
             
             if (response.success && response.data) {
-                console.log('✅ Alocações carregadas:', response.data);
-                setAlocacoes(Array.isArray(response.data) ? response.data : []);
+                // O backend retorna { success: true, data: [...] }
+                let alocacoesArray: any[] = [];
+                
+                if (Array.isArray(response.data)) {
+                    alocacoesArray = response.data;
+                } else if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray(response.data.data)) {
+                    alocacoesArray = response.data.data;
+                } else if (response.data && typeof response.data === 'object') {
+                    // Pode ser um objeto único, não um array
+                    console.warn('⚠️ Resposta não é um array:', response.data);
+                    alocacoesArray = [];
+                }
+                
+                console.log('✅ Alocações carregadas:', alocacoesArray.length, 'alocações');
+                if (alocacoesArray.length > 0) {
+                    console.log('📋 Exemplo de alocação:', JSON.stringify(alocacoesArray[0], null, 2));
+                }
+                
+                // Normalizar dados para garantir que todas as alocações tenham os campos necessários
+                const alocacoesNormalizadas = alocacoesArray.map((a: any) => {
+                    // O backend retorna dataFimPrevisto, então mapear para dataFim também
+                    const dataFimPrevisto = a.dataFimPrevisto || a.dataFimReal || null;
+                    const dataFimFinal = a.dataFim || dataFimPrevisto || a.dataInicio;
+                    
+                    // Normalizar nome do eletricista (pode vir como 'name' ou 'nome')
+                    const nomeEletricista = a.eletricista?.name || a.eletricista?.nome || null;
+                    
+                    return {
+                        ...a,
+                        id: a.id,
+                        equipeId: a.equipeId,
+                        eletricistaId: a.eletricistaId,
+                        projetoId: a.projetoId,
+                        dataInicio: a.dataInicio,
+                        dataFim: dataFimFinal,
+                        dataFimPrevisto: dataFimPrevisto || dataFimFinal,
+                        status: a.status || 'Planejada',
+                        observacoes: a.observacoes || '',
+                        equipe: a.equipe ? {
+                            id: a.equipe.id,
+                            nome: a.equipe.nome,
+                            tipo: a.equipe.tipo,
+                            membros: a.equipe.membros || []
+                        } : null,
+                        eletricista: a.eletricista ? {
+                            id: a.eletricista.id,
+                            nome: nomeEletricista,
+                            email: a.eletricista.email,
+                            role: a.eletricista.role
+                        } : null,
+                        projeto: a.projeto || null
+                    };
+                });
+                
+                setAlocacoes(alocacoesNormalizadas);
+                setError(null);
+                
+                if (alocacoesNormalizadas.length === 0) {
+                    console.log('ℹ️ Nenhuma alocação encontrada para o período selecionado');
+                }
             } else {
-                console.warn('⚠️ Resposta sem alocações:', response);
+                console.warn('⚠️ Resposta sem alocações ou erro:', response);
                 setAlocacoes([]);
+                const errorMsg = response.error || response.message || 'Nenhuma alocação encontrada';
+                if (response.error && response.error !== 'Nenhuma alocação encontrada') {
+                    setError(errorMsg);
+                    toast.error('Erro ao carregar alocações', {
+                        description: errorMsg
+                    });
+                }
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('❌ Erro ao carregar alocações:', err);
+            const errorMessage = err?.message || err?.response?.data?.message || err?.response?.data?.error || 'Erro ao carregar alocações';
+            setError(errorMessage);
             setAlocacoes([]);
+            toast.error('Erro ao carregar alocações', {
+                description: errorMessage
+            });
         }
-    };
+    }, [activeTab, mesCalendario, anoCalendario]);
 
     // Carregar obras em andamento do backend
     const loadObras = async () => {
@@ -284,12 +376,22 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         loadData();
     }, []);
 
-    // Recarregar obras quando mudar de aba para calendário
+    // Recarregar dados quando mudar de aba ou mês/ano do calendário
     useEffect(() => {
         if (activeTab === 'calendario') {
             loadObras();
+            loadAlocacoes(true); // Usar endpoint de calendário
+        } else if (activeTab === 'gantt') {
+            loadAlocacoes(false); // Usar endpoint geral para timeline
         }
-    }, [activeTab]);
+    }, [activeTab, loadAlocacoes]);
+
+    // Recarregar alocações quando mudar mês/ano do calendário
+    useEffect(() => {
+        if (activeTab === 'calendario') {
+            loadAlocacoes(true); // Usar endpoint de calendário com parâmetros de mês/ano
+        }
+    }, [mesCalendario, anoCalendario, activeTab, loadAlocacoes]);
 
     // Filtrar alocações por data para Timeline (sempre executado, não condicional)
     const alocacoesFiltradas = useMemo(() => {
@@ -655,21 +757,37 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     // Verificar se há alocações ou obras em um dia específico
     const getEventosDoDia = (dia: number) => {
         const hoje = new Date();
+        // Normalizar data para comparar apenas dia/mês/ano (sem horas)
         const dataAtual = new Date(anoCalendario, mesCalendario, dia);
+        dataAtual.setHours(0, 0, 0, 0);
+        
         const eventos: Array<{ tipo: 'alocacao' | 'obra'; cor: string; titulo: string }> = [];
 
-        // Verificar alocações
+        // Verificar alocações (equipes e eletricistas)
         alocacoes.forEach(alocacao => {
+            if (!alocacao.dataInicio) return;
+            
             const inicio = new Date(alocacao.dataInicio);
-            const fim = new Date(alocacao.dataFim);
+            inicio.setHours(0, 0, 0, 0);
+            
+            const fim = new Date(alocacao.dataFim || alocacao.dataFimPrevisto || alocacao.dataInicio);
+            fim.setHours(23, 59, 59, 999); // Incluir o dia inteiro
+            
+            // Verificar se a data atual está entre o início e o fim da alocação
             if (dataAtual >= inicio && dataAtual <= fim) {
                 const cor = alocacao.status === 'EmAndamento' ? 'bg-green-500' :
                            alocacao.status === 'Planejada' ? 'bg-blue-500' :
                            alocacao.status === 'Concluida' ? 'bg-orange-500' : 'bg-red-500';
+                // Determinar título: equipe ou eletricista
+                const titulo = alocacao.equipe 
+                    ? `Equipe: ${alocacao.equipe.nome}` 
+                    : alocacao.eletricista 
+                        ? `Eletricista: ${alocacao.eletricista.nome}` 
+                        : 'Alocação';
                 eventos.push({
                     tipo: 'alocacao',
                     cor,
-                    titulo: alocacao.equipe?.nome || 'Alocação'
+                    titulo
                 });
             }
         });
@@ -678,7 +796,13 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         obras.forEach(obra => {
             if (obra.dataPrevistaInicio || obra.dataInicioReal) {
                 const inicio = new Date(obra.dataInicioReal || obra.dataPrevistaInicio!);
+                inicio.setHours(0, 0, 0, 0);
+                
                 const fim = obra.dataPrevistaFim ? new Date(obra.dataPrevistaFim) : null;
+                if (fim) {
+                    fim.setHours(23, 59, 59, 999);
+                }
+                
                 if (dataAtual >= inicio && (!fim || dataAtual <= fim)) {
                     eventos.push({
                         tipo: 'obra',
@@ -1172,13 +1296,16 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             </div>
                             <div className="flex gap-2">
                                 <button 
-                                    onClick={() => {
-                                        loadAlocacoes();
+                                    onClick={async () => {
+                                        await loadAlocacoes(false);
                                         toast.success('Timeline atualizada!');
                                     }}
-                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold flex items-center gap-2"
                                 >
-                                    ↻ Atualizar
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Atualizar
                                 </button>
                             </div>
                         </div>
@@ -1295,7 +1422,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
 
                     {/* Timeline Principal */}
                     <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-6">Timeline de Alocações por Equipe</h3>
+                        <h3 className="text-lg font-bold text-gray-900 mb-6">Timeline de Alocações por Equipe e Eletricista (Mensal)</h3>
                         
                         {equipes.length === 0 ? (
                             <div className="text-center py-16">
@@ -1313,7 +1440,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                             <div className="space-y-6">
                                 {/* Header da Timeline - Meses */}
                                 <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-200">
-                                    <div className="w-48 font-semibold text-sm text-gray-700">Equipe</div>
+                                    <div className="w-48 font-semibold text-sm text-gray-700">Equipe / Eletricista</div>
                                     <div className="flex-1 grid grid-cols-12 gap-1">
                                         {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((mes, idx) => (
                                             <div key={idx} className="text-center text-xs font-semibold text-gray-600">
@@ -1354,7 +1481,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                                 {equipeAlocacoes.length > 0 ? (
                                                     equipeAlocacoes.map((alocacao, idx) => {
                                                         const startDate = new Date(alocacao.dataInicio);
-                                                        const endDate = new Date(alocacao.dataFim);
+                                                        const endDate = new Date(alocacao.dataFim || alocacao.dataFimPrevisto || alocacao.dataInicio);
                                                         const startMonth = startDate.getMonth();
                                                         const endMonth = endDate.getMonth();
                                                         const duration = endMonth - startMonth + 1;
@@ -1393,6 +1520,88 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                                         </div>
                                     );
                                 })}
+
+                                {/* Linhas dos Eletricistas Individuais */}
+                                {(() => {
+                                    // Buscar eletricistas únicos que têm alocações
+                                    const eletricistasComAlocacoes = new Map<string, { id: string; nome: string; email: string }>();
+                                    alocacoesFiltradas.forEach(alocacao => {
+                                        if (alocacao.eletricista && !eletricistasComAlocacoes.has(alocacao.eletricista.id)) {
+                                            eletricistasComAlocacoes.set(alocacao.eletricista.id, {
+                                                id: alocacao.eletricista.id,
+                                                nome: alocacao.eletricista.nome,
+                                                email: alocacao.eletricista.email
+                                            });
+                                        }
+                                    });
+
+                                    return Array.from(eletricistasComAlocacoes.values()).map((eletricista) => {
+                                        const eletricistaAlocacoes = alocacoesFiltradas.filter(a => a.eletricistaId === eletricista.id);
+                                        
+                                        return (
+                                            <div key={eletricista.id} className="flex items-center gap-4 group">
+                                                {/* Info do Eletricista */}
+                                                <div className="w-48">
+                                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-200 group-hover:border-indigo-400 transition-colors">
+                                                        <h4 className="font-semibold text-sm text-gray-900 truncate">⚡ {eletricista.nome}</h4>
+                                                        <p className="text-xs text-gray-500 mt-0.5">Eletricista Individual</p>
+                                                        <p className="text-xs text-gray-400 mt-1 truncate">{eletricista.email}</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Timeline Grid */}
+                                                <div className="flex-1 relative h-16">
+                                                    {/* Grid de fundo */}
+                                                    <div className="absolute inset-0 grid grid-cols-12 gap-1">
+                                                        {Array.from({ length: 12 }).map((_, idx) => (
+                                                            <div key={idx} className="bg-gray-50 rounded border border-gray-100"></div>
+                                                        ))}
+                                                    </div>
+                                                    
+                                                    {/* Barras de Alocação */}
+                                                    {eletricistaAlocacoes.length > 0 ? (
+                                                        eletricistaAlocacoes.map((alocacao, idx) => {
+                                                            const startDate = new Date(alocacao.dataInicio);
+                                                            const endDate = new Date(alocacao.dataFim || alocacao.dataFimPrevisto || alocacao.dataInicio);
+                                                            const startMonth = startDate.getMonth();
+                                                            const endMonth = endDate.getMonth();
+                                                            const duration = endMonth - startMonth + 1;
+                                                            const left = (startMonth / 12) * 100;
+                                                            const width = (duration / 12) * 100;
+                                                            
+                                                            const colors = {
+                                                                Planejada: 'bg-blue-500',
+                                                                EmAndamento: 'bg-green-500',
+                                                                Concluida: 'bg-orange-500',
+                                                                Cancelada: 'bg-red-500'
+                                                            };
+                                                            
+                                                            return (
+                                                                <div
+                                                                    key={idx}
+                                                                    className={`absolute h-10 rounded-lg ${colors[alocacao.status]} shadow-md flex items-center justify-center text-white text-xs font-semibold px-2 hover:shadow-lg transition-all cursor-pointer group/bar`}
+                                                                    style={{
+                                                                        left: `${left}%`,
+                                                                        width: `${width}%`,
+                                                                        top: '50%',
+                                                                        transform: 'translateY(-50%)'
+                                                                    }}
+                                                                    title={`${alocacao.status} - ${startDate.toLocaleDateString('pt-BR')} até ${endDate.toLocaleDateString('pt-BR')}`}
+                                                                >
+                                                                    <span className="truncate">{alocacao.status}</span>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                            <span className="text-xs text-gray-400">Sem alocações</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </div>
                         )}
                     </div>

@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { type PurchaseOrder, type Supplier, PurchaseStatus, type PurchaseOrderItem, type Product, CatalogItemType } from '../types';
 import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
 import { comprasService } from '../services/comprasService';
+import ViewToggle from './ui/ViewToggle';
+import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -76,6 +78,13 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     const [products, setProducts] = useState<Product[]>([]);
     const [filter, setFilter] = useState<PurchaseStatus | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(loadViewMode('Compras'));
+    
+    // Salvar viewMode no localStorage quando mudar
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        saveViewMode('Compras', mode);
+    };
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isXMLModalOpen, setIsXMLModalOpen] = useState(false);
 
@@ -621,11 +630,12 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                     </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
+                <div className="mt-4 flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm text-gray-600">
                         Exibindo <span className="font-bold text-gray-900">{filteredPurchases.length}</span> de <span className="font-bold text-gray-900">{purchaseOrders.length}</span> compras
                     </p>
                     <div className="flex items-center gap-4">
+                        <ViewToggle view={viewMode} onViewChange={handleViewModeChange} />
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                             <span className="text-xs text-gray-600">Pendente: {purchaseOrders.filter(p => p.status === PurchaseStatus.Pendente).length}</span>
@@ -642,7 +652,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                 </div>
             </div>
 
-            {/* Grid de Compras */}
+            {/* Grid/Lista de Compras */}
             {filteredPurchases.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-16 text-center">
                     <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -664,7 +674,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                         </button>
                     )}
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredPurchases.map((purchase) => (
                         <div key={purchase.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-orange-300 transition-all duration-200">
@@ -734,6 +744,78 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
                             </div>
                         </div>
                     ))}
+                </div>
+            ) : (
+                <div className="bg-white rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Fornecedor</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Nº NF</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Data</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Valor Total</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Itens</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredPurchases.map((purchase) => (
+                                    <tr key={purchase.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="font-bold text-gray-900">{purchase.supplierName}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="font-mono text-sm text-gray-600">{purchase.invoiceNumber}</span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-sm text-gray-600">{new Date(purchase.orderDate).toLocaleDateString('pt-BR')}</span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="font-bold text-orange-700">
+                                                R$ {purchase.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-sm text-gray-600">{purchase.items.length} item(s)</span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm ${getStatusClass(purchase.status)}`}>
+                                                {purchase.status === PurchaseStatus.Pendente && '⏳ '}
+                                                {purchase.status === PurchaseStatus.Recebido && '✅ '}
+                                                {purchase.status === PurchaseStatus.Cancelado && '❌ '}
+                                                {purchase.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setPurchaseToView(purchase)}
+                                                    className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
+                                                >
+                                                    <EyeIcon className="w-4 h-4" />
+                                                </button>
+                                                {purchase.status === PurchaseStatus.Pendente && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setPurchaseToView(purchase);
+                                                            handleOpenReceivingModal();
+                                                        }}
+                                                        className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-semibold"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 

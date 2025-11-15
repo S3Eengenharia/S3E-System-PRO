@@ -71,9 +71,16 @@ router.delete('/equipes/:id', authenticate, authorize('admin'), AlocacaoControll
 router.post('/alocar', authenticate, authorize('admin'), AlocacaoController.alocarEquipe);
 
 /**
+ * @route   POST /api/obras/alocar-eletricista
+ * @desc    Aloca um eletricista individual a um projeto/obra
+ * @access  Admin only
+ */
+router.post('/alocar-eletricista', authenticate, authorize('admin'), AlocacaoController.alocarEletricista);
+
+/**
  * @route   GET /api/obras/alocacoes
  * @desc    Lista todas as alocações com filtros opcionais
- * @query   ?equipeId=xxx&projetoId=xxx&status=xxx&dataInicio=xxx&dataFim=xxx
+ * @query   ?equipeId=xxx&eletricistaId=xxx&projetoId=xxx&status=xxx&dataInicio=xxx&dataFim=xxx
  * @access  Authenticated
  */
 router.get('/alocacoes', authenticate, AlocacaoController.listarAlocacoes);

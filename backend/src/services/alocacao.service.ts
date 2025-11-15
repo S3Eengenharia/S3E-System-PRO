@@ -23,6 +23,17 @@ export interface AlocarEquipeDTO {
 }
 
 /**
+ * Interface para alocar um eletricista individual a um projeto
+ */
+export interface AlocarEletricistaDTO {
+  eletricistaId: string;
+  projetoId: string;
+  dataInicio: Date | string;
+  duracaoDias: number; // Dias úteis (20 dias/mês)
+  observacoes?: string;
+}
+
+/**
  * Interface para atualizar uma alocação
  */
 export interface AtualizarAlocacaoDTO {
@@ -335,10 +346,111 @@ export class AlocacaoService {
   }
 
   /**
+   * Aloca um eletricista individual a um projeto/obra
+   */
+  async alocarEletricista(data: AlocarEletricistaDTO) {
+    // Validar se eletricista existe e está ativo
+    const eletricista = await prisma.user.findUnique({
+      where: { id: data.eletricistaId }
+    });
+
+    if (!eletricista) {
+      throw new Error('Eletricista não encontrado');
+    }
+
+    if (!eletricista.active) {
+      throw new Error('Eletricista não está ativo');
+    }
+
+    // Verificar se é realmente um eletricista
+    if (eletricista.role?.toLowerCase() !== 'eletricista') {
+      throw new Error('Usuário não é um eletricista');
+    }
+
+    // Validar se projeto existe
+    const projeto = await prisma.projeto.findUnique({
+      where: { id: data.projetoId }
+    });
+
+    if (!projeto) {
+      throw new Error('Projeto não encontrado');
+    }
+
+    // Converter dataInicio para Date se for string
+    const dataInicio = typeof data.dataInicio === 'string' 
+      ? new Date(data.dataInicio) 
+      : data.dataInicio;
+
+    // Calcular data fim prevista
+    const dataFimPrevisto = this.calcularDataFimPrevista(dataInicio, data.duracaoDias);
+
+    // Verificar conflitos com outras alocações do mesmo eletricista
+    const alocacoesExistentes = await prisma.alocacaoObra.findMany({
+      where: {
+        eletricistaId: data.eletricistaId,
+        status: { in: ['Planejada', 'EmAndamento'] }
+      }
+    });
+
+    for (const alocacao of alocacoesExistentes) {
+      const conflito = this.verificarConflito(
+        dataInicio,
+        dataFimPrevisto,
+        alocacao.dataInicio,
+        alocacao.dataFimPrevisto
+      );
+
+      if (conflito) {
+        throw new Error(
+          `Conflito detectado! O eletricista já está alocado no período de ${
+            alocacao.dataInicio.toLocaleDateString('pt-BR')
+          } a ${alocacao.dataFimPrevisto.toLocaleDateString('pt-BR')}`
+        );
+      }
+    }
+
+    // Criar alocação
+    const alocacao = await prisma.alocacaoObra.create({
+      data: {
+        eletricistaId: data.eletricistaId,
+        projetoId: data.projetoId,
+        dataInicio,
+        dataFimPrevisto,
+        status: 'Planejada',
+        observacoes: data.observacoes
+      },
+      include: {
+        eletricista: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        projeto: {
+          select: {
+            id: true,
+            titulo: true,
+            cliente: {
+              select: {
+                nome: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return alocacao;
+  }
+
+  /**
    * Lista todas as alocações (com filtros opcionais)
    */
   async listarAlocacoes(filtros?: {
     equipeId?: string;
+    eletricistaId?: string;
     projetoId?: string;
     status?: string;
     dataInicio?: Date;
@@ -348,6 +460,10 @@ export class AlocacaoService {
 
     if (filtros?.equipeId) {
       where.equipeId = filtros.equipeId;
+    }
+
+    if (filtros?.eletricistaId) {
+      where.eletricistaId = filtros.eletricistaId;
     }
 
     if (filtros?.projetoId) {
@@ -394,7 +510,37 @@ export class AlocacaoService {
       orderBy: { dataInicio: 'asc' }
     });
 
-    return alocacoes;
+    // Buscar eletricistas separadamente se necessário (para evitar erro se relação não existir)
+    const eletricistaIds = alocacoes
+      .map(a => a.eletricistaId)
+      .filter((id): id is string => id !== null && id !== undefined);
+    
+    const eletricistasMap = new Map<string, any>();
+    if (eletricistaIds.length > 0) {
+      try {
+        const eletricistas = await prisma.user.findMany({
+          where: { id: { in: eletricistaIds } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        });
+        eletricistas.forEach(e => eletricistasMap.set(e.id, e));
+      } catch (error) {
+        console.warn('Erro ao buscar eletricistas:', error);
+        // Continuar sem eletricistas se houver erro
+      }
+    }
+
+    // Retornar alocações com eletricistas incluídos
+    return alocacoes.map(alocacao => ({
+      ...alocacao,
+      eletricista: alocacao.eletricistaId && eletricistasMap.has(alocacao.eletricistaId) 
+        ? eletricistasMap.get(alocacao.eletricistaId)! 
+        : null
+    }));
   }
 
   /**
@@ -449,14 +595,47 @@ export class AlocacaoService {
       orderBy: { dataInicio: 'asc' }
     });
 
+    // Buscar eletricistas separadamente se necessário (para evitar erro se relação não existir)
+    const eletricistaIds = alocacoes
+      .map(a => a.eletricistaId)
+      .filter((id): id is string => id !== null && id !== undefined);
+    
+    const eletricistasMap = new Map<string, any>();
+    if (eletricistaIds.length > 0) {
+      try {
+        const eletricistas = await prisma.user.findMany({
+          where: { id: { in: eletricistaIds } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        });
+        eletricistas.forEach(e => eletricistasMap.set(e.id, e));
+      } catch (error) {
+        console.warn('Erro ao buscar eletricistas:', error);
+        // Continuar sem eletricistas se houver erro
+      }
+    }
+
     // Formatar para calendário
     return alocacoes.map(alocacao => ({
       id: alocacao.id,
-      equipe: {
+      equipeId: alocacao.equipeId,
+      eletricistaId: alocacao.eletricistaId,
+      projetoId: alocacao.projetoId,
+      equipe: alocacao.equipe ? {
         id: alocacao.equipe.id,
         nome: alocacao.equipe.nome,
         tipo: alocacao.equipe.tipo
-      },
+      } : null,
+      eletricista: alocacao.eletricistaId && eletricistasMap.has(alocacao.eletricistaId) ? {
+        id: eletricistasMap.get(alocacao.eletricistaId)!.id,
+        nome: eletricistasMap.get(alocacao.eletricistaId)!.name,
+        email: eletricistasMap.get(alocacao.eletricistaId)!.email,
+        role: eletricistasMap.get(alocacao.eletricistaId)!.role
+      } : null,
       projeto: {
         id: alocacao.projeto.id,
         titulo: alocacao.projeto.titulo,
