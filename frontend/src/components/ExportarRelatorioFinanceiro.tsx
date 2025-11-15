@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { axiosApiService } from '../services/axiosApi';
+import { API_CONFIG, getUploadUrl } from '../config/api';
 
 interface ExportarRelatorioFinanceiroProps {
   setAbaAtiva: (aba: string) => void;
@@ -48,48 +49,71 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
       return;
     }
 
-    // Para Excel, continuar com o download direto
+    // Para JSON, exportar dados como JSON
+    if (formState.formato === 'json') {
+      handleExportarJSON();
+      return;
+    }
+  };
+
+  const handleExportarJSON = async () => {
     try {
       setGerando(true);
-      
+
+      // Buscar dados do período
       const params = new URLSearchParams({
         tipo: formState.tipoRelatorio,
-        formato: formState.formato,
         dataInicio: formState.dataInicio,
-        dataFim: formState.dataFim,
-        incluirGraficos: formState.incluirGraficos.toString(),
-        incluirDetalhes: formState.incluirDetalhes.toString()
+        dataFim: formState.dataFim
       });
 
-      toast.promise(
-        axiosApiService.get(`/api/relatorios/financeiro/exportar?${params}`, {
-          responseType: 'blob'
-        }),
-        {
-          loading: '📊 Gerando relatório...',
-          success: (response) => {
-            const blob = new Blob([response.data], { 
-              type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `relatorio-financeiro-${new Date().toISOString().split('T')[0]}.xlsx`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-            
-            return '✅ Relatório exportado com sucesso!';
-          },
-          error: (err) => {
-            console.error('Erro ao exportar relatório:', err);
-            return '❌ Erro ao exportar relatório';
-          }
-        }
-      );
+      const response = await axiosApiService.get(`/api/relatorios/financeiro/dados?${params}`);
+
+      if (!response.success || !response.data) {
+        toast.error('Erro ao carregar dados do relatório');
+        return;
+      }
+
+      const dados = response.data;
+
+      // Criar objeto JSON com todos os dados
+      const jsonData = {
+        version: '1.0.0',
+        exportDate: new Date().toISOString(),
+        periodo: {
+          dataInicio: formState.dataInicio,
+          dataFim: formState.dataFim,
+          tipoRelatorio: formState.tipoRelatorio
+        },
+        resumo: {
+          totalReceber: dados.totalReceber || 0,
+          totalPagar: dados.totalPagar || 0,
+          saldoPrevisto: dados.saldoPrevisto || 0,
+          totalFaturado: dados.totalFaturado || 0,
+          totalPago: dados.totalPago || 0,
+          lucroLiquido: dados.lucroLiquido || 0
+        },
+        contasReceber: formState.incluirDetalhes && dados.contasReceber ? dados.contasReceber : [],
+        contasPagar: formState.incluirDetalhes && dados.contasPagar ? dados.contasPagar : [],
+        graficos: formState.incluirGraficos && dados.graficos ? dados.graficos : null
+      };
+
+      // Criar e baixar arquivo JSON
+      const jsonString = JSON.stringify(jsonData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `relatorio-financeiro-${formState.dataInicio}_${formState.dataFim}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('✅ Relatório JSON exportado com sucesso!');
     } catch (error: any) {
-      console.error('Erro ao exportar:', error);
+      console.error('Erro ao exportar JSON:', error);
+      toast.error('❌ Erro ao exportar relatório JSON');
     } finally {
       setGerando(false);
     }
@@ -114,6 +138,9 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
       }
 
       const dados = response.data;
+
+      // Obter URL completa do logo
+      const logoUrl = getUploadUrl('/uploads/logos/logo-nome-azul.png');
 
       // Abrir nova janela
       const relatorioWindow = window.open('', '_blank');
@@ -143,6 +170,12 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
               margin-bottom: 40px;
               padding-bottom: 20px;
               border-bottom: 3px solid #10B981;
+            }
+            .header img {
+              display: block;
+              margin: 0 auto 15px auto;
+              max-width: 300px;
+              height: auto;
             }
             .header h1 {
               color: #10B981;
@@ -220,6 +253,7 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
         </head>
         <body>
           <div class="header">
+            <img src="${logoUrl}" alt="S3E Engenharia" style="max-width: 300px; height: auto; margin-bottom: 20px;" onerror="this.style.display='none';" />
             <h1>💰 S3E Engenharia</h1>
             <p><strong>Relatório Financeiro</strong></p>
             <p>Período: ${new Date(formState.dataInicio).toLocaleDateString('pt-BR')} até ${new Date(formState.dataFim).toLocaleDateString('pt-BR')}</p>
@@ -346,7 +380,7 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
           </button>
           <div>
             <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 dark:text-dark-text tracking-tight">Exportar Relatório Financeiro</h1>
-            <p className="text-sm sm:text-base text-gray-500 dark:text-dark-text-secondary mt-1">Gere relatórios personalizados em PDF ou Excel</p>
+            <p className="text-sm sm:text-base text-gray-500 dark:text-dark-text-secondary mt-1">Gere relatórios personalizados em PDF ou JSON</p>
           </div>
         </div>
         <button
@@ -477,20 +511,20 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormState({ ...formState, formato: 'excel' })}
+                  onClick={() => setFormState({ ...formState, formato: 'json' })}
                   className={`p-4 rounded-xl border-2 transition-all ${
-                    formState.formato === 'excel'
-                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-400'
-                      : 'border-gray-300 dark:border-dark-border hover:border-green-300 dark:hover:border-green-600'
+                    formState.formato === 'json'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                      : 'border-gray-300 dark:border-dark-border hover:border-blue-300 dark:hover:border-blue-600'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                    <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                     </svg>
                     <div className="text-left">
-                      <p className="font-bold text-gray-900 dark:text-dark-text">Excel</p>
-                      <p className="text-xs text-gray-600 dark:text-dark-text-secondary">Ideal para análise</p>
+                      <p className="font-bold text-gray-900 dark:text-dark-text">JSON</p>
+                      <p className="text-xs text-gray-600 dark:text-dark-text-secondary">Ideal para análise de dados</p>
                     </div>
                   </div>
                 </button>
@@ -580,16 +614,16 @@ const ExportarRelatorioFinanceiro: React.FC<ExportarRelatorioFinanceiroProps> = 
 
           {/* Informações Adicionais */}
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
-              <h4 className="font-semibold text-purple-900 dark:text-purple-300 mb-2">📄 Relatório PDF</h4>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+              <h4 className="font-semibold text-red-900 dark:text-red-300 mb-2">📄 Relatório PDF</h4>
               <p className="text-sm text-gray-700 dark:text-dark-text">
                 Ideal para apresentações e impressão. Inclui logo da empresa, formatação profissional e gráficos visuais.
               </p>
             </div>
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-              <h4 className="font-semibold text-green-900 dark:text-green-300 mb-2">📊 Relatório Excel</h4>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+              <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📊 Relatório JSON</h4>
               <p className="text-sm text-gray-700 dark:text-dark-text">
-                Ideal para análise de dados. Permite edição, filtros, fórmulas e análises personalizadas no Excel.
+                Ideal para análise de dados. Formato estruturado que permite integração com outros sistemas e processamento programático.
               </p>
             </div>
           </div>

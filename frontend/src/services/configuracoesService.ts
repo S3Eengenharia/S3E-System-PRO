@@ -65,6 +65,20 @@ class ConfiguracoesService {
   }
 
   /**
+   * Lista todas as logos disponíveis na pasta uploads/logos
+   */
+  async listarLogos() {
+    return axiosApiService.get<Array<{ filename: string; url: string }>>('/api/configuracoes/logos');
+  }
+
+  /**
+   * Atualiza a logo da empresa selecionando uma logo existente
+   */
+  async atualizarLogo(logoUrl: string) {
+    return axiosApiService.put<ConfiguracaoSistema>('/api/configuracoes/logo', { logoUrl });
+  }
+
+  /**
    * Lista todos os usuários
    */
   async listarUsuarios(filtros?: UsuarioFiltros) {
@@ -105,6 +119,13 @@ class ConfiguracoesService {
    */
   async excluirUsuario(userId: string) {
     return axiosApiService.delete(`/api/configuracoes/usuarios/${userId}`);
+  }
+
+  /**
+   * Atualiza email e senha de um usuário (Gerente, Admin ou Desenvolvedor)
+   */
+  async atualizarUsuario(userId: string, data: { email?: string; name?: string; senhaNova?: string }) {
+    return axiosApiService.put<Usuario>(`/api/configuracoes/usuarios/${userId}`, data);
   }
 }
 

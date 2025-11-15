@@ -50,6 +50,13 @@ router.get('/:id', ObraController.getObraPorId);
 router.put('/:id/status', authorize('admin', 'gerente'), ObraController.updateObraStatus);
 
 /**
+ * @route PUT /api/obras/:id/iniciar-execucao
+ * @desc Permite que eletricistas iniciem a execução de uma obra (mover de A_FAZER para ANDAMENTO)
+ * @access Authenticated (eletricista com tarefa atribuída ou admin/gerente)
+ */
+router.put('/:id/iniciar-execucao', ObraController.iniciarExecucao);
+
+/**
  * @route GET /api/obras/alocacao
  * @desc Busca alocação de equipes (calendário)
  * @access Authenticated

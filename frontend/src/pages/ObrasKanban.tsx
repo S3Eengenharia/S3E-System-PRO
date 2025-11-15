@@ -57,9 +57,10 @@ const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 interface ObrasKanbanProps {
     toggleSidebar: () => void;
+    onNavigate?: (view: string) => void;
 }
 
-const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar }) => {
+const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate }) => {
     const [isModalNovaObraOpen, setIsModalNovaObraOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     
@@ -255,7 +256,7 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar }) => {
                     <h2 className="text-xl font-bold text-gray-900 dark:text-dark-text">Kanban de Obras</h2>
                     <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">Clique nos cards para gerenciar tarefas ou arraste para mover entre as etapas</p>
                 </div>
-                <ObraKanban key={refreshKey} onRefresh={handleRefresh} />
+                <ObraKanban key={refreshKey} onRefresh={handleRefresh} onNavigate={onNavigate} />
             </div>
 
             {/* MODAL DE CRIAÇÃO DE OBRA - COMPLETO */}

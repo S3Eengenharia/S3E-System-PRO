@@ -8,3 +8,4 @@ coverage/
 .idea/
 
 /src/generated/prisma
+.env.production

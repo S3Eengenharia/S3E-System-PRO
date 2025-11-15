@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useContext } from 'react';
 import { toast } from 'sonner';
 import { AuthContext } from '../contexts/AuthContext';
@@ -6,6 +6,14 @@ import { BudgetStatus } from '../types';
 import { vendasService, type Venda, type DashboardVendas } from '../services/vendasService';
 import { orcamentosService } from '../services/orcamentosService';
 import { clientesService } from '../services/clientesService';
+import {
+    generateExampleTemplate,
+    exportToJSON,
+    readJSONFile,
+    validateImportData,
+    type VendaTemplate,
+    type ImportExportData,
+} from '../utils/importExportTemplates';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -46,6 +54,22 @@ const DocumentTextIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const CreditCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h16.5M6 18h12" />
+    </svg>
+);
+const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+const DocumentArrowDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+);
+const DocumentArrowUpIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
     </svg>
 );
 
@@ -101,6 +125,23 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     const [vendas, setVendas] = useState<Venda[]>([]);
     const [orcamentosAprovados, setOrcamentosAprovados] = useState<any[]>([]);
     const [dashboardData, setDashboardData] = useState<DashboardVendas | null>(null);
+
+    // Estados para modal de visualização
+    const [vendaParaVisualizar, setVendaParaVisualizar] = useState<Venda | null>(null);
+    const [modalVisualizarVenda, setModalVisualizarVenda] = useState(false);
+    const [detalhesVenda, setDetalhesVenda] = useState<any>(null);
+    const [loadingDetalhes, setLoadingDetalhes] = useState(false);
+
+    // Estados para importação/exportação
+    const [importing, setImporting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Estados para modal de preview de importação
+    const [modalPreviewImportOpen, setModalPreviewImportOpen] = useState(false);
+    const [dadosParaImportar, setDadosParaImportar] = useState<{
+        vendas: any[];
+        erros: string[];
+    } | null>(null);
 
     // Carregar dados iniciais
     const loadData = async () => {
@@ -161,6 +202,49 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     useEffect(() => {
         loadData();
     }, []);
+
+    // Função para abrir modal de visualização e buscar detalhes da venda
+    const abrirModalVisualizarVenda = async (venda: Venda) => {
+        setVendaParaVisualizar(venda);
+        setModalVisualizarVenda(true);
+        setLoadingDetalhes(true);
+
+        try {
+            // Buscar detalhes completos da venda
+            const vendaRes = await vendasService.buscarVenda(venda.id);
+            
+            if (vendaRes.success && vendaRes.data) {
+                const vendaCompleta = vendaRes.data;
+                
+                // Buscar detalhes do orçamento se necessário
+                let orcamentoCompleto = vendaCompleta.orcamento;
+                if (vendaCompleta.orcamentoId && !orcamentoCompleto?.items) {
+                    try {
+                        const orcamentoRes = await orcamentosService.buscar(vendaCompleta.orcamentoId);
+                        if (orcamentoRes.success && orcamentoRes.data) {
+                            orcamentoCompleto = orcamentoRes.data;
+                        }
+                    } catch (error) {
+                        console.error('Erro ao buscar detalhes do orçamento:', error);
+                    }
+                }
+
+                setDetalhesVenda({
+                    ...vendaCompleta,
+                    orcamento: orcamentoCompleto
+                });
+            } else {
+                toast.error('Erro ao carregar detalhes da venda');
+                setDetalhesVenda(null);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar detalhes da venda:', error);
+            toast.error('Erro ao carregar detalhes da venda');
+            setDetalhesVenda(null);
+        } finally {
+            setLoadingDetalhes(false);
+        }
+    };
 
     // Orçamento selecionado
     const orcamentoSelecionado = useMemo(() => {
@@ -289,6 +373,226 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
             }
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Funções de Exportação/Importação
+    const handleExportTemplate = () => {
+        try {
+            const template = generateExampleTemplate('vendas');
+            exportToJSON(template, `template_vendas_${new Date().toISOString().split('T')[0]}.json`);
+            toast.success('✅ Template exportado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao exportar template:', error);
+            toast.error('❌ Erro ao exportar template');
+        }
+    };
+
+    const handleExportData = () => {
+        try {
+            const template: ImportExportData = {
+                version: '1.0.0',
+                exportDate: new Date().toISOString(),
+                vendas: vendas.map(venda => {
+                    // Mapear itens do orçamento para o formato de exportação
+                    const items = venda.orcamento?.items?.map((item: any) => ({
+                        tipo: item.tipo || 'MATERIAL',
+                        materialId: item.materialId,
+                        materialNome: item.material?.nome || item.materialNome,
+                        kitId: item.kitId,
+                        kitNome: item.kit?.nome || item.kitNome,
+                        servicoId: item.servicoId,
+                        servicoNome: item.servico?.nome || item.servicoNome,
+                        quadroId: item.quadroId,
+                        quadroNome: item.quadro?.nome || item.quadroNome,
+                        cotacaoId: item.cotacaoId,
+                        cotacaoNome: item.cotacao?.nome || item.cotacaoNome,
+                        nome: item.nome || item.material?.nome || item.descricao || 'Item',
+                        descricao: item.descricao || '',
+                        unidadeMedida: item.unidadeMedida || item.material?.unidadeMedida || 'UN',
+                        quantidade: item.quantidade || 1,
+                        custoUnit: item.custoUnitario || item.custoUnit || item.material?.preco || 0,
+                        precoUnit: item.precoUnitario || item.precoUnit || item.precoUnitario || 0,
+                        subtotal: item.subtotal || (item.precoUnitario || item.precoUnit || 0) * (item.quantidade || 1),
+                    })) || [];
+
+                    // Calcular valor total se não existir
+                    const subtotalItens = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+                    const valorFrete = venda.orcamento?.valorFrete || 0;
+                    const valorDesconto = venda.orcamento?.descontoValor || 0;
+                    const valorTotalCalculado = subtotalItens + valorFrete - valorDesconto;
+
+                    return {
+                        orcamentoId: venda.orcamentoId,
+                        orcamentoNumero: venda.orcamento?.numeroSequencial?.toString(),
+                        clienteId: venda.clienteId,
+                        clienteNome: venda.cliente?.nome || venda.orcamento?.cliente?.nome,
+                        formaPagamento: venda.formaPagamento,
+                        numeroParcelas: venda.numeroParcelas,
+                        dataVenda: venda.dataVenda,
+                        dataVencimentoPrimeiraParcela: venda.dataVencimentoPrimeiraParcela,
+                        observacoes: venda.observacoes,
+                        valorTotal: venda.valorTotal || valorTotalCalculado,
+                        valorFrete: valorFrete,
+                        valorDesconto: valorDesconto,
+                        items: items.length > 0 ? items : undefined,
+                    };
+                }),
+            };
+            exportToJSON(template, `vendas_export_${new Date().toISOString().split('T')[0]}.json`);
+            toast.success(`✅ ${vendas.length} venda(s) exportada(s) com sucesso!`);
+        } catch (error) {
+            console.error('Erro ao exportar vendas:', error);
+            toast.error('❌ Erro ao exportar vendas');
+        }
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setImporting(true);
+            const data = await readJSONFile(file);
+            
+            // Validar estrutura
+            const validation = validateImportData(data);
+            if (!validation.valid) {
+                toast.error('❌ Erro na validação do arquivo: ' + validation.errors.join(', '));
+                return;
+            }
+
+            if (!data.vendas || data.vendas.length === 0) {
+                toast.error('❌ O arquivo não contém vendas para importar');
+                return;
+            }
+
+            // Preparar dados para preview
+            const vendasPreview: any[] = [];
+            const erros: string[] = [];
+
+            // Validar cada venda antes de mostrar no preview
+            for (const vendaTemplate of data.vendas) {
+                const errosVenda: string[] = [];
+                
+                // Buscar orçamento por número ou ID
+                let orcamentoId = vendaTemplate.orcamentoId;
+                if (!orcamentoId && vendaTemplate.orcamentoNumero) {
+                    const orcamento = orcamentosAprovados.find(
+                        o => o.numeroSequencial?.toString() === vendaTemplate.orcamentoNumero
+                    );
+                    if (orcamento) {
+                        orcamentoId = orcamento.id;
+                    } else {
+                        errosVenda.push(`Orçamento ${vendaTemplate.orcamentoNumero} não encontrado`);
+                    }
+                }
+
+                if (!orcamentoId) {
+                    errosVenda.push('Orçamento não informado ou inválido');
+                }
+
+                // Buscar cliente por nome se não tiver ID
+                let clienteId = vendaTemplate.clienteId;
+                let clienteNome = vendaTemplate.clienteNome || '';
+                if (!clienteId && vendaTemplate.clienteNome) {
+                    const orcamento = orcamentosAprovados.find(o => o.id === orcamentoId);
+                    if (orcamento?.clienteId) {
+                        clienteId = orcamento.clienteId;
+                        clienteNome = orcamento.cliente?.nome || vendaTemplate.clienteNome;
+                    } else {
+                        errosVenda.push(`Cliente ${vendaTemplate.clienteNome} não encontrado`);
+                    }
+                }
+
+                if (!clienteId) {
+                    errosVenda.push('Cliente não informado ou inválido');
+                }
+
+                vendasPreview.push({
+                    ...vendaTemplate,
+                    orcamentoId,
+                    clienteId,
+                    clienteNome,
+                    errosVenda,
+                });
+
+                if (errosVenda.length > 0) {
+                    erros.push(`Venda ${vendaTemplate.orcamentoNumero || 'sem número'}: ${errosVenda.join(', ')}`);
+                }
+            }
+
+            // Mostrar preview
+            setDadosParaImportar({
+                vendas: vendasPreview,
+                erros,
+            });
+            setModalPreviewImportOpen(true);
+
+            // Limpar input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        } catch (error) {
+            console.error('Erro ao importar arquivo:', error);
+            toast.error('❌ Erro ao importar arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const handleConfirmarImportacao = async () => {
+        if (!dadosParaImportar) return;
+
+        try {
+            setImporting(true);
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Importar apenas vendas válidas (sem erros)
+            for (const vendaTemplate of dadosParaImportar.vendas) {
+                if (vendaTemplate.errosVenda && vendaTemplate.errosVenda.length > 0) {
+                    errorCount++;
+                    continue;
+                }
+
+                try {
+                    const vendaData = {
+                        orcamentoId: vendaTemplate.orcamentoId,
+                        clienteId: vendaTemplate.clienteId,
+                        formaPagamento: vendaTemplate.formaPagamento,
+                        numeroParcelas: vendaTemplate.numeroParcelas,
+                        dataVencimentoPrimeiraParcela: vendaTemplate.dataVencimentoPrimeiraParcela || vendaTemplate.dataVenda,
+                        observacoes: vendaTemplate.observacoes,
+                    };
+
+                    const response = await vendasService.realizarVenda(vendaData);
+                    if (response.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        console.error('Erro ao criar venda:', response.error);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error('Erro ao importar venda:', error);
+                }
+            }
+
+            setModalPreviewImportOpen(false);
+            setDadosParaImportar(null);
+
+            toast.success(`✅ Importação concluída! ${successCount} venda(s) importada(s), ${errorCount} erro(s)`);
+            await loadData(); // Recarregar lista
+        } catch (error) {
+            console.error('Erro ao confirmar importação:', error);
+            toast.error('❌ Erro ao confirmar importação');
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -882,12 +1186,13 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-4">
-                    {vendas.map((venda) => (
+                    {vendas.map((venda, index) => (
                         <div key={venda.id} className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-soft hover:shadow-medium hover:border-green-300 transition-all">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
                                 <div>
                                     <h4 className="font-semibold text-gray-900">{venda.cliente?.nome || 'Cliente'}</h4>
                                     <p className="text-sm text-gray-600">{venda.orcamento?.titulo || 'Projeto'}</p>
+                                    <p className="text-xs text-gray-500 mt-1">Nº {index + 1}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">Valor Total</p>
@@ -916,6 +1221,16 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                         {venda.status === 'Cancelada' && '❌ '}
                                         {venda.status}
                                     </span>
+                                </div>
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => abrirModalVisualizarVenda(venda)}
+                                        className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold flex items-center gap-2"
+                                        title="Visualizar detalhes da venda"
+                                    >
+                                        <EyeIcon className="w-5 h-5" />
+                                        Visualizar
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1215,6 +1530,40 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                         </svg>
                         {loading ? 'Carregando...' : 'Atualizar'}
                     </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleExportTemplate}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all font-semibold shadow-md"
+                            title="Exportar template vazio para preenchimento"
+                        >
+                            <DocumentArrowDownIcon className="w-5 h-5" />
+                            Template
+                        </button>
+                        <button
+                            onClick={handleExportData}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-700 hover:to-purple-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                            disabled={vendas.length === 0}
+                            title="Exportar todas as vendas"
+                        >
+                            <DocumentArrowDownIcon className="w-5 h-5" />
+                            Exportar
+                        </button>
+                        <button
+                            onClick={handleImportClick}
+                            disabled={importing}
+                            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                            title="Importar vendas do arquivo JSON"
+                        >
+                            <DocumentArrowUpIcon className="w-5 h-5" />
+                            {importing ? 'Importando...' : 'Importar'}
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".json"
+                            onChange={handleImportFile}
+                            style={{ display: 'none' }}
+                        />
                     <button
                         onClick={() => setActiveTab('nova')}
                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl hover:from-green-700 hover:to-green-600 transition-all shadow-medium font-semibold"
@@ -1222,6 +1571,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                         <PlusIcon className="w-5 h-5" />
                         Nova Venda
                     </button>
+                    </div>
                 </div>
             </header>
 
@@ -1304,6 +1654,429 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                 {activeTab === 'config' && renderConfig()}
                 {activeTab === 'ajuda' && renderAjuda()}
             </div>
+
+            {/* Modal de Visualização de Venda */}
+            {modalVisualizarVenda && vendaParaVisualizar && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto my-4">
+                        {/* Header */}
+                        <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-500 px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                    <EyeIcon className="w-7 h-7 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Detalhes da Venda</h3>
+                                    <p className="text-green-100 text-sm mt-1">Informações completas da venda</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setModalVisualizarVenda(false);
+                                    setVendaParaVisualizar(null);
+                                    setDetalhesVenda(null);
+                                }}
+                                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                            >
+                                <XMarkIcon className="w-5 h-5 text-white" />
+                            </button>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-6">
+                            {loadingDetalhes ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                                    <p className="text-gray-600 dark:text-gray-400">Carregando detalhes da venda...</p>
+                                </div>
+                            ) : detalhesVenda ? (
+                                <>
+                                    {/* Informações Gerais */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Nome Completo do Cliente
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {detalhesVenda.cliente?.nome || detalhesVenda.orcamento?.cliente?.nome || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Número do Orçamento
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {detalhesVenda.orcamento?.numeroSequencial 
+                                                    ? `Orçamento ${detalhesVenda.orcamento.numeroSequencial}` 
+                                                    : detalhesVenda.orcamento?.numero || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Data de Emissão
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {new Date(detalhesVenda.dataVenda).toLocaleDateString('pt-BR', {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Vendedor
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {detalhesVenda.orcamento?.usuarioNome || detalhesVenda.orcamento?.criadoPorNome || user?.name || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Número Sequencial da Venda
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                #{vendas.findIndex(v => v.id === detalhesVenda.id) + 1}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Endereço da Obra */}
+                                    {(detalhesVenda.orcamento?.enderecoObra || detalhesVenda.cliente?.endereco) && (
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                                <span>📍</span>
+                                                Endereço da Obra
+                                            </h4>
+                                            <p className="text-gray-900 dark:text-white">
+                                                {detalhesVenda.orcamento?.enderecoObra || detalhesVenda.cliente?.endereco || 'N/A'}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Tabela de Materiais */}
+                                    {detalhesVenda.orcamento?.items && detalhesVenda.orcamento.items.length > 0 && (
+                                        <div>
+                                            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                                                Materiais do Orçamento
+                                            </h4>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-gray-100 dark:bg-gray-700">
+                                                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Material/Serviço
+                                                            </th>
+                                                            <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Quantidade
+                                                            </th>
+                                                            <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Valor Unitário
+                                                            </th>
+                                                            <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Valor Total
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {detalhesVenda.orcamento.items.map((item: any, index: number) => {
+                                                            const quantidade = item.quantidade || 0;
+                                                            const precoUnit = item.precoUnit || item.precoUnitario || (item.subtotal / (item.quantidade || 1)) || 0;
+                                                            const valorTotal = item.subtotal || (quantidade * precoUnit);
+                                                            return (
+                                                                <tr key={item.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        {item.material?.nome || item.servico?.nome || item.kit?.nome || item.descricao || 'Item sem nome'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-center text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        {quantidade} {item.unidadeMedida || 'UN'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-right text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        R$ {precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Totais e Frete */}
+                                    <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl p-6">
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                    Subtotal:
+                                                </span>
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    R$ {(detalhesVenda.orcamento?.precoVenda || detalhesVenda.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                    Custo de Frete:
+                                                </span>
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    R$ {(detalhesVenda.orcamento?.custoFrete || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="pt-3 border-t-2 border-green-300 dark:border-green-700 flex justify-between items-center">
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    Valor Total:
+                                                </span>
+                                                <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                                    R$ {detalhesVenda.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Condições de Pagamento */}
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
+                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                            <span>💳</span>
+                                            Condições de Pagamento
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">Forma de Pagamento:</p>
+                                                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                    {detalhesVenda.formaPagamento}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">Número de Parcelas:</p>
+                                                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                    {detalhesVenda.numeroParcelas || 1} parcela(s)
+                                                </p>
+                                            </div>
+                                            {detalhesVenda.orcamento?.condicoesEspeciaisPagamento && (
+                                                <div className="md:col-span-2">
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Condições Especiais:</p>
+                                                    <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                                                        {detalhesVenda.orcamento.condicoesEspeciaisPagamento}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Observações */}
+                                    {(detalhesVenda.observacoes || detalhesVenda.orcamento?.observacoesComerciais) && (
+                                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                                <span>📝</span>
+                                                Observações
+                                            </h4>
+                                            <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                                                {detalhesVenda.observacoes || detalhesVenda.orcamento?.observacoesComerciais}
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <p className="text-gray-600 dark:text-gray-400">Erro ao carregar detalhes da venda</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3 rounded-b-2xl">
+                            <button
+                                onClick={() => {
+                                    setModalVisualizarVenda(false);
+                                    setVendaParaVisualizar(null);
+                                    setDetalhesVenda(null);
+                                }}
+                                className="px-6 py-3 bg-white dark:bg-gray-600 border-2 border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-500 transition-all font-semibold"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Preview de Importação */}
+            {modalPreviewImportOpen && dadosParaImportar && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-emerald-600 to-emerald-500">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <DocumentArrowUpIcon className="w-7 h-7 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">Preview de Importação</h3>
+                                        <p className="text-sm text-emerald-100 mt-1">
+                                            {dadosParaImportar.vendas.length} venda(s) para importar
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setModalPreviewImportOpen(false);
+                                        setDadosParaImportar(null);
+                                    }}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-6">
+                            {/* Resumo */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📊 Resumo da Importação</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-blue-700 dark:text-blue-400">Total:</p>
+                                        <p className="text-lg font-bold text-blue-900 dark:text-blue-300">
+                                            {dadosParaImportar.vendas.length}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-green-700 dark:text-green-400">Válidas:</p>
+                                        <p className="text-lg font-bold text-green-900 dark:text-green-300">
+                                            {dadosParaImportar.vendas.filter(v => !v.errosVenda || v.errosVenda.length === 0).length}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-red-700 dark:text-red-400">Com Erros:</p>
+                                        <p className="text-lg font-bold text-red-900 dark:text-red-300">
+                                            {dadosParaImportar.vendas.filter(v => v.errosVenda && v.errosVenda.length > 0).length}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Lista de Vendas */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-3">📋 Vendas para Importar</h4>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-100 dark:bg-gray-800">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Orçamento
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Cliente
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Forma Pagamento
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Parcelas
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Valor Total
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                    Status
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {dadosParaImportar.vendas.map((venda, index) => {
+                                                const temErros = venda.errosVenda && venda.errosVenda.length > 0;
+                                                return (
+                                                    <tr key={index} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${temErros ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {venda.orcamentoNumero ? `Orçamento ${venda.orcamentoNumero}` : 'Sem número'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {venda.clienteNome || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {venda.formaPagamento || 'N/A'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            {venda.numeroParcelas || 1}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                            R$ {(venda.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm border border-gray-300 dark:border-gray-600">
+                                                            {temErros ? (
+                                                                <div className="text-red-600 dark:text-red-400">
+                                                                    <p className="font-semibold">❌ Erros</p>
+                                                                    <ul className="text-xs mt-1">
+                                                                        {venda.errosVenda.map((erro, i) => (
+                                                                            <li key={i}>• {erro}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-green-600 dark:text-green-400 font-semibold">✅ Válida</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Avisos */}
+                            {dadosParaImportar.erros.length > 0 && (
+                                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                                    <h4 className="font-semibold text-amber-900 dark:text-amber-300 mb-2 flex items-center gap-2">
+                                        ⚠️ Avisos
+                                    </h4>
+                                    <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300 max-h-32 overflow-y-auto">
+                                        {dadosParaImportar.erros.map((erro, index) => (
+                                            <li key={index}>• {erro}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3 rounded-b-2xl">
+                            <button
+                                onClick={() => {
+                                    setModalPreviewImportOpen(false);
+                                    setDadosParaImportar(null);
+                                }}
+                                disabled={importing}
+                                className="px-6 py-3 bg-white dark:bg-gray-600 border-2 border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-500 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmarImportacao}
+                                disabled={importing || dadosParaImportar.vendas.filter(v => !v.errosVenda || v.errosVenda.length === 0).length === 0}
+                                className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        Importando...
+                                    </>
+                                ) : (
+                                    <>
+                                        ✅ Confirmar Importação
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

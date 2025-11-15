@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import obraService from '../services/obra.service.js';
+
+const prisma = new PrismaClient();
 
 export class ObraController {
   /**
@@ -169,6 +172,145 @@ export class ObraController {
       res.status(500).json({ 
         success: false, 
         message: 'Erro ao atualizar status da obra', 
+        error: error.message 
+      });
+    }
+  }
+
+  /**
+   * PUT /api/obras/:id/iniciar-execucao
+   * Permite que eletricistas iniciem a execução de uma obra (mover de A_FAZER para ANDAMENTO)
+   */
+  static async iniciarExecucao(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).user?.userId;
+      const userRole = (req as any).user?.role?.toLowerCase();
+
+      if (!userId) {
+        res.status(401).json({ 
+          success: false, 
+          message: 'Usuário não autenticado' 
+        });
+        return;
+      }
+
+      // Buscar a obra atual
+      const obra = await obraService.buscarObraPorId(id);
+
+      if (!obra) {
+        res.status(404).json({ 
+          success: false, 
+          message: 'Obra não encontrada' 
+        });
+        return;
+      }
+
+      // Verificar se a obra está em A_FAZER
+      if (obra.status !== 'A_FAZER') {
+        res.status(400).json({ 
+          success: false, 
+          message: `A obra precisa estar em "A Fazer" para iniciar execução. Status atual: ${obra.status}` 
+        });
+        return;
+      }
+
+      // Verificar se o usuário tem tarefa atribuída nesta obra (para eletricistas)
+      if (userRole === 'eletricista') {
+        // 1. Verificar tarefas atribuídas diretamente ao eletricista
+        const temTarefaDireta = await prisma.tarefaObra.findFirst({
+          where: {
+            obraId: id,
+            atribuidoA: userId
+          }
+        });
+
+        if (temTarefaDireta) {
+          // Tem tarefa direta, pode iniciar
+          console.log(`✅ Eletricista ${userId} tem tarefa direta atribuída na obra ${id}`);
+        } else {
+          // 2. Buscar todas as equipes onde o eletricista está
+          const equipesDoEletricista = await prisma.equipe.findMany({
+            where: {
+              membros: {
+                has: userId // Verifica se userId está no array de membros
+              },
+              ativa: true
+            },
+            select: {
+              id: true,
+              nome: true
+            }
+          });
+
+          if (equipesDoEletricista.length === 0) {
+            res.status(403).json({ 
+              success: false, 
+              message: 'Você não tem tarefas atribuídas nesta obra nem está em uma equipe alocada' 
+            });
+            return;
+          }
+
+          const equipeIds = equipesDoEletricista.map(e => e.id);
+          console.log(`🔍 Eletricista ${userId} está em ${equipesDoEletricista.length} equipe(s):`, equipesDoEletricista.map(e => e.nome));
+
+          // 3. Verificar se há tarefas atribuídas às equipes do eletricista nesta obra
+          const temTarefaEquipe = await prisma.tarefaObra.findFirst({
+            where: {
+              obraId: id,
+              equipeId: {
+                in: equipeIds
+              }
+            }
+          });
+
+          // 4. Verificar se há alocações das equipes do eletricista nesta obra/projeto
+          let temAlocacaoEquipe = false;
+          // Buscar projetoId da obra (pode estar direto ou dentro do include)
+          const projetoId = obra.projetoId || (obra as any).projeto?.id;
+          if (projetoId) {
+            const alocacao = await prisma.alocacaoObra.findFirst({
+              where: {
+                projetoId: projetoId,
+                equipeId: {
+                  in: equipeIds
+                },
+                status: {
+                  in: ['Planejada', 'EmAndamento']
+                }
+              }
+            });
+            temAlocacaoEquipe = !!alocacao;
+            if (alocacao) {
+              console.log(`✅ Encontrada alocação da equipe ${alocacao.equipeId} no projeto ${projetoId}`);
+            }
+          }
+
+          if (!temTarefaEquipe && !temAlocacaoEquipe) {
+            res.status(403).json({ 
+              success: false, 
+              message: 'Você não tem tarefas atribuídas nesta obra. Nenhuma das suas equipes está alocada a esta obra.' 
+            });
+            return;
+          }
+
+          console.log(`✅ Eletricista autorizado - Tarefa de equipe: ${!!temTarefaEquipe}, Alocação: ${!!temAlocacaoEquipe}`);
+        }
+      }
+
+      // Atualizar status para ANDAMENTO
+      const obraAtualizada = await obraService.updateObraStatus(id, 'ANDAMENTO');
+
+      res.status(200).json({ 
+        success: true, 
+        data: obraAtualizada,
+        message: 'Execução iniciada com sucesso!' 
+      });
+    } catch (error: any) {
+      console.error('Erro ao iniciar execução:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao iniciar execução da obra', 
         error: error.message 
       });
     }

@@ -50,7 +50,16 @@ export const authorize = (...roles: string[]) => {
       return;
     }
     
-    if (!userRole || !roles.includes(userRole)) {
+    if (!userRole) {
+      res.status(403).json({ error: 'Acesso negado' });
+      return;
+    }
+    
+    // Comparação case-insensitive
+    const userRoleLower = userRole.toLowerCase();
+    const rolesLower = roles.map(r => r.toLowerCase());
+    
+    if (!rolesLower.includes(userRoleLower)) {
       res.status(403).json({ error: 'Acesso negado' });
       return;
     }

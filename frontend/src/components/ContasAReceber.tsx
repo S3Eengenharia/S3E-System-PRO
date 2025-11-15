@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { financeiroService } from '../services/financeiroService';
 import { axiosApiService } from '../services/axiosApi';
+import { vendasService, type Venda } from '../services/vendasService';
+import { orcamentosService } from '../services/orcamentosService';
+import { AuthContext } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -127,6 +130,8 @@ interface ContasAReceberProps {
 
 // ==================== COMPONENT ====================
 const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAtiva }) => {
+    const { user } = useContext(AuthContext)!;
+    
     // Estados
     const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]);
     const [loading, setLoading] = useState(true);
@@ -141,10 +146,14 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
     const [valorRecebido, setValorRecebido] = useState('0');
     const [observacoesBaixa, setObservacoesBaixa] = useState('');
     
-    // Modal de Visualização de Venda
+    // Modal de Visualização de Venda (usando o mesmo formato do componente Vendas)
     const [isVisualizarModalOpen, setIsVisualizarModalOpen] = useState(false);
-    const [vendaDetalhada, setVendaDetalhada] = useState<VendaDetalhada | null>(null);
-    const [loadingVenda, setLoadingVenda] = useState(false);
+    const [vendaParaVisualizar, setVendaParaVisualizar] = useState<Venda | null>(null);
+    const [detalhesVenda, setDetalhesVenda] = useState<any>(null);
+    const [loadingDetalhes, setLoadingDetalhes] = useState(false);
+    
+    // Lista de vendas para calcular número sequencial
+    const [vendas, setVendas] = useState<Venda[]>([]);
     
     // AlertDialog de Confirmação
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -152,6 +161,7 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
     // Carregar dados
     useEffect(() => {
         loadContasReceber();
+        loadVendas();
     }, []);
 
     const loadContasReceber = async () => {
@@ -171,14 +181,15 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                         vendaId: conta.vendaId || conta.venda?.id || 'N/A',
                         numeroParcela: conta.numeroParcela || 1,
                         numeroDuplicata: `DUP-${(conta.numeroParcela || 1).toString().padStart(3, '0')}`,
-                        clienteNome: conta.cliente?.nome || conta.venda?.cliente?.nome || 'Cliente não informado',
+                        clienteNome: conta.cliente?.nome || conta.venda?.cliente?.nome || conta.venda?.orcamento?.cliente?.nome || 'Cliente não informado',
                         projetoTitulo: conta.descricao || conta.venda?.orcamento?.titulo || 'Projeto',
                         dataVencimento: conta.dataVencimento,
                         valor: conta.valorParcela || conta.valor || 0,
                         valorRecebido: conta.valorRecebido,
                         dataPagamento: conta.dataPagamento,
                         status: isAtrasada ? 'Atrasado' : (conta.status === 'Pago' ? 'Recebido' : conta.status),
-                        observacoes: conta.observacoes
+                        observacoes: conta.observacoes,
+                        venda: conta.venda // Salvar objeto venda para usar depois
                     };
                 });
                 
@@ -193,6 +204,17 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
             setContasReceber([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadVendas = async () => {
+        try {
+            const response = await vendasService.listarVendas({ limit: 1000 });
+            if (response.success && response.data) {
+                setVendas(response.data.vendas || []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar vendas:', error);
         }
     };
 
@@ -309,103 +331,74 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
         }
     };
 
+    // Função para abrir modal de visualização e buscar detalhes da venda (mesma do componente Vendas)
     const handleVisualizarVenda = async (vendaId: string) => {
-        setLoadingVenda(true);
-        setIsVisualizarModalOpen(true);
-        
-        try {
-            console.log('🔍 Buscando detalhes da venda:', vendaId);
-            
-            // Buscar venda com todos os relacionamentos
-            const response = await axiosApiService.get<any>(`/api/vendas/${vendaId}`);
-            
+        // Encontrar a venda na lista
+        const vendaEncontrada = vendas.find(v => v.id === vendaId);
+        if (vendaEncontrada) {
+            setVendaParaVisualizar(vendaEncontrada);
+        } else {
+            // Se não encontrar na lista, buscar diretamente
+            const response = await vendasService.buscarVenda(vendaId);
             if (response.success && response.data) {
-                const venda = response.data;
+                setVendaParaVisualizar(response.data);
+            } else {
+                toast.error('Erro ao carregar venda');
+                return;
+            }
+        }
+        
+        setIsVisualizarModalOpen(true);
+        setLoadingDetalhes(true);
+
+        try {
+            // Buscar detalhes completos da venda
+            const vendaRes = await vendasService.buscarVenda(vendaId);
+            
+            if (vendaRes.success && vendaRes.data) {
+                const vendaCompleta = vendaRes.data;
                 
-                // Buscar obra se houver projeto associado
-                let obra = null;
-                if (venda.projetoId) {
+                // Buscar detalhes do orçamento se necessário
+                let orcamentoCompleto = vendaCompleta.orcamento;
+                if (vendaCompleta.orcamentoId && !orcamentoCompleto?.items) {
                     try {
-                        const obraResponse = await axiosApiService.get<any>(`/api/obras/projeto/${venda.projetoId}`);
-                        if (obraResponse.success && obraResponse.data) {
-                            obra = obraResponse.data;
+                        const orcamentoRes = await orcamentosService.buscar(vendaCompleta.orcamentoId);
+                        if (orcamentoRes.success && orcamentoRes.data) {
+                            orcamentoCompleto = orcamentoRes.data;
                         }
                     } catch (error) {
-                        console.log('⚠️ Projeto ainda não tem obra associada');
+                        console.error('Erro ao buscar detalhes do orçamento:', error);
                     }
                 }
 
-                // Montar estrutura de dados
-                const vendaDetalhes: VendaDetalhada = {
-                    id: venda.id,
-                    numeroVenda: venda.numeroVenda,
-                    dataVenda: venda.dataVenda,
-                    valorTotal: venda.valorTotal,
-                    formaPagamento: venda.formaPagamento,
-                    parcelas: venda.parcelas,
-                    cliente: {
-                        id: venda.cliente?.id || venda.clienteId,
-                        nome: venda.cliente?.nome || 'Cliente não informado',
-                        email: venda.cliente?.email,
-                        telefone: venda.cliente?.telefone,
-                        endereco: venda.cliente?.endereco,
-                        cidade: venda.cliente?.cidade,
-                        estado: venda.cliente?.estado,
-                        cep: venda.cliente?.cep
-                    },
-                    projeto: venda.projeto ? {
-                        id: venda.projeto.id,
-                        titulo: venda.projeto.titulo,
-                        descricao: venda.projeto.descricao,
-                        dataInicio: venda.projeto.dataInicio,
-                        endereco: venda.projeto.endereco
-                    } : undefined,
-                    obra: obra ? {
-                        id: obra.id,
-                        nomeObra: obra.nomeObra,
-                        status: obra.status,
-                        dataInicioReal: obra.dataInicioReal,
-                        dataPrevistaFim: obra.dataPrevistaFim
-                    } : undefined,
-                    orcamento: venda.orcamento ? {
-                        id: venda.orcamento.id,
-                        items: (venda.orcamento.items || []).map((item: any) => ({
-                            id: item.id,
-                            nome: item.material?.nome || item.kit?.nome || 'Item',
-                            quantidade: item.quantidade,
-                            valorUnitario: item.precoUnitario,
-                            valorTotal: item.quantidade * item.precoUnitario
-                        }))
-                    } : undefined
-                };
-
-                setVendaDetalhada(vendaDetalhes);
-                console.log('✅ Detalhes da venda carregados:', vendaDetalhes);
+                setDetalhesVenda({
+                    ...vendaCompleta,
+                    orcamento: orcamentoCompleto
+                });
             } else {
-                toast.error('❌ Erro ao buscar detalhes da venda');
-                setIsVisualizarModalOpen(false);
+                toast.error('Erro ao carregar detalhes da venda');
+                setDetalhesVenda(null);
             }
         } catch (error) {
-            console.error('❌ Erro ao buscar venda:', error);
-            toast.error('❌ Erro ao buscar detalhes da venda', {
-                description: 'Verifique sua conexão e tente novamente.'
-            });
-            setIsVisualizarModalOpen(false);
+            console.error('Erro ao buscar detalhes da venda:', error);
+            toast.error('Erro ao carregar detalhes da venda');
+            setDetalhesVenda(null);
         } finally {
-            setLoadingVenda(false);
+            setLoadingDetalhes(false);
         }
     };
 
     const handleCloseVisualizarModal = () => {
         setIsVisualizarModalOpen(false);
-        setVendaDetalhada(null);
+        setVendaParaVisualizar(null);
+        setDetalhesVenda(null);
     };
 
     const handleGerarPDFVenda = () => {
-        if (!vendaDetalhada) return;
+        if (!detalhesVenda) return;
 
         try {
-            const statusObra = vendaDetalhada.obra ? getStatusObraDisplay(vendaDetalhada.obra.status) : null;
+            const statusObra = detalhesVenda.obra ? getStatusObraDisplay(detalhesVenda.obra.status) : null;
             
             // Criar conteúdo HTML para impressão
             const conteudoHTML = `
@@ -413,7 +406,7 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                 <html lang="pt-BR">
                 <head>
                     <meta charset="UTF-8">
-                    <title>Venda - ${vendaDetalhada.numeroVenda}</title>
+                    <title>Venda - ${detalhesVenda.numeroVenda || detalhesVenda.id}</title>
                     <style>
                         body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
                         .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #16a34a; padding-bottom: 20px; }
@@ -442,8 +435,8 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                 <body>
                     <div class="header">
                         <h1>💰 VENDA - RECIBO</h1>
-                        <p><strong>Venda Nº:</strong> ${vendaDetalhada.numeroVenda}</p>
-                        <p><strong>Data da Venda:</strong> ${new Date(vendaDetalhada.dataVenda).toLocaleDateString('pt-BR')}</p>
+                        <p><strong>Venda Nº:</strong> ${detalhesVenda.numeroVenda || detalhesVenda.id}</p>
+                        <p><strong>Data da Venda:</strong> ${new Date(detalhesVenda.dataVenda).toLocaleDateString('pt-BR')}</p>
                     </div>
 
                     <div class="section">
@@ -451,80 +444,80 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                         <div class="grid">
                             <div class="field">
                                 <label>Nome:</label>
-                                <p>${vendaDetalhada.cliente.nome}</p>
+                                <p>${detalhesVenda.cliente?.nome || detalhesVenda.orcamento?.cliente?.nome || 'N/A'}</p>
                             </div>
-                            ${vendaDetalhada.cliente.telefone ? `
+                            ${detalhesVenda.cliente?.telefone ? `
                                 <div class="field">
                                     <label>Telefone:</label>
-                                    <p>${vendaDetalhada.cliente.telefone}</p>
+                                    <p>${detalhesVenda.cliente.telefone}</p>
                                 </div>
                             ` : ''}
-                            ${vendaDetalhada.cliente.email ? `
+                            ${detalhesVenda.cliente?.email ? `
                                 <div class="field">
                                     <label>Email:</label>
-                                    <p>${vendaDetalhada.cliente.email}</p>
+                                    <p>${detalhesVenda.cliente.email}</p>
                                 </div>
                             ` : ''}
                         </div>
-                        ${vendaDetalhada.cliente.endereco ? `
+                        ${detalhesVenda.cliente?.endereco ? `
                             <div class="field">
                                 <label>Endereço:</label>
-                                <p>${vendaDetalhada.cliente.endereco}${vendaDetalhada.cliente.cidade ? ', ' + vendaDetalhada.cliente.cidade : ''}${vendaDetalhada.cliente.estado ? ' - ' + vendaDetalhada.cliente.estado : ''}${vendaDetalhada.cliente.cep ? ' | CEP: ' + vendaDetalhada.cliente.cep : ''}</p>
+                                <p>${detalhesVenda.cliente.endereco}${detalhesVenda.cliente.cidade ? ', ' + detalhesVenda.cliente.cidade : ''}${detalhesVenda.cliente.estado ? ' - ' + detalhesVenda.cliente.estado : ''}${detalhesVenda.cliente.cep ? ' | CEP: ' + detalhesVenda.cliente.cep : ''}</p>
                             </div>
                         ` : ''}
                     </div>
 
-                    ${vendaDetalhada.projeto ? `
+                    ${detalhesVenda.projeto ? `
                         <div class="section">
                             <h2>📋 Informações do Projeto</h2>
                             <div class="field">
                                 <label>Título:</label>
-                                <p>${vendaDetalhada.projeto.titulo}</p>
+                                <p>${detalhesVenda.projeto.titulo}</p>
                             </div>
-                            ${vendaDetalhada.projeto.descricao ? `
+                            ${detalhesVenda.projeto.descricao ? `
                                 <div class="field">
                                     <label>Descrição:</label>
-                                    <p>${vendaDetalhada.projeto.descricao}</p>
+                                    <p>${detalhesVenda.projeto.descricao}</p>
                                 </div>
                             ` : ''}
-                            ${vendaDetalhada.projeto.dataInicio ? `
+                            ${detalhesVenda.projeto.dataInicio ? `
                                 <div class="field">
                                     <label>Data de Início:</label>
-                                    <p>${new Date(vendaDetalhada.projeto.dataInicio).toLocaleDateString('pt-BR')}</p>
+                                    <p>${new Date(detalhesVenda.projeto.dataInicio).toLocaleDateString('pt-BR')}</p>
                                 </div>
                             ` : ''}
                         </div>
                     ` : ''}
 
-                    ${vendaDetalhada.obra ? `
+                    ${detalhesVenda.obra ? `
                         <div class="section" style="background: #fff7ed; border-color: #fb923c;">
                             <h2 style="color: #9a3412;">🏗️ Status da Obra</h2>
                             <div class="grid">
                                 <div class="field">
                                     <label>Nome da Obra:</label>
-                                    <p>${vendaDetalhada.obra.nomeObra}</p>
+                                    <p>${detalhesVenda.obra.nomeObra}</p>
                                 </div>
                                 <div class="field">
                                     <label>Status:</label>
                                     <p><span class="badge badge-obra">${statusObra?.icon} ${statusObra?.text}</span></p>
                                 </div>
-                                ${vendaDetalhada.obra.dataInicioReal ? `
+                                ${detalhesVenda.obra.dataInicioReal ? `
                                     <div class="field">
                                         <label>Data de Início Real:</label>
-                                        <p>${new Date(vendaDetalhada.obra.dataInicioReal).toLocaleDateString('pt-BR')}</p>
+                                        <p>${new Date(detalhesVenda.obra.dataInicioReal).toLocaleDateString('pt-BR')}</p>
                                     </div>
                                 ` : ''}
-                                ${vendaDetalhada.obra.dataPrevistaFim ? `
+                                ${detalhesVenda.obra.dataPrevistaFim ? `
                                     <div class="field">
                                         <label>Previsão de Término:</label>
-                                        <p>${new Date(vendaDetalhada.obra.dataPrevistaFim).toLocaleDateString('pt-BR')}</p>
+                                        <p>${new Date(detalhesVenda.obra.dataPrevistaFim).toLocaleDateString('pt-BR')}</p>
                                     </div>
                                 ` : ''}
                             </div>
                         </div>
                     ` : ''}
 
-                    ${vendaDetalhada.orcamento && vendaDetalhada.orcamento.items.length > 0 ? `
+                    ${detalhesVenda.orcamento && detalhesVenda.orcamento.items && detalhesVenda.orcamento.items.length > 0 ? `
                         <div class="section">
                             <h2>📦 Itens Vendidos</h2>
                             <table>
@@ -537,14 +530,19 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${vendaDetalhada.orcamento.items.map(item => `
-                                        <tr>
-                                            <td>${item.nome}</td>
-                                            <td style="text-align: center;">${item.quantidade}</td>
-                                            <td style="text-align: right;">R$ ${item.valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td style="text-align: right; font-weight: bold;">R$ ${item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                    `).join('')}
+                                    ${detalhesVenda.orcamento.items.map((item: any) => {
+                                        const quantidade = item.quantidade || 0;
+                                        const precoUnit = item.precoUnit || item.precoUnitario || (item.subtotal / (item.quantidade || 1)) || 0;
+                                        const valorTotal = item.subtotal || (quantidade * precoUnit);
+                                        return `
+                                            <tr>
+                                                <td>${item.material?.nome || item.servico?.nome || item.kit?.nome || item.descricao || 'Item sem nome'}</td>
+                                                <td style="text-align: center;">${quantidade}</td>
+                                                <td style="text-align: right;">R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                <td style="text-align: right; font-weight: bold;">R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
                         </div>
@@ -554,15 +552,15 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                         <h2 style="margin: 0 0 15px 0; color: #15803d;">💰 Resumo da Venda</h2>
                         <div class="resumo-item">
                             <span>Forma de Pagamento:</span>
-                            <span style="font-weight: bold;">${vendaDetalhada.formaPagamento}</span>
+                            <span style="font-weight: bold;">${detalhesVenda.formaPagamento}</span>
                         </div>
                         <div class="resumo-item">
                             <span>Parcelas:</span>
-                            <span style="font-weight: bold;">${vendaDetalhada.parcelas}x</span>
+                            <span style="font-weight: bold;">${detalhesVenda.numeroParcelas || 1}x</span>
                         </div>
                         <div class="resumo-item resumo-total">
                             <span>VALOR TOTAL:</span>
-                            <span>R$ ${vendaDetalhada.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>R$ ${detalhesVenda.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
 
@@ -843,8 +841,15 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                                         </td>
                                         <td className="px-6 py-4">
                                             <div>
-                                                <p className="font-medium text-gray-900">{conta.clienteNome}</p>
+                                                <p className="font-medium text-gray-900">
+                                                    {conta.clienteNome !== 'Cliente não informado' ? conta.clienteNome : (conta.venda?.cliente?.nome || 'Cliente não informado')}
+                                                </p>
                                                 <p className="text-sm text-gray-600">{conta.projetoTitulo}</p>
+                                                {conta.vendaId && conta.vendaId !== 'N/A' && (
+                                                    <p className="text-xs text-blue-600 mt-1">
+                                                        Venda #{(vendas.findIndex(v => v.id === conta.vendaId) >= 0 ? vendas.findIndex(v => v.id === conta.vendaId) + 1 : contasFiltradas.findIndex(c => c.id === conta.id) + 1)}
+                                                    </p>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
@@ -915,241 +920,243 @@ const ContasAReceber: React.FC<ContasAReceberProps> = ({ toggleSidebar, setAbaAt
                 </div>
             </div>
 
-            {/* Modal de Visualização de Venda */}
-            {isVisualizarModalOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="modal-content max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        {loadingVenda ? (
-                            <div className="p-12 text-center">
-                                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                                <p className="text-gray-600">Carregando detalhes da venda...</p>
-                            </div>
-                        ) : vendaDetalhada ? (
-                            <>
-                                {/* Header */}
-                                <div className="modal-header bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30">
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Detalhes da Venda</h2>
-                                        <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Venda {vendaDetalhada.numeroVenda}</p>
-                                    </div>
-                                    <button
-                                        onClick={handleCloseVisualizarModal}
-                                        className="p-2 text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-dark-text hover:bg-white/80 dark:hover:bg-white/10 rounded-xl"
-                                    >
-                                        <XMarkIcon className="w-6 h-6" />
-                                    </button>
+            {/* Modal de Visualização de Venda - Modal Completo (igual ao componente Vendas) */}
+            {isVisualizarModalOpen && vendaParaVisualizar && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto my-4">
+                        {/* Header */}
+                        <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-500 px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                    <EyeIcon className="w-7 h-7 text-white" />
                                 </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Detalhes da Venda</h3>
+                                    <p className="text-green-100 text-sm mt-1">Informações completas da venda</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseVisualizarModal}
+                                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                            >
+                                <XMarkIcon className="w-5 h-5 text-white" />
+                            </button>
+                        </div>
 
-                                {/* Body */}
-                                <div className="modal-body space-y-6">
-                                    {/* Informações da Venda */}
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                                        <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-3">Informações da Venda</h3>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                            <div>
-                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Número:</span>
-                                                <p className="text-blue-900 dark:text-blue-300 font-semibold">{vendaDetalhada.numeroVenda}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Data:</span>
-                                                <p className="text-blue-900 dark:text-blue-300">{new Date(vendaDetalhada.dataVenda).toLocaleDateString('pt-BR')}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Forma de Pagamento:</span>
-                                                <p className="text-blue-900 dark:text-blue-300">{vendaDetalhada.formaPagamento}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-blue-700 dark:text-blue-400 font-medium">Parcelas:</span>
-                                                <p className="text-blue-900 dark:text-blue-300">{vendaDetalhada.parcelas}x</p>
-                                            </div>
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-6">
+                            {loadingDetalhes ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                                    <p className="text-gray-600 dark:text-gray-400">Carregando detalhes da venda...</p>
+                                </div>
+                            ) : detalhesVenda ? (
+                                <>
+                                    {/* Informações Gerais */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Nome Completo do Cliente
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {detalhesVenda.cliente?.nome || detalhesVenda.orcamento?.cliente?.nome || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Número do Orçamento
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {detalhesVenda.orcamento?.numeroSequencial 
+                                                    ? `Orçamento ${detalhesVenda.orcamento.numeroSequencial}` 
+                                                    : detalhesVenda.orcamento?.numero || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Data de Emissão
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {new Date(detalhesVenda.dataVenda).toLocaleDateString('pt-BR', {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Vendedor
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                {detalhesVenda.orcamento?.usuarioNome || detalhesVenda.orcamento?.criadoPorNome || user?.name || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                Número Sequencial da Venda
+                                            </h4>
+                                            <p className="text-lg text-gray-900 dark:text-white font-semibold">
+                                                #{vendas.findIndex(v => v.id === detalhesVenda.id) + 1 || 1}
+                                            </p>
                                         </div>
                                     </div>
 
-                                    {/* Informações do Cliente */}
-                                    <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl p-4">
-                                        <h3 className="font-semibold text-green-900 dark:text-green-300 mb-3 flex items-center gap-2">
-                                            👤 Dados do Cliente
-                                        </h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                            <div>
-                                                <span className="text-green-700 dark:text-green-400 font-medium">Nome:</span>
-                                                <p className="text-green-900 dark:text-green-300 font-semibold">{vendaDetalhada.cliente.nome}</p>
-                                            </div>
-                                            {vendaDetalhada.cliente.telefone && (
-                                                <div>
-                                                    <span className="text-green-700 dark:text-green-400 font-medium">Telefone:</span>
-                                                    <p className="text-green-900 dark:text-green-300">{vendaDetalhada.cliente.telefone}</p>
-                                                </div>
-                                            )}
-                                            {vendaDetalhada.cliente.email && (
-                                                <div>
-                                                    <span className="text-green-700 dark:text-green-400 font-medium">Email:</span>
-                                                    <p className="text-green-900 dark:text-green-300">{vendaDetalhada.cliente.email}</p>
-                                                </div>
-                                            )}
-                                            {vendaDetalhada.cliente.endereco && (
-                                                <div className="md:col-span-2">
-                                                    <span className="text-green-700 dark:text-green-400 font-medium">Endereço:</span>
-                                                    <p className="text-green-900 dark:text-green-300">
-                                                        {vendaDetalhada.cliente.endereco}
-                                                        {vendaDetalhada.cliente.cidade && `, ${vendaDetalhada.cliente.cidade}`}
-                                                        {vendaDetalhada.cliente.estado && ` - ${vendaDetalhada.cliente.estado}`}
-                                                        {vendaDetalhada.cliente.cep && ` | CEP: ${vendaDetalhada.cliente.cep}`}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Informações da Obra */}
-                                    {vendaDetalhada.obra && (
-                                        <div className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-200 dark:border-orange-800 rounded-xl p-4">
-                                            <h3 className="font-semibold text-orange-900 dark:text-orange-300 mb-3 flex items-center gap-2">
-                                                🏗️ Status da Obra
-                                            </h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                                <div>
-                                                    <span className="text-orange-700 dark:text-orange-400 font-medium">Nome da Obra:</span>
-                                                    <p className="text-orange-900 dark:text-orange-300 font-semibold">{vendaDetalhada.obra.nomeObra}</p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-orange-700 dark:text-orange-400 font-medium">Status:</span>
-                                                    <div className="mt-1">
-                                                        {(() => {
-                                                            const statusObra = getStatusObraDisplay(vendaDetalhada.obra.status);
-                                                            return (
-                                                                <span className={`inline-block px-3 py-1.5 text-xs font-bold rounded-lg ${statusObra.class}`}>
-                                                                    {statusObra.icon} {statusObra.text}
-                                                                </span>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                                {vendaDetalhada.obra.dataInicioReal && (
-                                                    <div>
-                                                        <span className="text-orange-700 font-medium">Data de Início:</span>
-                                                        <p className="text-orange-900">{new Date(vendaDetalhada.obra.dataInicioReal).toLocaleDateString('pt-BR')}</p>
-                                                    </div>
-                                                )}
-                                                {vendaDetalhada.obra.dataPrevistaFim && (
-                                                    <div>
-                                                        <span className="text-orange-700 font-medium">Previsão de Término:</span>
-                                                        <p className="text-orange-900">{new Date(vendaDetalhada.obra.dataPrevistaFim).toLocaleDateString('pt-BR')}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            
-                                            {/* Alerta de obra concluída e parcela final */}
-                                            {vendaDetalhada.obra.status === 'CONCLUIDO' && (
-                                                <div className="mt-4 bg-green-100 border-l-4 border-green-500 p-3 rounded">
-                                                    <p className="text-green-800 text-sm font-semibold">
-                                                        ✅ Obra concluída! Verificar pagamento final.
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {vendaDetalhada.obra.status === 'ANDAMENTO' && (
-                                                <div className="mt-4 bg-orange-100 border-l-4 border-orange-500 p-3 rounded">
-                                                    <p className="text-orange-800 text-sm font-semibold">
-                                                        🚧 Obra em andamento. Acompanhar evolução.
-                                                    </p>
-                                                </div>
-                                            )}
+                                    {/* Endereço da Obra */}
+                                    {(detalhesVenda.orcamento?.enderecoObra || detalhesVenda.cliente?.endereco) && (
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                                <span>📍</span>
+                                                Endereço da Obra
+                                            </h4>
+                                            <p className="text-gray-900 dark:text-white">
+                                                {detalhesVenda.orcamento?.enderecoObra || detalhesVenda.cliente?.endereco || 'N/A'}
+                                            </p>
                                         </div>
                                     )}
 
-                                    {/* Informações do Projeto */}
-                                    {vendaDetalhada.projeto && (
-                                        <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-                                            <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
-                                                📋 Informações do Projeto
-                                            </h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                <div>
-                                                    <span className="text-purple-700 font-medium">Título:</span>
-                                                    <p className="text-purple-900 font-semibold">{vendaDetalhada.projeto.titulo}</p>
-                                                </div>
-                                                {vendaDetalhada.projeto.dataInicio && (
-                                                    <div>
-                                                        <span className="text-purple-700 font-medium">Data de Início:</span>
-                                                        <p className="text-purple-900">{new Date(vendaDetalhada.projeto.dataInicio).toLocaleDateString('pt-BR')}</p>
-                                                    </div>
-                                                )}
-                                                {vendaDetalhada.projeto.descricao && (
-                                                    <div className="md:col-span-2">
-                                                        <span className="text-purple-700 font-medium">Descrição:</span>
-                                                        <p className="text-purple-900">{vendaDetalhada.projeto.descricao}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Itens Vendidos */}
-                                    {vendaDetalhada.orcamento && vendaDetalhada.orcamento.items && vendaDetalhada.orcamento.items.length > 0 && (
+                                    {/* Tabela de Materiais */}
+                                    {detalhesVenda.orcamento?.items && detalhesVenda.orcamento.items.length > 0 && (
                                         <div>
-                                            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                📦 Itens Vendidos
-                                            </h3>
-                                            <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                                <table className="w-full text-sm">
-                                                    <thead className="bg-gray-50 border-b border-gray-200">
-                                                        <tr>
-                                                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Item</th>
-                                                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">Qtd</th>
-                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Valor Unit.</th>
-                                                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Total</th>
+                                            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                                                Materiais do Orçamento
+                                            </h4>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-gray-100 dark:bg-gray-700">
+                                                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Material/Serviço
+                                                            </th>
+                                                            <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Quantidade
+                                                            </th>
+                                                            <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Valor Unitário
+                                                            </th>
+                                                            <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600">
+                                                                Valor Total
+                                                            </th>
                                                         </tr>
                                                     </thead>
-                                                    <tbody className="divide-y divide-gray-200">
-                                                        {vendaDetalhada.orcamento.items.map((item) => (
-                                                            <tr key={item.id} className="hover:bg-gray-50">
-                                                                <td className="px-4 py-3 text-gray-900">{item.nome}</td>
-                                                                <td className="px-4 py-3 text-center text-gray-900">{item.quantidade}</td>
-                                                                <td className="px-4 py-3 text-right text-gray-900">
-                                                                    R$ {item.valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                                </td>
-                                                                <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                                                                    R$ {item.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
+                                                    <tbody>
+                                                        {detalhesVenda.orcamento.items.map((item: any, index: number) => {
+                                                            const quantidade = item.quantidade || 0;
+                                                            const precoUnit = item.precoUnit || item.precoUnitario || (item.subtotal / (item.quantidade || 1)) || 0;
+                                                            const valorTotal = item.subtotal || (quantidade * precoUnit);
+                                                            return (
+                                                                <tr key={item.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        {item.material?.nome || item.servico?.nome || item.kit?.nome || item.descricao || 'Item sem nome'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-center text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        {quantidade} {item.unidadeMedida || 'UN'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-right text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        R$ {precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600">
+                                                                        R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
                                                     </tbody>
-                                                    <tfoot className="bg-gradient-to-r from-blue-50 to-cyan-50 border-t-2 border-blue-200">
-                                                        <tr>
-                                                            <td colSpan={3} className="px-4 py-3 text-right font-bold text-gray-900">
-                                                                TOTAL DA VENDA:
-                                                            </td>
-                                                            <td className="px-4 py-3 text-right font-bold text-blue-900 text-lg">
-                                                                R$ {vendaDetalhada.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                            </td>
-                                                        </tr>
-                                                    </tfoot>
                                                 </table>
                                             </div>
                                         </div>
                                     )}
-                                </div>
 
-                                {/* Footer */}
-                                <div className="flex justify-between items-center gap-3 p-6 border-t border-gray-100">
-                                    <button
-                                        onClick={handleGerarPDFVenda}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-xl transition-colors flex items-center gap-2"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                        </svg>
-                                        Gerar PDF / Imprimir
-                                    </button>
-                                    <button
-                                        onClick={handleCloseVisualizarModal}
-                                        className="btn-secondary"
-                                    >
-                                        Fechar
-                                    </button>
+                                    {/* Totais e Frete */}
+                                    <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl p-6">
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                    Subtotal:
+                                                </span>
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    R$ {(detalhesVenda.orcamento?.precoVenda || detalhesVenda.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                    Custo de Frete:
+                                                </span>
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    R$ {(detalhesVenda.orcamento?.custoFrete || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="pt-3 border-t-2 border-green-300 dark:border-green-700 flex justify-between items-center">
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    Valor Total:
+                                                </span>
+                                                <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                                    R$ {detalhesVenda.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Condições de Pagamento */}
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
+                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                            <span>💳</span>
+                                            Condições de Pagamento
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">Forma de Pagamento:</p>
+                                                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                    {detalhesVenda.formaPagamento}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">Número de Parcelas:</p>
+                                                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                    {detalhesVenda.numeroParcelas || 1} parcela(s)
+                                                </p>
+                                            </div>
+                                            {detalhesVenda.orcamento?.condicoesEspeciaisPagamento && (
+                                                <div className="md:col-span-2">
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Condições Especiais:</p>
+                                                    <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                                                        {detalhesVenda.orcamento.condicoesEspeciaisPagamento}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Observações */}
+                                    {(detalhesVenda.observacoes || detalhesVenda.orcamento?.observacoesComerciais) && (
+                                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+                                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                                <span>📝</span>
+                                                Observações
+                                            </h4>
+                                            <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                                                {detalhesVenda.observacoes || detalhesVenda.orcamento?.observacoesComerciais}
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <p className="text-gray-600 dark:text-gray-400">Erro ao carregar detalhes da venda</p>
                                 </div>
-                            </>
-                        ) : null}
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3 rounded-b-2xl">
+                            <button
+                                onClick={handleCloseVisualizarModal}
+                                className="px-6 py-3 bg-white dark:bg-gray-600 border-2 border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-500 transition-all font-semibold"
+                            >
+                                Fechar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

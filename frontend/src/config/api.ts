@@ -5,6 +5,21 @@ export const API_CONFIG = {
   RETRY_ATTEMPTS: 3,
 };
 
+/**
+ * Constrói a URL completa para um arquivo de upload (logo, imagem, etc.)
+ * Se a URL já começar com http/https, retorna ela mesma.
+ * Caso contrário, concatena com a BASE_URL da API.
+ */
+export const getUploadUrl = (url: string): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // Remove a barra inicial se existir, pois vamos adicionar
+  const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+  return `${API_CONFIG.BASE_URL}${cleanUrl}`;
+};
+
 // Headers padrão
 export const DEFAULT_HEADERS = {
   'Content-Type': 'application/json',
