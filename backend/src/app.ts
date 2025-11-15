@@ -49,7 +49,7 @@ import tarefasObraRoutes from './routes/tarefasObra.js';
 import { healthCheck } from './controllers/logsController.js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Middlewares
 app.use(helmet({
@@ -120,6 +120,7 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/api/health', healthCheck);
+app.get('/health', healthCheck);
 
 // API routes
 app.get('/api', (_req, res) => {

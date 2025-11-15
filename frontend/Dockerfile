@@ -26,8 +26,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build args
-ARG VITE_API_URL
+# Build args with defaults
+ARG VITE_API_URL=http://localhost:3001
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the application
@@ -37,24 +37,34 @@ RUN npm run build
 FROM nginx:alpine AS production
 WORKDIR /usr/share/nginx/html
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Copy nginx config
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy built files from builder
 COPY --from=builder /app/dist .
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-RUN chown -R nextjs:nodejs /usr/share/nginx/html
-RUN chown -R nextjs:nodejs /var/cache/nginx
-RUN chown -R nextjs:nodejs /var/log/nginx
-RUN chown -R nextjs:nodejs /etc/nginx/conf.d
-RUN touch /var/run/nginx.pid
-RUN chown -R nextjs:nodejs /var/run/nginx.pid
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nginx_user -u 1001 -G nodejs && \
+    chown -R nginx_user:nodejs /usr/share/nginx/html && \
+    chown -R nginx_user:nodejs /var/cache/nginx && \
+    chown -R nginx_user:nodejs /var/log/nginx && \
+    chown -R nginx_user:nodejs /etc/nginx/conf.d && \
+    touch /var/run/nginx.pid && \
+    chown nginx_user:nodejs /var/run/nginx.pid
 
-USER nextjs
+USER nginx_user
 
 EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
