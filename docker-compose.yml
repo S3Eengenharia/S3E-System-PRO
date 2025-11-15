@@ -51,17 +51,20 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${BACKEND_PORT:-3000}
-      DATABASE_URL: postgresql://${DB_USER:-s3e_user}:${DB_PASSWORD:-s3e_password}@postgres:5432/${DB_NAME:-s3e_db}
+      PORT: ${BACKEND_PORT:-3001}
+      DATABASE_URL: postgresql://${DB_USER:-s3e_user}:${DB_PASSWORD:-s3e_password}@postgres:5432/${DB_NAME:-s3e_db}?schema=public
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
     ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - "${BACKEND_PORT:-3001}:3001"
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - ./backend/uploads:/app/uploads
       - backend_logs:/app/logs
     depends_on:
       postgres:
@@ -70,7 +73,12 @@ services:
         condition: service_healthy
     networks:
       - s3e-network
-    command: npm run dev
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run dev
+      "
 
   # Frontend React App
   frontend:
@@ -79,22 +87,23 @@ services:
       dockerfile: Dockerfile
       target: ${NODE_ENV:-development}
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
     container_name: s3e-frontend
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     networks:
       - s3e-network
-    command: npm run dev -- --host
+    command: npm run dev -- --host 0.0.0.0
 
   # Nginx Reverse Proxy (Production)
   nginx:

@@ -1,20 +1,91 @@
 version: '3.8'
 
-# Production overrides
 services:
+  # PostgreSQL Database - PRODUÇÃO
+  postgres:
+    image: postgres:16-alpine
+    container_name: s3e-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-s3e_prod}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  
+      POSTGRES_DB: ${DB_NAME:-s3e_producao}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # Pasta para backups manuais
+    networks:
+      - s3e-network-prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-s3e_prod} -d ${DB_NAME:-s3e_producao}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API - PRODUÇÃO
   backend:
     build:
+      context: ./backend
+      dockerfile: Dockerfile
       target: production
+    container_name: s3e-backend-prod
+    restart: unless-stopped
     environment:
       NODE_ENV: production
-    command: node dist/app.js
-    volumes: []  # Remove volume mounts in production
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER:-s3e_prod}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-s3e_producao}
+      JWT_SECRET: ${JWT_SECRET}  
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:80}
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+    ports:
+      - "3001:3001"
+    volumes:
+      - backend_uploads:/app/uploads  # Uploads persistentes
+      - backend_logs:/app/logs        # Logs da aplicação
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - s3e-network-prod
+    command: "node dist/app.js"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
+  # Frontend React App - PRODUÇÃO
   frontend:
     build:
+      context: ./frontend
+      dockerfile: Dockerfile
       target: production
-    command: nginx -g 'daemon off;'
-    volumes: []  # Remove volume mounts in production
+    container_name: s3e-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"  # HTTP padrão para produção
+    networks:
+      - s3e-network-prod
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  nginx:
-    profiles: []  # Enable nginx in production
+volumes:
+  postgres_data:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_logs:
+    driver: local
+
+networks:
+  s3e-network-prod:
+    driver: bridge
