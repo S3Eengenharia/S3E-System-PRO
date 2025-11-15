@@ -7,7 +7,8 @@ async function main() {
   console.log('🌱 Iniciando seed do banco de dados...');
 
   // Criar usuários padrão
-  const adminPassword = await bcrypt.hash('123456', 10);
+  const adminPassword = await bcrypt.hash('123456A', 10);
+  const adminOldPassword = await bcrypt.hash('123456', 10);
   const devPassword = await bcrypt.hash('134679@Aj', 10);
   const eletricistaPassword = await bcrypt.hash('eletricista123', 10);
 
@@ -16,6 +17,7 @@ async function main() {
     where: { 
       OR: [
         { email: 'admin@s3e.com.br' },
+        { email: 'admin@s3eengenharia.com.br' },
         { email: 'antoniojrtech@gmail.com' },
         { email: 'eletricista1@s3e.com' },
         { email: 'eletricista2@s3e.com' }
@@ -23,12 +25,23 @@ async function main() {
     }
   });
 
-  // Criar usuário admin
+  // Criar usuário admin principal (para testes)
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@s3e.com.br',
+      email: 'admin@s3eengenharia.com.br',
       password: adminPassword,
       name: 'Administrador S3E',
+      role: 'admin',
+      active: true
+    }
+  });
+
+  // Criar usuário admin antigo (manter compatibilidade)
+  const adminOld = await prisma.user.create({
+    data: {
+      email: 'admin@s3e.com.br',
+      password: adminOldPassword,
+      name: 'Administrador S3E (Antigo)',
       role: 'admin',
       active: true
     }
@@ -38,6 +51,12 @@ async function main() {
     email: admin.email,
     name: admin.name,
     role: admin.role
+  });
+
+  console.log('✅ Usuário Admin (Antigo) criado:', {
+    email: adminOld.email,
+    name: adminOld.name,
+    role: adminOld.role
   });
 
   // Criar usuário desenvolvedor
@@ -103,7 +122,12 @@ async function main() {
   console.log('');
   console.log('📝 Credenciais de acesso:');
   console.log('');
-  console.log('👤 ADMIN:');
+  console.log('👤 ADMIN (PRINCIPAL - Para Testes):');
+  console.log('   Email: admin@s3eengenharia.com.br');
+  console.log('   Senha: 123456A');
+  console.log('   Role: admin');
+  console.log('');
+  console.log('👤 ADMIN (ANTIGO):');
   console.log('   Email: admin@s3e.com.br');
   console.log('   Senha: 123456');
   console.log('   Role: admin');

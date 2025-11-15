@@ -1,7 +1,7 @@
 // Credenciais de teste para desenvolvimento
 export const TEST_CREDENTIALS = {
-  email: 'admin@s3e.com.br',
-  password: '123456',
+  email: 'admin@s3eengenharia.com.br',
+  password: '123456A',
   name: 'Admin S3E',
   role: 'admin'
 };
