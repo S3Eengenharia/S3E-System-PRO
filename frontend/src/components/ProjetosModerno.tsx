@@ -11,7 +11,10 @@ import { ENDPOINTS } from '../config/api';
 import { AuthContext } from '../contexts/AuthContext';
 import ViewToggle from './ui/ViewToggle';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+<<<<<<< HEAD
 import { useEscapeKey } from '../hooks/useEscapeKey';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -511,6 +514,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
         }
     };
 
+<<<<<<< HEAD
     // Fechar modais com ESC
     useEscapeKey(isCreateModalOpen, () => setIsCreateModalOpen(false));
     useEscapeKey(isViewModalOpen, () => {
@@ -521,6 +525,8 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     useEscapeKey(isTaskModalOpen, () => setIsTaskModalOpen(false));
     useEscapeKey(extendPrazoModalOpen, () => setExtendPrazoModalOpen(false));
 
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleDelete = async (permanent = false) => {
         if (!projetoToDelete) return;
         

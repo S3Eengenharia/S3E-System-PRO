@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { equipeService, type EquipeDTO } from '../../services/EquipeService';
 import { axiosApiService } from '../../services/axiosApi';
+<<<<<<< HEAD
 import { toast } from 'sonner';
 import { alocacaoObraService } from '../../services/AlocacaoObraService';
 import {
@@ -21,6 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 interface EletricistaDTO {
   id: string;
@@ -46,6 +49,7 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [editingEquipeId, setEditingEquipeId] = useState<string | null>(null);
+<<<<<<< HEAD
   
   // Estados para diálogos
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -55,6 +59,8 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [equipeParaRenomear, setEquipeParaRenomear] = useState<EquipeDTO | null>(null);
   const [novoNome, setNovoNome] = useState('');
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
   useEffect(() => {
     if (isOpen) {
@@ -311,6 +317,7 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
     }
   };
 
+<<<<<<< HEAD
   // Verificar alocações ativas antes de excluir
   const verificarAlocacoesAtivas = async (equipeId: string) => {
     try {
@@ -441,6 +448,39 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
       setLoading(false);
       setEquipeParaRenomear(null);
       setNovoNome('');
+=======
+  const excluirEquipe = async (id: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await equipeService.deleteEquipe(id);
+      if (res.success) {
+        setEquipes(prev => prev.filter(e => e.id !== id));
+        // Ao excluir, membros ficam disponíveis novamente
+        void Promise.all([loadEletricistas(), loadEquipes()]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao excluir equipe');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renomearEquipe = async (id: string) => {
+    const novoNome = window.prompt('Novo nome da equipe');
+    if (!novoNome || !novoNome.trim()) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await equipeService.updateEquipe(id, { nome: novoNome.trim() });
+      if (res.success && res.data) {
+        setEquipes(prev => prev.map(e => (e.id === id ? res.data! : e)));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao renomear equipe');
+    } finally {
+      setLoading(false);
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     }
   };
 
@@ -457,6 +497,7 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">✕</button>
         </div>
 
+<<<<<<< HEAD
         {/* Mensagem de erro */}
         {error && (
           <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -476,6 +517,8 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
           </div>
         )}
 
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           <div>
             <h4 className="font-semibold text-gray-900 mb-3">
@@ -638,8 +681,13 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => iniciarEdicao(eq)} className="px-3 py-1.5 text-sm bg-white border-2 border-brand-blue text-brand-blue rounded-lg hover:bg-blue-50">Editar membros</button>
+<<<<<<< HEAD
                       <button onClick={() => abrirDialogRenomear(eq)} className="px-3 py-1.5 text-sm bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50">Renomear</button>
                       <button onClick={() => abrirDialogExcluir(eq.id)} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">Excluir</button>
+=======
+                      <button onClick={() => renomearEquipe(eq.id)} className="px-3 py-1.5 text-sm bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50">Renomear</button>
+                      <button onClick={() => excluirEquipe(eq.id)} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">Excluir</button>
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                     </div>
                   </div>
                 ))}
@@ -652,6 +700,7 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
           <button onClick={onClose} className="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg">Fechar</button>
         </div>
       </div>
+<<<<<<< HEAD
 
       {/* Dialog de Confirmação de Exclusão */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -728,6 +777,8 @@ const ModalEquipesDeObra: React.FC<ModalEquipesDeObraProps> = ({ isOpen, onClose
           </DialogFooter>
         </DialogContent>
       </Dialog>
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     </div>
   );
 };

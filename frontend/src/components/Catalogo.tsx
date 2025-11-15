@@ -6,7 +6,10 @@ import { ENDPOINTS } from '../config/api';
 import CriacaoQuadroModular from './CriacaoQuadroModular';
 import CriacaoKitModal from './CriacaoKitModal';
 import ViewToggle from './ui/ViewToggle';
+<<<<<<< HEAD
 import { useEscapeKey } from '../hooks/useEscapeKey';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -188,6 +191,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             // Carregar detalhes completos do kit
             const response = await axiosApiService.get(`${ENDPOINTS.KITS}/${item.id}`);
             if (response.success && response.data) {
+<<<<<<< HEAD
                 // Garantir que itensFaltantes seja um array para o modal de edição
                 const kitData = { ...response.data };
                 if (kitData.itensFaltantes) {
@@ -209,6 +213,9 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                 }
                 
                 setKitParaEditar(kitData);
+=======
+                setKitParaEditar(response.data);
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                 setShowKitModal(true);
             }
         } catch (error) {
@@ -222,6 +229,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         setItemToEdit(null);
     };
 
+<<<<<<< HEAD
     // Fechar modais com ESC
     useEscapeKey(isModalOpen, handleCloseModal);
     useEscapeKey(showKitModal, () => {
@@ -231,6 +239,8 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
     useEscapeKey(showQuadroModal, () => setShowQuadroModal(false));
     useEscapeKey(!!itemToDelete, () => setItemToDelete(null));
 
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleViewItem = async (item: CatalogItem) => {
         setSelectedItem(item);
         
@@ -241,12 +251,17 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                 const response = await axiosApiService.get(`${ENDPOINTS.KITS}/${item.id}`);
                 console.log('📦 Detalhes do kit carregados:', response.data);
                 console.log('   - Items:', response.data?.items?.length || 0);
+<<<<<<< HEAD
                 console.log('   - ItensFaltantes (raw):', response.data?.itensFaltantes);
                 console.log('   - ItensFaltantes (type):', typeof response.data?.itensFaltantes);
+=======
+                console.log('   - ItensFaltantes:', response.data?.itensFaltantes);
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                 console.log('   - temItensCotacao:', response.data?.temItensCotacao);
                 console.log('   - statusEstoque:', response.data?.statusEstoque);
                 
                 if (response.success && response.data) {
+<<<<<<< HEAD
                     // Garantir que itensFaltantes seja um array
                     const kitData = { ...response.data };
                     if (kitData.itensFaltantes) {
@@ -269,6 +284,9 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                     
                     console.log('   - ItensFaltantes (processed):', kitData.itensFaltantes);
                     setKitDetalhes(kitData);
+=======
+                    setKitDetalhes(response.data);
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                 }
             } catch (error) {
                 console.error('Erro ao carregar detalhes do kit:', error);
@@ -910,6 +928,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                                         <span>❄️</span> Itens do Banco Frio ({kitDetalhes.itensFaltantes.length})
                                                     </h4>
                                                     <div className="space-y-2">
+<<<<<<< HEAD
                                                         {kitDetalhes.itensFaltantes.map((item: any, index: number) => {
                                                             // Garantir que os campos estejam corretos
                                                             const nome = item.nome || item.materialNome || 'Item do Banco Frio';
@@ -951,6 +970,35 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                                                 </div>
                                                             );
                                                         })}
+=======
+                                                        {kitDetalhes.itensFaltantes.map((item: any, index: number) => (
+                                                            <div key={index} className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="flex-1">
+                                                                        <p className="font-semibold text-gray-900 text-sm">
+                                                                            {item.nome}
+                                                                        </p>
+                                                                        <p className="text-xs text-gray-600 mt-1">
+                                                                            {item.quantidade} UN × R$ {(item.precoUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                        </p>
+                                                                        {item.dataUltimaCotacao && (
+                                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                                                                                📅 Cotação: {(() => {
+                                                                                    const data = new Date(item.dataUltimaCotacao);
+                                                                                    return !isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : 'Sem data';
+                                                                                })()}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="font-bold text-sm text-blue-700">
+                                                                            R$ {((item.quantidade || 0) * (item.precoUnit || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                                                     </div>
                                                     <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                                                         <p className="text-xs text-orange-800 font-medium">

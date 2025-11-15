@@ -1,5 +1,8 @@
 import { PrismaClient, StatusObra } from '@prisma/client';
+<<<<<<< HEAD
 import { EstoqueService } from './estoque.service';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 const prisma = new PrismaClient();
 
@@ -110,7 +113,10 @@ export class ObraService {
 
   /**
    * Gera uma Obra a partir de um Projeto aprovado
+<<<<<<< HEAD
    * Valida disponibilidade de estoque antes de criar a obra
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
    */
   async gerarObraAPartirDoProjeto(projetoId: string, nomeObra?: string) {
     try {
@@ -133,6 +139,7 @@ export class ObraService {
         throw new Error('Já existe uma obra para este projeto');
       }
 
+<<<<<<< HEAD
       // ✅ VALIDAÇÃO: Verificar disponibilidade de estoque antes de criar obra
       console.log('🔍 Verificando disponibilidade de estoque para o projeto...');
       const verificacaoEstoque = await EstoqueService.verificarDisponibilidadeProjeto(projetoId);
@@ -168,6 +175,8 @@ export class ObraService {
 
       console.log('✅ Validação de estoque passou. Todos os materiais estão disponíveis.');
 
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
       // Criar obra
       const obra = await prisma.obra.create({
         data: {

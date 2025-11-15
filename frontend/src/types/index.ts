@@ -627,9 +627,13 @@ export interface MaterialItem {
     supplierId?: string;
     supplierName?: string;
     supplier?: { id: string; name: string }; // Objeto supplier do backend
+<<<<<<< HEAD
     price: number; // Preço de custo (última compra)
     valorVenda?: number; // Preço de venda (usado em orçamentos)
     porcentagemLucro?: number; // Porcentagem de lucro ((valorVenda - price) / price * 100)
+=======
+    price: number;
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 }
 
 

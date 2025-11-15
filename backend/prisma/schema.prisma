@@ -151,9 +151,13 @@ model Material {
   estoqueMinimo          Float     @default(5)
   unidadeMedida          String    @default("un")
   localizacao            String?
+<<<<<<< HEAD
   preco                  Float? // Preço de custo (última compra)
   valorVenda             Float? // Preço de venda (usado em orçamentos)
   porcentagemLucro       Float? // Porcentagem de lucro ((valorVenda - preco) / preco * 100)
+=======
+  preco                  Float? // Preço de referência
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
   ultimaAtualizacaoPreco DateTime? // Data da última atualização de preço
   fornecedorId           String?
   ativo                  Boolean   @default(true)

@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
+<<<<<<< HEAD
 import EquipesGantt from './Obras/EquipesGantt';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { toast } from 'sonner';
+<<<<<<< HEAD
 import { useEscapeKey } from '../hooks/useEscapeKey';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -104,6 +110,13 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
+<<<<<<< HEAD
+=======
+    // Estados para filtros de data na Timeline
+    const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
+    const [filtroDataFim, setFiltroDataFim] = useState<string>('');
+    
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     // Estados para calendário
     const [mesCalendario, setMesCalendario] = useState(new Date().getMonth());
     const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
@@ -391,6 +404,32 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         }
     }, [mesCalendario, anoCalendario, activeTab, loadAlocacoes]);
 
+<<<<<<< HEAD
+=======
+    // Filtrar alocações por data para Timeline (sempre executado, não condicional)
+    const alocacoesFiltradas = useMemo(() => {
+        let filtradas = alocacoes;
+        
+        if (filtroDataInicio) {
+            const dataInicio = new Date(filtroDataInicio);
+            filtradas = filtradas.filter(a => {
+                const alocacaoInicio = new Date(a.dataInicio);
+                return alocacaoInicio >= dataInicio;
+            });
+        }
+        
+        if (filtroDataFim) {
+            const dataFim = new Date(filtroDataFim);
+            filtradas = filtradas.filter(a => {
+                const alocacaoFim = new Date(a.dataFim);
+                return alocacaoFim <= dataFim;
+            });
+        }
+        
+        return filtradas;
+    }, [alocacoes, filtroDataInicio, filtroDataFim]);
+
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     // Carregar eletricistas do backend
     const loadEletricistas = async () => {
         try {
@@ -491,10 +530,13 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         });
     };
 
+<<<<<<< HEAD
     // Fechar modais com ESC
     useEscapeKey(isModalOpen, handleCloseModal);
     useEscapeKey(isAlocacaoModalOpen, () => setIsAlocacaoModalOpen(false));
 
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -1265,6 +1307,7 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             })()}
 
             {activeTab === 'gantt' && (
+<<<<<<< HEAD
                 <EquipesGantt
                     equipes={equipes}
                     obras={obras}
@@ -1273,6 +1316,351 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                         await Promise.all([loadEquipes(), loadAlocacoes(false), loadObras()]);
                     }}
                 />
+=======
+                <div className="space-y-6">
+                    {/* Header */}
+                    <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">Timeline Gantt</h2>
+                                <p className="text-sm text-gray-500 mt-1">Visualização de alocações das equipes ao longo do tempo</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={async () => {
+                                        await loadAlocacoes(false);
+                                        toast.success('Timeline atualizada!');
+                                    }}
+                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold flex items-center gap-2"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Atualizar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Filtros de Data */}
+                    <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Filtros de Período</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data Início
+                                </label>
+                                <input
+                                    type="date"
+                                    value={filtroDataInicio}
+                                    onChange={(e) => setFiltroDataInicio(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Data Fim
+                                </label>
+                                <input
+                                    type="date"
+                                    value={filtroDataFim}
+                                    onChange={(e) => setFiltroDataFim(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <button
+                                    onClick={() => {
+                                        setFiltroDataInicio('');
+                                        setFiltroDataFim('');
+                                        toast.info('Filtros removidos');
+                                    }}
+                                    className="w-full px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
+                                >
+                                    Limpar Filtros
+                                </button>
+                            </div>
+                        </div>
+                        {(filtroDataInicio || filtroDataFim) && (
+                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                                <p className="text-sm text-blue-800">
+                                    <strong>Mostrando:</strong> {alocacoesFiltradas.length} de {alocacoes.length} alocações
+                                    {filtroDataInicio && ` a partir de ${new Date(filtroDataInicio).toLocaleDateString('pt-BR')}`}
+                                    {filtroDataFim && ` até ${new Date(filtroDataFim).toLocaleDateString('pt-BR')}`}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Estatísticas */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-white p-4 rounded-2xl shadow-soft border border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm ring-1 ring-blue-200/50">
+                                    <UsersIcon className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500">Equipes Ativas</p>
+                                    <p className="text-xl font-bold text-gray-900">
+                                        {equipes.filter(e => e.ativa).length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl shadow-soft border border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center shadow-sm ring-1 ring-green-200/50">
+                                    <CalendarIcon className="w-5 h-5 text-green-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500">Alocações Ativas</p>
+                                    <p className="text-xl font-bold text-gray-900">
+                                        {alocacoes.filter(a => a.status === 'EmAndamento').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl shadow-soft border border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shadow-sm ring-1 ring-purple-200/50">
+                                    <ChartBarIcon className="w-5 h-5 text-purple-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500">Planejadas</p>
+                                    <p className="text-xl font-bold text-gray-900">
+                                        {alocacoes.filter(a => a.status === 'Planejada').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl shadow-soft border border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shadow-sm ring-1 ring-orange-200/50">
+                                    <CalendarIcon className="w-5 h-5 text-orange-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500">Concluídas</p>
+                                    <p className="text-xl font-bold text-gray-900">
+                                        {alocacoes.filter(a => a.status === 'Concluida').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Timeline Principal */}
+                    <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-6">
+                        <h3 className="text-lg font-bold text-gray-900 mb-6">Timeline de Alocações por Equipe e Eletricista (Mensal)</h3>
+                        
+                        {equipes.length === 0 ? (
+                            <div className="text-center py-16">
+                                <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma equipe cadastrada</h3>
+                                <p className="text-gray-500 mb-6">Para visualizar o cronograma, é necessário cadastrar equipes primeiro.</p>
+                                <button
+                                    onClick={() => setActiveTab('equipes')}
+                                    className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-medium font-semibold"
+                                >
+                                    Gerenciar Equipes
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Header da Timeline - Meses */}
+                                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-200">
+                                    <div className="w-48 font-semibold text-sm text-gray-700">Equipe / Eletricista</div>
+                                    <div className="flex-1 grid grid-cols-12 gap-1">
+                                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((mes, idx) => (
+                                            <div key={idx} className="text-center text-xs font-semibold text-gray-600">
+                                                {mes}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Linhas das Equipes */}
+                                {equipes.map((equipe) => {
+                                    const equipeAlocacoes = alocacoesFiltradas.filter(a => a.equipeId === equipe.id);
+                                    
+                                    return (
+                                        <div key={equipe.id} className="flex items-center gap-4 group">
+                                            {/* Info da Equipe */}
+                                            <div className="w-48">
+                                                <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 group-hover:border-blue-300 transition-colors">
+                                                    <h4 className="font-semibold text-sm text-gray-900 truncate">{equipe.nome}</h4>
+                                                    <p className="text-xs text-gray-500 mt-0.5">{equipe.tipo}</p>
+                                                    <div className="flex items-center gap-1 mt-1">
+                                                        <UsersIcon className="w-3 h-3 text-gray-400" />
+                                                        <span className="text-xs text-gray-600">{equipe.membros?.length || 0} membros</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Timeline Grid */}
+                                            <div className="flex-1 relative h-16">
+                                                {/* Grid de fundo */}
+                                                <div className="absolute inset-0 grid grid-cols-12 gap-1">
+                                                    {Array.from({ length: 12 }).map((_, idx) => (
+                                                        <div key={idx} className="bg-gray-50 rounded border border-gray-100"></div>
+                                                    ))}
+                                                </div>
+                                                
+                                                {/* Barras de Alocação */}
+                                                {equipeAlocacoes.length > 0 ? (
+                                                    equipeAlocacoes.map((alocacao, idx) => {
+                                                        const startDate = new Date(alocacao.dataInicio);
+                                                        const endDate = new Date(alocacao.dataFim || alocacao.dataFimPrevisto || alocacao.dataInicio);
+                                                        const startMonth = startDate.getMonth();
+                                                        const endMonth = endDate.getMonth();
+                                                        const duration = endMonth - startMonth + 1;
+                                                        const left = (startMonth / 12) * 100;
+                                                        const width = (duration / 12) * 100;
+                                                        
+                                                        const colors = {
+                                                            Planejada: 'bg-blue-500',
+                                                            EmAndamento: 'bg-green-500',
+                                                            Concluida: 'bg-orange-500',
+                                                            Cancelada: 'bg-red-500'
+                                                        };
+                                                        
+                                                        return (
+                                                            <div
+                                                                key={idx}
+                                                                className={`absolute h-10 rounded-lg ${colors[alocacao.status]} shadow-md flex items-center justify-center text-white text-xs font-semibold px-2 hover:shadow-lg transition-all cursor-pointer group/bar`}
+                                                                style={{
+                                                                    left: `${left}%`,
+                                                                    width: `${width}%`,
+                                                                    top: '50%',
+                                                                    transform: 'translateY(-50%)'
+                                                                }}
+                                                                title={`${alocacao.status} - ${startDate.toLocaleDateString('pt-BR')} até ${endDate.toLocaleDateString('pt-BR')}`}
+                                                            >
+                                                                <span className="truncate">{alocacao.status}</span>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <span className="text-xs text-gray-400">Sem alocações</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Linhas dos Eletricistas Individuais */}
+                                {(() => {
+                                    // Buscar eletricistas únicos que têm alocações
+                                    const eletricistasComAlocacoes = new Map<string, { id: string; nome: string; email: string }>();
+                                    alocacoesFiltradas.forEach(alocacao => {
+                                        if (alocacao.eletricista && !eletricistasComAlocacoes.has(alocacao.eletricista.id)) {
+                                            eletricistasComAlocacoes.set(alocacao.eletricista.id, {
+                                                id: alocacao.eletricista.id,
+                                                nome: alocacao.eletricista.nome,
+                                                email: alocacao.eletricista.email
+                                            });
+                                        }
+                                    });
+
+                                    return Array.from(eletricistasComAlocacoes.values()).map((eletricista) => {
+                                        const eletricistaAlocacoes = alocacoesFiltradas.filter(a => a.eletricistaId === eletricista.id);
+                                        
+                                        return (
+                                            <div key={eletricista.id} className="flex items-center gap-4 group">
+                                                {/* Info do Eletricista */}
+                                                <div className="w-48">
+                                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-200 group-hover:border-indigo-400 transition-colors">
+                                                        <h4 className="font-semibold text-sm text-gray-900 truncate">⚡ {eletricista.nome}</h4>
+                                                        <p className="text-xs text-gray-500 mt-0.5">Eletricista Individual</p>
+                                                        <p className="text-xs text-gray-400 mt-1 truncate">{eletricista.email}</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Timeline Grid */}
+                                                <div className="flex-1 relative h-16">
+                                                    {/* Grid de fundo */}
+                                                    <div className="absolute inset-0 grid grid-cols-12 gap-1">
+                                                        {Array.from({ length: 12 }).map((_, idx) => (
+                                                            <div key={idx} className="bg-gray-50 rounded border border-gray-100"></div>
+                                                        ))}
+                                                    </div>
+                                                    
+                                                    {/* Barras de Alocação */}
+                                                    {eletricistaAlocacoes.length > 0 ? (
+                                                        eletricistaAlocacoes.map((alocacao, idx) => {
+                                                            const startDate = new Date(alocacao.dataInicio);
+                                                            const endDate = new Date(alocacao.dataFim || alocacao.dataFimPrevisto || alocacao.dataInicio);
+                                                            const startMonth = startDate.getMonth();
+                                                            const endMonth = endDate.getMonth();
+                                                            const duration = endMonth - startMonth + 1;
+                                                            const left = (startMonth / 12) * 100;
+                                                            const width = (duration / 12) * 100;
+                                                            
+                                                            const colors = {
+                                                                Planejada: 'bg-blue-500',
+                                                                EmAndamento: 'bg-green-500',
+                                                                Concluida: 'bg-orange-500',
+                                                                Cancelada: 'bg-red-500'
+                                                            };
+                                                            
+                                                            return (
+                                                                <div
+                                                                    key={idx}
+                                                                    className={`absolute h-10 rounded-lg ${colors[alocacao.status]} shadow-md flex items-center justify-center text-white text-xs font-semibold px-2 hover:shadow-lg transition-all cursor-pointer group/bar`}
+                                                                    style={{
+                                                                        left: `${left}%`,
+                                                                        width: `${width}%`,
+                                                                        top: '50%',
+                                                                        transform: 'translateY(-50%)'
+                                                                    }}
+                                                                    title={`${alocacao.status} - ${startDate.toLocaleDateString('pt-BR')} até ${endDate.toLocaleDateString('pt-BR')}`}
+                                                                >
+                                                                    <span className="truncate">{alocacao.status}</span>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                            <span className="text-xs text-gray-400">Sem alocações</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Legenda */}
+                    <div className="bg-white rounded-2xl shadow-soft border border-gray-100 p-4">
+                        <h4 className="text-sm font-bold text-gray-900 mb-3">Legenda de Status</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 bg-blue-500 rounded shadow-sm"></div>
+                                <span className="text-sm text-gray-700 font-medium">Planejada</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 bg-green-500 rounded shadow-sm"></div>
+                                <span className="text-sm text-gray-700 font-medium">Em Andamento</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 bg-orange-500 rounded shadow-sm"></div>
+                                <span className="text-sm text-gray-700 font-medium">Concluída</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 bg-red-500 rounded shadow-sm"></div>
+                                <span className="text-sm text-gray-700 font-medium">Cancelada</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
             )}
 
         {/* Modal de Visualizar Membros da Equipe */}

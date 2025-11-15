@@ -103,6 +103,7 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                 }));
                 
                 // Carregar itens do banco frio
+<<<<<<< HEAD
                 // Garantir que itensFaltantes seja um array
                 let itensFaltantesArray: any[] = [];
                 if (kitParaEditar.itensFaltantes) {
@@ -132,6 +133,17 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                     unidadeMedida: item.unidadeMedida || 'un',
                     isCotacao: true,
                     dataUltimaCotacao: item.dataUltimaCotacao || item.dataAtualizacao
+=======
+                const itensBancoFrio: ItemKit[] = (kitParaEditar.itensFaltantes || []).map((item: any) => ({
+                    materialId: `cotacao_${item.cotacaoId}`,
+                    nome: item.nome,
+                    quantidade: item.quantidade,
+                    precoUnit: item.precoUnit || 0,
+                    subtotal: item.quantidade * (item.precoUnit || 0),
+                    unidadeMedida: 'un',
+                    isCotacao: true,
+                    dataUltimaCotacao: item.dataUltimaCotacao
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                 }));
                 
                 setItensKit([...itensEstoque, ...itensBancoFrio]);

@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import obraService from '../services/obra.service.js';
+<<<<<<< HEAD
 import { EstoqueService } from '../services/estoque.service.js';
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 const prisma = new PrismaClient();
 
@@ -473,6 +476,7 @@ export class ObraController {
   }
 
   /**
+<<<<<<< HEAD
    * GET /api/obras/verificar-estoque/:projetoId
    * Verifica disponibilidade de estoque antes de criar obra
    */
@@ -504,6 +508,8 @@ export class ObraController {
   }
 
   /**
+=======
+>>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
    * GET /api/obras/projeto/:projetoId
    * Busca obra associada a um projeto
    */
