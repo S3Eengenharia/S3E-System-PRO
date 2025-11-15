@@ -10,6 +10,7 @@ import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { AuthContext } from '../contexts/AuthContext';
 import ViewToggle from './ui/ViewToggle';
+import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -132,13 +133,16 @@ interface Usuario {
 
 interface ProjetosProps {
     toggleSidebar: () => void;
-    onNavigate: (view: string) => void;
+    onNavigate: (view: string, ...args: any[]) => void;
     onViewBudget: (budgetId: string) => void;
+    onViewSale?: (saleId: string) => void;
+    onViewClient?: (clientId: string) => void;
+    onViewObra?: (obraId: string) => void;
 }
 
 type ViewModalTab = 'geral' | 'etapasAdmin' | 'materiais' | 'etapas' | 'qualidade';
 
-const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBudget }) => {
+const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, onViewBudget, onViewSale, onViewClient, onViewObra }) => {
     // ==================== AUTH ====================
     const authContext = useContext(AuthContext);
     const user = authContext?.user;
@@ -161,7 +165,13 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
     const [statusFilter, setStatusFilter] = useState<string>('Todos');
     const [responsavelFilter, setResponsavelFilter] = useState<string>('Todos');
     const [mostrarCancelados, setMostrarCancelados] = useState(false);
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(loadViewMode('Projetos'));
+    
+    // Salvar viewMode no localStorage quando mudar
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        saveViewMode('Projetos', mode);
+    };
 
     // Modais
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -274,11 +284,19 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
             }
 
             if (usuariosRes.success && usuariosRes.data) {
-                // Filtrar apenas roles técnicas: admin, gerente, engenheiro, orcamentista
+                // Filtrar apenas roles técnicas: engenheiro, tecnico, orcamentista, compras, gerente
                 const usuariosArray = Array.isArray(usuariosRes.data) ? usuariosRes.data : [];
-                const usuariosFiltrados = usuariosArray.filter((u: any) => 
-                    ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
-                );
+                const usuariosFiltrados = usuariosArray
+                    .filter((u: any) => 
+                        ['engenheiro', 'tecnico', 'técnico', 'orcamentista', 'compras', 'gerente'].includes(u.role?.toLowerCase())
+                    )
+                    .map((u: any) => ({
+                        id: u.id,
+                        nome: u.name || u.nome || '',
+                        email: u.email || '',
+                        funcao: u.role || u.funcao || '',
+                        role: u.role || ''
+                    }));
                 setUsuarios(usuariosFiltrados);
             } else {
                 setUsuarios([]);
@@ -840,7 +858,7 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                         Exibindo <span className="font-bold text-gray-900">{filteredProjetos.length}</span> de <span className="font-bold text-gray-900">{projetos.length}</span> projetos
                     </p>
                     <div className="flex items-center gap-3">
-                        <ViewToggle view={viewMode} onViewChange={setViewMode} />
+                        <ViewToggle view={viewMode} onViewChange={handleViewModeChange} />
                         {/* Toggle Mostrar Cancelados */}
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -1213,6 +1231,9 @@ const ProjetosModerno: React.FC<ProjetosProps> = ({ toggleSidebar, onNavigate, o
                     onClose={() => setIsViewModalOpen(false)}
                     onRefresh={loadData}
                     onViewBudget={onViewBudget}
+                    onViewSale={onViewSale}
+                    onViewClient={onViewClient}
+                    onViewObra={onViewObra}
                     onNavigate={onNavigate}
                     initialTab={
                         viewModalActiveTab === 'geral' ? 'Visão Geral' :

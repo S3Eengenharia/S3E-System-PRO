@@ -34,6 +34,7 @@ import Vendas from './components/Vendas';
 import Cotacoes from './components/Cotacoes';
 import ObrasKanban from './pages/ObrasKanban';
 import NovaCompraPage from './pages/NovaCompraPage';
+import DetalhesObra from './pages/DetalhesObra';
 // import SettingsModal from './components/SettingsModal'; // DESCONTINUADO - Substituído por página Configuracoes.tsx
 import GestaoObras from './components/GestaoObras';
 import TarefasObra from './components/TarefasObra';
@@ -48,16 +49,21 @@ const MainApp: React.FC = () => {
   // const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // DESCONTINUADO
   const [initialBudgetId, setInitialBudgetId] = useState<string | null>(null);
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
+  const [initialObraId, setInitialObraId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
   
-  const handleNavigate = (view: string) => {
+  const handleNavigate = (view: string, ...args: any[]) => {
     setActiveView(view);
     if (window.innerWidth < 1024) { // lg breakpoint
       setIsSidebarOpen(false);
+    }
+    // Se for DetalhesObra e tiver argumentos, usar o primeiro como obraId
+    if (view === 'DetalhesObra' && args[0]) {
+      setInitialObraId(args[0]);
     }
   };
 
@@ -69,6 +75,23 @@ const MainApp: React.FC = () => {
   const handleViewProject = (projectId: string) => {
     setInitialProjectId(projectId);
     handleNavigate('Projetos');
+  };
+
+  const handleViewObra = (obraId: string) => {
+    setInitialObraId(obraId);
+    handleNavigate('DetalhesObra');
+  };
+
+  const handleViewSale = (saleId: string) => {
+    // Navegar para vendas - o componente pode abrir o modal automaticamente se necessário
+    handleNavigate('Vendas');
+    // TODO: Implementar abertura automática do modal de visualização de venda
+  };
+
+  const handleViewClient = (clientId: string) => {
+    // Navegar para clientes - o componente pode abrir o modal automaticamente se necessário
+    handleNavigate('Clientes');
+    // TODO: Implementar abertura automática do modal de visualização de cliente
   };
 
 
@@ -101,9 +124,24 @@ const MainApp: React.FC = () => {
                  toggleSidebar={toggleSidebar} 
                  onNavigate={handleNavigate}
                  onViewBudget={handleViewBudget}
+                 onViewSale={handleViewSale}
+                 onViewClient={handleViewClient}
+                 onViewObra={handleViewObra}
                />;
       case 'Obras':
-        return <ObrasKanban toggleSidebar={toggleSidebar} />;
+        return <ObrasKanban toggleSidebar={toggleSidebar} onNavigate={(view, ...args) => {
+          if (view === 'DetalhesObra' && args[0]) {
+            handleViewObra(args[0]);
+          } else {
+            handleNavigate(view);
+          }
+        }} />;
+      case 'DetalhesObra':
+        return initialObraId ? (
+          <DetalhesObra toggleSidebar={toggleSidebar} obraId={initialObraId} onNavigate={handleNavigate} />
+        ) : (
+          <ObrasKanban toggleSidebar={toggleSidebar} onNavigate={handleNavigate} />
+        );
       case 'Tarefas da Obra':
         return <TarefasObra toggleSidebar={toggleSidebar} />;
       case 'Gestão de Obras':
