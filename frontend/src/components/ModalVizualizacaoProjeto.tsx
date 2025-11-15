@@ -17,14 +17,33 @@ import {
 type ProjetoStatus = 'PROPOSTA' | 'VALIDADO' | 'APROVADO' | 'EXECUCAO' | 'CONCLUIDO';
 
 interface ClienteRef { id: string; nome: string }
+interface MaterialRef {
+  id?: string;
+  nome?: string;
+  sku?: string;
+  estoque?: number;
+  unidadeMedida?: string | null;
+  updatedAt?: string;
+}
+
+interface CotacaoRef {
+  id: string;
+  nome?: string;
+  fornecedorNome?: string | null;
+  dataAtualizacao?: string | null;
+  ncm?: string | null;
+}
+
 interface OrcamentoItemRef { 
   id: string; 
-  material?: { nome: string; sku: string } | null; 
-  kit?: { nome: string } | null; 
-  servico?: { nome: string } | null;
+  material?: MaterialRef | null; 
+  kit?: { nome?: string | null } | null; 
+  servico?: { nome?: string | null } | null;
+  cotacao?: CotacaoRef | null;
   quantidade?: number; 
   subtotal?: number;
   tipo?: string;
+  descricao?: string | null;
 }
 interface OrcamentoRef { id: string; status: string; precoVenda?: number; items?: OrcamentoItemRef[] }
 
@@ -48,12 +67,15 @@ interface ModalVizualizacaoProjetoProps {
   initialTab?: Aba;
   onRefresh?: () => void; // chamado após alterações (ex: mudança de status)
   onViewBudget?: (budgetId: string) => void; // navegar para orçamento
-  onNavigate?: (view: string) => void; // navegar para outras páginas
+  onViewClient?: (clientId: string) => void; // navegar para cliente
+  onViewSale?: (saleId: string) => void; // navegar para venda
+  onViewObra?: (obraId: string) => void; // navegar para obra
+  onNavigate?: (view: string, ...args: any[]) => void; // navegar para outras páginas
 }
 
 const TABS: Aba[] = ['Visão Geral', 'Materiais', 'EtapasAdmin', 'Kanban', 'Qualidade'];
 
-const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ projeto, isOpen, onClose, initialTab = 'Visão Geral', onRefresh, onViewBudget, onNavigate }) => {
+const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ projeto, isOpen, onClose, initialTab = 'Visão Geral', onRefresh, onViewBudget, onViewClient, onViewSale, onViewObra, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<Aba>(initialTab);
   const [loadingAcao, setLoadingAcao] = useState(false);
 
@@ -89,6 +111,22 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<{ id: string; nome: string; tipo: string; url: string } | null>(null);
 
+  // Estado para orçamento completo
+  const [orcamentoCompleto, setOrcamentoCompleto] = useState<OrcamentoRef | null>(null);
+  const [loadingOrcamento, setLoadingOrcamento] = useState(false);
+  
+  // Estado para venda vinculada
+  const [vendaVinculada, setVendaVinculada] = useState<{ id: string } | null>(null);
+  
+  // Estado para obra vinculada
+  const [obraVinculada, setObraVinculada] = useState<{ id: string; nome?: string } | null>(null);
+  const [loadingObra, setLoadingObra] = useState(false);
+
+  // Modal de visualização de cliente
+  const [clienteModalOpen, setClienteModalOpen] = useState(false);
+  const [clienteData, setClienteData] = useState<any>(null);
+  const [loadingCliente, setLoadingCliente] = useState(false);
+
   // AlertDialog
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{
@@ -107,24 +145,110 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     }
     if (isOpen && activeTab === 'Kanban') {
       carregarUsuarios();
+      carregarTasks();
+    }
+    if (isOpen && activeTab === 'Materiais' && projeto.orcamento?.id) {
+      carregarOrcamentoCompleto();
+    }
+    if (isOpen && activeTab === 'Visão Geral' && projeto.orcamento?.id) {
+      carregarOrcamentoCompleto();
+    }
+    if (isOpen && activeTab === 'Visão Geral') {
+      carregarObraVinculada();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, activeTab, projeto?.id]);
 
   async function carregarUsuarios() {
     try {
-      const response = await axiosApiService.get('/api/configuracoes/usuarios');
-      const todosUsuarios = response.data || response || [];
-      // Filtrar apenas roles técnicas: admin, gerente, engenheiro, orcamentista
+      const response = await axiosApiService.get<any[]>('/api/configuracoes/usuarios');
+      const todosUsuarios = (response.success && response.data) ? response.data : [];
+      // Filtrar apenas roles: admin, desenvolvedor, gerente, tecnico, engenheiro
       const usuariosFiltrados = Array.isArray(todosUsuarios) 
         ? todosUsuarios.filter((u: any) => 
-            ['admin', 'gerente', 'engenheiro', 'orcamentista'].includes(u.role?.toLowerCase())
+            ['admin', 'desenvolvedor', 'gerente', 'tecnico', 'engenheiro'].includes(u.role?.toLowerCase())
           )
         : [];
       setUsuariosDisponiveis(usuariosFiltrados);
-      console.log('👥 Usuários técnicos carregados:', usuariosFiltrados.length);
+      console.log('👥 Usuários carregados:', usuariosFiltrados.length, usuariosFiltrados);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
+      setUsuariosDisponiveis([]);
+    }
+  }
+
+  async function carregarTasks() {
+    try {
+      const response = await axiosApiService.get<any[]>(`/api/projetos/${projeto.id}/tasks`);
+      if (response.success && response.data && Array.isArray(response.data)) {
+        // Mapear tasks do backend para o formato do frontend
+        const tasksFormatadas: Task[] = response.data.map((t: any) => ({
+          id: t.id,
+          titulo: t.titulo,
+          descricao: t.descricao || '',
+          status: t.status === 'ToDo' ? 'A Fazer' : t.status === 'Doing' ? 'Em Andamento' : 'Concluído',
+          prazo: t.prazo ? new Date(t.prazo).toISOString().split('T')[0] : '',
+          responsavelId: t.responsavel || '',
+          responsavelNome: t.responsavel || ''
+        }));
+        setTasks(tasksFormatadas);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar tasks:', error);
+      setTasks([]);
+    }
+  }
+
+  async function carregarOrcamentoCompleto() {
+    if (!projeto.orcamento?.id) return;
+    try {
+      setLoadingOrcamento(true);
+      const response = await axiosApiService.get<any>(`/api/orcamentos/${projeto.orcamento.id}`);
+      if (response.success && response.data) {
+        setOrcamentoCompleto(response.data);
+        // Buscar venda vinculada ao orçamento
+        if (response.data.vendaId) {
+          setVendaVinculada({ id: response.data.vendaId });
+        } else {
+          // Tentar buscar venda pelo orcamentoId
+          try {
+            const vendasResponse = await axiosApiService.get<any>(`/api/vendas?orcamentoId=${projeto.orcamento.id}`);
+            if (vendasResponse.success && vendasResponse.data) {
+              // Verificar se é array ou objeto único
+              const vendas = Array.isArray(vendasResponse.data) ? vendasResponse.data : [vendasResponse.data];
+              if (vendas.length > 0) {
+                setVendaVinculada({ id: vendas[0].id });
+              }
+            }
+          } catch (err) {
+            console.log('Nenhuma venda encontrada para este orçamento');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar orçamento completo:', error);
+    } finally {
+      setLoadingOrcamento(false);
+    }
+  }
+
+  async function carregarObraVinculada() {
+    try {
+      setLoadingObra(true);
+      const response = await axiosApiService.get<any>(`/api/obras/projeto/${projeto.id}`);
+      if (response.success && response.data) {
+        setObraVinculada({ 
+          id: response.data.id, 
+          nome: response.data.nome || response.data.nomeObra || 'Obra vinculada'
+        });
+      } else {
+        setObraVinculada(null);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar obra vinculada:', error);
+      setObraVinculada(null);
+    } finally {
+      setLoadingObra(false);
     }
   }
 
@@ -137,11 +261,32 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
         setEtapasResp(res.data);
       } else {
         setErroEtapas('Falha ao carregar etapas');
+        setEtapasResp(null);
       }
     } catch (e) {
       setErroEtapas('Erro ao carregar etapas');
+      setEtapasResp(null);
     } finally {
       setLoadingEtapas(false);
+    }
+  }
+
+  async function carregarCliente() {
+    if (!projeto.cliente?.id) return;
+    try {
+      setLoadingCliente(true);
+      const response = await axiosApiService.get<any>(`/api/clientes/${projeto.cliente.id}`);
+      if (response.success && response.data) {
+        setClienteData(response.data);
+        setClienteModalOpen(true);
+      } else {
+        toast.error('❌ Erro ao carregar dados do cliente');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cliente:', error);
+      toast.error('❌ Erro ao carregar dados do cliente');
+    } finally {
+      setLoadingCliente(false);
     }
   }
 
@@ -337,59 +482,101 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     setTaskModalOpen(true);
   }
 
-  function handleSalvarTask() {
+  async function handleSalvarTask() {
     if (!taskForm.titulo || !taskForm.descricao || !taskForm.prazo) {
       toast.error('❌ Preencha todos os campos obrigatórios');
       return;
     }
 
     const usuario = usuariosDisponiveis.find(u => u.id === taskForm.responsavelId);
+    
+    // Mapear status do frontend para o backend
+    const statusBackend = taskForm.status === 'A Fazer' ? 'ToDo' : taskForm.status === 'Em Andamento' ? 'Doing' : 'Done';
 
-    if (taskEditando) {
-      // Editar task existente
-      setTasks(prev => prev.map(t => 
-        t.id === taskEditando.id 
-          ? { 
-              ...t, 
-              titulo: taskForm.titulo, 
-              descricao: taskForm.descricao, 
-              prazo: taskForm.prazo,
-              responsavelId: taskForm.responsavelId,
-              responsavelNome: usuario?.nome || '',
-              status: taskForm.status
-            }
-          : t
-      ));
-    } else {
-      // Criar nova task
-      const novaTask: Task = {
-        id: Date.now().toString(),
-        titulo: taskForm.titulo,
-        descricao: taskForm.descricao,
-        prazo: taskForm.prazo,
-        responsavelId: taskForm.responsavelId,
-        responsavelNome: usuario?.nome || '',
-        status: taskForm.status
-      };
-      setTasks(prev => [...prev, novaTask]);
+    try {
+      if (taskEditando) {
+        // Editar task existente
+        const response = await axiosApiService.put(`/api/projetos/${projeto.id}/tasks/${taskEditando.id}`, {
+          titulo: taskForm.titulo,
+          descricao: taskForm.descricao,
+          prazo: taskForm.prazo,
+          status: statusBackend,
+          responsavel: taskForm.responsavelId || null
+        });
+
+        if (response.success) {
+          toast.success('✅ Tarefa atualizada com sucesso!');
+          await carregarTasks(); // Recarregar tasks do backend
+        } else {
+          toast.error('❌ Erro ao atualizar tarefa');
+        }
+      } else {
+        // Criar nova task
+        const response = await axiosApiService.post(`/api/projetos/${projeto.id}/tasks`, {
+          titulo: taskForm.titulo,
+          descricao: taskForm.descricao,
+          prazo: taskForm.prazo,
+          status: statusBackend,
+          responsavel: taskForm.responsavelId || null
+        });
+
+        if (response.success) {
+          toast.success('✅ Tarefa criada com sucesso!');
+          await carregarTasks(); // Recarregar tasks do backend
+        } else {
+          toast.error('❌ Erro ao criar tarefa');
+        }
+      }
+
+      setTaskModalOpen(false);
+      setTaskEditando(null);
+      setTaskForm({ titulo: '', descricao: '', prazo: '', responsavelId: '', status: 'A Fazer' });
+    } catch (error: any) {
+      console.error('Erro ao salvar task:', error);
+      toast.error('❌ Erro ao salvar tarefa: ' + (error.message || 'Erro desconhecido'));
     }
-
-    setTaskModalOpen(false);
-    setTaskEditando(null);
-    setTaskForm({ titulo: '', descricao: '', prazo: '', responsavelId: '', status: 'A Fazer' });
   }
 
-  function handleMoverTask(taskId: string, novoStatus: 'A Fazer' | 'Em Andamento' | 'Concluído') {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: novoStatus } : t));
+  async function handleMoverTask(taskId: string, novoStatus: 'A Fazer' | 'Em Andamento' | 'Concluído') {
+    // Mapear status do frontend para o backend
+    const statusBackend = novoStatus === 'A Fazer' ? 'ToDo' : novoStatus === 'Em Andamento' ? 'Doing' : 'Done';
+    
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const response = await axiosApiService.put(`/api/projetos/${projeto.id}/tasks/${taskId}`, {
+        status: statusBackend
+      });
+
+      if (response.success) {
+        await carregarTasks(); // Recarregar tasks do backend
+      } else {
+        toast.error('❌ Erro ao mover tarefa');
+      }
+    } catch (error: any) {
+      console.error('Erro ao mover task:', error);
+      toast.error('❌ Erro ao mover tarefa: ' + (error.message || 'Erro desconhecido'));
+    }
   }
 
   function handleExcluirTask(taskId: string) {
     setAlertConfig({
       title: '🗑️ Excluir Tarefa',
       description: 'Deseja realmente excluir esta tarefa? Esta ação não pode ser desfeita.',
-      onConfirm: () => {
-        setTasks(prev => prev.filter(t => t.id !== taskId));
-        toast.success('✅ Tarefa excluída com sucesso!');
+      onConfirm: async () => {
+        try {
+          const response = await axiosApiService.delete(`/api/projetos/${projeto.id}/tasks/${taskId}`);
+          if (response.success) {
+            toast.success('✅ Tarefa excluída com sucesso!');
+            await carregarTasks(); // Recarregar tasks do backend
+          } else {
+            toast.error('❌ Erro ao excluir tarefa');
+          }
+        } catch (error: any) {
+          console.error('Erro ao excluir task:', error);
+          toast.error('❌ Erro ao excluir tarefa: ' + (error.message || 'Erro desconhecido'));
+        }
       }
     });
     setAlertOpen(true);
@@ -454,6 +641,39 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   }, [etapasResp, tasks, projeto.status]);
 
   async function handleIniciarObra() {
+    const materiaisProjeto = (orcamentoCompleto?.items || projeto.orcamento?.items || []) as OrcamentoItemRef[];
+    if (materiaisProjeto && materiaisProjeto.length > 0) {
+      const itensSemEstoque = materiaisProjeto.filter((item) => {
+        const quantidadeNecessaria = Number(item.quantidade ?? 0);
+        if (quantidadeNecessaria <= 0) return false;
+        const isBancoFrio = (item.tipo || '').toUpperCase() === 'COTACAO' || !!item.cotacao;
+        const possuiMaterialEstoque = !!item.material;
+        if (!isBancoFrio && !possuiMaterialEstoque) {
+          // Serviços, kits ou itens sem material associado não bloqueiam automaticamente
+          return false;
+        }
+        const estoqueDisponivel = Number(item.material?.estoque ?? 0);
+        return estoqueDisponivel < quantidadeNecessaria;
+      });
+
+      if (itensSemEstoque.length > 0) {
+        const resumoPendencias = itensSemEstoque
+          .slice(0, 4)
+          .map((pendente) => {
+            const nome = pendente.material?.nome || pendente.cotacao?.nome || pendente.kit?.nome || 'Item sem identificação';
+            const quantidade = Number(pendente.quantidade ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(Number(pendente.quantidade ?? 0)) ? 0 : 2 });
+            return `• ${nome} (Necessário: ${quantidade})`;
+          })
+          .join('\n');
+
+        toast.error('Materiais pendentes para iniciar a obra', {
+          description: `${resumoPendencias}${itensSemEstoque.length > 4 ? '\n• ...' : ''}\nRegularize o estoque para liberar a etapa de obras.`,
+        });
+        setActiveTab('Materiais');
+        return;
+      }
+    }
+
     setAlertConfig({
       title: '🚀 Iniciar Obra',
       description: 'Deseja iniciar a obra? Isso criará automaticamente uma nova entrada no Kanban de Obras na etapa Backlog.',
@@ -510,7 +730,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
       <div className="w-full max-w-7xl bg-white dark:bg-dark-card rounded-2xl shadow-strong overflow-hidden max-h-[95vh] flex flex-col">
         {/* Header */}
-        <div className="relative p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-indigo-600">
+        <div className="relative p-6 border-b border-gray-200 dark:border-dark-border" style={{ backgroundColor: '#0a1a2f' }}>
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-medium">
               <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -570,23 +790,6 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                     </div>
                     <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{projeto.status}</p>
                   </div>
-
-                  {/* Valor Total */}
-                  {projeto.valorTotal != null && (
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-2 border-green-200 dark:border-green-800 rounded-2xl p-6 shadow-soft">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-lg bg-green-600 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Valor Total</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                        R$ {projeto.valorTotal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  )}
 
                   {/* Data de Criação */}
                   {projeto.createdAt && (
@@ -754,6 +957,9 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                             if (onViewBudget) {
                               onViewBudget(projeto.orcamento!.id);
                               onClose(); // Fechar o modal atual
+                            } else if (onNavigate) {
+                              onNavigate('Orçamentos');
+                              onClose(); // Fechar modal
                             } else {
                               toast.info('📋 Navegando para orçamento...');
                             }
@@ -772,16 +978,75 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           </svg>
                         </button>
                       )}
+                      {vendaVinculada && vendaVinculada.id && (
+                        <button
+                          onClick={() => {
+                            if (onViewSale && vendaVinculada.id) {
+                              onViewSale(vendaVinculada.id);
+                              onClose(); // Fechar modal
+                            } else if (onNavigate) {
+                              onNavigate('Vendas');
+                              onClose(); // Fechar modal
+                            } else {
+                              toast.info('📋 Navegando para página de vendas...');
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all text-left"
+                        >
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm">Venda Vinculada</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">Ver detalhes da venda</p>
+                          </div>
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      )}
+                      {obraVinculada && obraVinculada.id && (
+                        <button
+                          onClick={() => {
+                            if (onViewObra && obraVinculada.id) {
+                              onViewObra(obraVinculada.id);
+                              onClose(); // Fechar modal
+                            } else if (onNavigate) {
+                              onNavigate('DetalhesObra', obraVinculada.id);
+                              onClose(); // Fechar modal
+                            } else {
+                              toast.info('🏗️ Navegando para obra...');
+                            }
+                          }}
+                          disabled={loadingObra}
+                          className="w-full flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5-3H12M8.25 9h7.5" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm">Obra Vinculada</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">{obraVinculada.nome || 'Ver detalhes da obra'}</p>
+                          </div>
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         onClick={() => {
-                          if (onNavigate) {
+                          if (onViewClient && projeto.cliente?.id) {
+                            onViewClient(projeto.cliente.id);
+                            onClose(); // Fechar modal
+                          } else if (onNavigate) {
                             onNavigate('Clientes');
                             onClose(); // Fechar modal
                           } else {
-                            toast.info('📋 Navegando para página do cliente...');
+                            carregarCliente();
                           }
                         }}
-                        className="w-full flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
+                        disabled={loadingCliente}
+                        className="w-full flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -971,39 +1236,98 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                     <thead className="bg-gray-50 dark:bg-dark-bg border-b-2 border-gray-200 dark:border-dark-border">
                       <tr>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Item</th>
-                        <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">SKU</th>
+                        <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">SKU / NCM</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Quantidade</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Subtotal</th>
+                        <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Disponibilidade</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Alocação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                      {projeto.orcamento?.items?.map((i, idx) => (
-                        <tr key={i.id} className="border-t border-gray-200 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium">
-                            {i.material?.nome || i.kit?.nome || '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                            {i.material?.sku || '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                            {i.quantidade ?? '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
-                            {i.subtotal != null ? `R$ ${i.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            <select className="px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-dark-bg dark:text-white">
-                            <option>Não alocado</option>
-                            <option>Reservar do estoque</option>
-                            <option>Solicitar compra</option>
-                          </select>
-                        </td>
                       </tr>
-                    ))}
-                      {(!projeto.orcamento?.items || projeto.orcamento.items.length === 0) && (
+                    </thead>
+                    <tbody>
+                      {loadingOrcamento ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                              <p className="font-medium">Carregando materiais...</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : ((orcamentoCompleto?.items || projeto.orcamento?.items || []) as OrcamentoItemRef[]).map((item, idx) => {
+                        const nomeMaterial = item.material?.nome || item.kit?.nome || item.servico?.nome || item.cotacao?.nome || item.descricao || 'Item sem identificação';
+                        const skuDisplay = item.material?.sku || item.cotacao?.ncm || '-';
+                        const quantidadeNecessariaRaw = Number(item.quantidade ?? 0);
+                        const quantidadeNecessaria = Number.isFinite(quantidadeNecessariaRaw) ? quantidadeNecessariaRaw : 0;
+                        const quantidadeFormatada = quantidadeNecessaria.toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(quantidadeNecessaria) ? 0 : 2 });
+                        const estoqueDisponivelRaw = Number(item.material?.estoque ?? 0);
+                        const estoqueDisponivel = Number.isFinite(estoqueDisponivelRaw) ? estoqueDisponivelRaw : 0;
+                        const estoqueFormatado = estoqueDisponivel.toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(estoqueDisponivel) ? 0 : 2 });
+                        const isBancoFrio = (item.tipo || '').toUpperCase() === 'COTACAO' || !!item.cotacao;
+                        const possuiEstoque = quantidadeNecessaria <= 0 ? estoqueDisponivel > 0 : estoqueDisponivel >= quantidadeNecessaria;
+                        const dataCotacao = item.cotacao?.dataAtualizacao ? new Date(item.cotacao.dataAtualizacao).toLocaleDateString('pt-BR') : null;
+                        const rowClasses = `border-t border-gray-200 dark:border-dark-border transition-colors ${
+                          possuiEstoque ? 'hover:bg-gray-50 dark:hover:bg-dark-hover' : 'bg-red-50/60 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20'
+                        }`;
+
+                        return (
+                          <tr key={item.id || idx} className={rowClasses}>
+                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-semibold align-top">
+                              <div>{nomeMaterial}</div>
+                              <div className="mt-1 space-y-1 text-xs font-normal text-gray-500 dark:text-gray-400">
+                                {isBancoFrio && (
+                                  <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-900/20 dark:text-purple-200 dark:border-purple-800">
+                                    <span>Banco Frio</span>
+                                    {dataCotacao && <span>• {dataCotacao}</span>}
+                                  </div>
+                                )}
+                                {item.cotacao?.fornecedorNome && (
+                                  <p>Fornecedor: {item.cotacao.fornecedorNome}</p>
+                                )}
+                                {item.descricao && (
+                                  <p className="italic text-[11px] text-gray-400 dark:text-gray-500">{item.descricao}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 align-top">
+                              {skuDisplay}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white align-top">
+                              {quantidadeNecessaria > 0 ? quantidadeFormatada : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-semibold text-green-600 dark:text-green-400 align-top">
+                              {item.subtotal != null ? `R$ ${item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm align-top">
+                              <div className={`flex items-center gap-2 font-semibold ${possuiEstoque ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {possuiEstoque ? '✅ Em estoque' : '⚠️ Comprar / receber'}
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Necessário: {quantidadeNecessaria > 0 ? quantidadeFormatada : '0'} • Disponível: {estoqueFormatado}
+                              </p>
+                              {!possuiEstoque && isBancoFrio && (
+                                <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">
+                                  Item proveniente do banco frio. Finalize a compra e receba no estoque.
+                                </p>
+                              )}
+                              {!possuiEstoque && !isBancoFrio && (
+                                <p className="text-xs text-red-500 dark:text-red-300 mt-1">
+                                  Estoque insuficiente. Regularize antes de iniciar a obra.
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm align-top">
+                              <select className="px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-dark-bg dark:text-white">
+                                <option>Não alocado</option>
+                                <option>Reservar do estoque</option>
+                                <option>Solicitar compra</option>
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!loadingOrcamento && (!orcamentoCompleto?.items || orcamentoCompleto.items.length === 0) && (!projeto.orcamento?.items || projeto.orcamento.items.length === 0) && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                             <div className="flex flex-col items-center gap-2">
                               <svg className="w-12 h-12 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -1013,9 +1337,9 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                           </td>
                         </tr>
                       )}
-                  </tbody>
-                </table>
-              </div>
+                    </tbody>
+                  </table>
+                </div>
             </div>
           )}
 
@@ -1063,8 +1387,10 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                 )}
 
                 {!loadingEtapas && !erroEtapas && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {etapasResp?.etapas.map((etapa) => {
+                  <>
+                    {etapasResp?.etapas && etapasResp.etapas.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {etapasResp.etapas.map((etapa) => {
                   const atrasada = etapa.atrasada;
                       const realizada = etapa.concluida;
                       const tempoDecorrido = calcularTempoDecorrido(etapa.createdAt || etapa.dataPrevista);
@@ -1166,18 +1492,20 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                       </div>
                     </div>
                   );
-                })}
-                    {(!etapasResp?.etapas || etapasResp.etapas.length === 0) && (
-                      <div className="col-span-3 text-center py-12">
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
                         <div className="w-16 h-16 bg-gray-100 dark:bg-dark-bg rounded-full flex items-center justify-center mx-auto mb-4">
                           <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
-              </div>
+                        </div>
                         <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma etapa administrativa cadastrada</p>
+                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Clique em "Criar Etapa" para adicionar uma nova etapa</p>
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
             </div>
           )}
@@ -1733,10 +2061,10 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
                       onChange={(e) => setTaskForm({ ...taskForm, responsavelId: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-xl focus:ring-2 focus:ring-blue-500 dark:bg-dark-bg dark:text-white"
                     >
-                      <option value="">Selecione um técnico</option>
+                      <option value="">Selecione um responsável</option>
                       {usuariosDisponiveis.map(usuario => (
                         <option key={usuario.id} value={usuario.id}>
-                          {usuario.nome} - {usuario.funcao || 'Técnico'}
+                          {usuario.name || usuario.nome} - {usuario.role || usuario.funcao || 'Usuário'}
                         </option>
                       ))}
                     </select>
@@ -2043,6 +2371,105 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
         )}
 
         {/* AlertDialog para Confirmações */}
+        {/* Modal de Visualização de Cliente */}
+        {clienteModalOpen && clienteData && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="w-full max-w-3xl bg-white dark:bg-dark-card rounded-2xl shadow-strong overflow-hidden max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="relative px-6 py-4 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-green-600 to-green-700">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold text-white">{clienteData.nome}</h2>
+                    <p className="text-sm text-white/80 mt-1">{clienteData.cpfCnpj || 'Documento não informado'}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setClienteModalOpen(false);
+                    setClienteData(null);
+                  }}
+                  className="absolute top-4 right-4 p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">Tipo</h3>
+                    <p className="text-gray-900 dark:text-white font-medium">{clienteData.tipo || 'Não informado'}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">Email</h3>
+                    <p className="text-gray-900 dark:text-white font-medium">{clienteData.email || 'Não informado'}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">Telefone</h3>
+                    <p className="text-gray-900 dark:text-white font-medium">{clienteData.telefone || 'Não informado'}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">Cidade/Estado</h3>
+                    <p className="text-gray-900 dark:text-white font-medium">
+                      {clienteData.cidade && clienteData.estado 
+                        ? `${clienteData.cidade}/${clienteData.estado}` 
+                        : 'Não informado'}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">Endereço</h3>
+                    <p className="text-gray-900 dark:text-white font-medium">{clienteData.endereco || 'Não informado'}</p>
+                  </div>
+                  {clienteData.cep && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">CEP</h3>
+                      <p className="text-gray-900 dark:text-white font-medium">{clienteData.cep}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Orçamentos */}
+                {clienteData.orcamentos && clienteData.orcamentos.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-border">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Orçamentos ({clienteData.orcamentos.length})</h3>
+                    <div className="space-y-2">
+                      {clienteData.orcamentos.slice(0, 5).map((orc: any) => (
+                        <div key={orc.id} className="p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">Orçamento #{orc.id.slice(0, 8)}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Status: {orc.status}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Projetos */}
+                {clienteData.projetos && clienteData.projetos.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-border">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Projetos ({clienteData.projetos.length})</h3>
+                    <div className="space-y-2">
+                      {clienteData.projetos.slice(0, 5).map((proj: any) => (
+                        <div key={proj.id} className="p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{proj.titulo}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Status: {proj.status}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
