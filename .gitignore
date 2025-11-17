@@ -10,7 +10,13 @@ build/
 
 # Environment files
 .env
+.env.*
+.env.local
+.env.development
 .env.production
+.env.producao
+.env.prod
+!.env.example
 
 # IDE
 .vscode/

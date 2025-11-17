@@ -38,13 +38,24 @@ export const buscarKitPorId = async (req: Request, res: Response) => {
 
 export const criarKit = async (req: Request, res: Response) => {
     try {
-        const { nome, descricao, tipo, preco, items } = req.body;
+        const { nome, descricao, tipo, preco, items, itensBancoFrio, temItensCotacao } = req.body;
         
-        // Validações
-        if (!nome || !tipo || !preco || !items || items.length === 0) {
+        // Validações - permitir criar kit mesmo sem itens de estoque real se tiver itens do banco frio
+        if (!nome || !tipo || !preco) {
             return res.status(400).json({
                 success: false,
-                error: 'Nome, tipo, preço e itens são obrigatórios'
+                error: 'Nome, tipo e preço são obrigatórios'
+            });
+        }
+
+        // Validar que tem pelo menos itens de estoque OU itens do banco frio
+        const temItensEstoque = items && items.length > 0;
+        const temItensBancoFrio = itensBancoFrio && itensBancoFrio.length > 0;
+        
+        if (!temItensEstoque && !temItensBancoFrio) {
+            return res.status(400).json({
+                success: false,
+                error: 'O kit deve ter pelo menos um item (estoque real ou banco frio)'
             });
         }
 
@@ -53,7 +64,9 @@ export const criarKit = async (req: Request, res: Response) => {
             descricao,
             tipo,
             preco,
-            items
+            items: items || [],
+            itensBancoFrio: itensBancoFrio || [],
+            temItensCotacao: temItensCotacao || false
         });
 
         return res.status(201).json({ 
@@ -73,7 +86,20 @@ export const criarKit = async (req: Request, res: Response) => {
 export const atualizarKit = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { nome, descricao, tipo, preco, items, ativo } = req.body;
+        const { nome, descricao, tipo, preco, items, ativo, itensBancoFrio, temItensCotacao } = req.body;
+
+        // Validar que tem pelo menos itens de estoque OU itens do banco frio (se items foi fornecido)
+        if (items !== undefined || itensBancoFrio !== undefined) {
+            const temItensEstoque = items && items.length > 0;
+            const temItensBancoFrio = itensBancoFrio && itensBancoFrio.length > 0;
+            
+            if (!temItensEstoque && !temItensBancoFrio) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'O kit deve ter pelo menos um item (estoque real ou banco frio)'
+                });
+            }
+        }
 
         const kit = await KitsService.atualizar(id, {
             nome,
@@ -81,7 +107,9 @@ export const atualizarKit = async (req: Request, res: Response) => {
             tipo,
             preco,
             items,
-            ativo
+            ativo,
+            itensBancoFrio: itensBancoFrio || [],
+            temItensCotacao: temItensCotacao !== undefined ? temItensCotacao : undefined
         });
 
         return res.json({ 

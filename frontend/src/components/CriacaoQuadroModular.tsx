@@ -158,7 +158,8 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                     .map((cotacao: any) => ({
                         id: `cotacao_${cotacao.id}`,
                         nome: cotacao.nome || 'Item da Cotação',
-                        preco: cotacao.valorUnitario || 0,
+                        preco: cotacao.valorUnitario || 0, // Preço de cotação (valorUnitario)
+                        valorVenda: cotacao.valorVenda || cotacao.valorUnitario * 1.4, // Valor de venda (padrão 40% acima)
                         estoque: 0, // Cotações não têm estoque físico
                         unidadeMedida: 'un',
                         _isCotacao: true,
@@ -195,17 +196,24 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
     };
 
     // Função helper para filtrar materiais por termo de busca
+    // IMPORTANTE: Agora retorna AMBOS os arrays combinados para permitir seleção de qualquer fonte
     const filtrarMateriais = (searchTerm: string) => {
-        const fonte = fonteDados === 'ESTOQUE' ? materiais : cotacoes;
+        // Combinar materiais e cotações para permitir seleção de qualquer fonte
+        const todosItens = [
+            ...materiais.map(m => ({ ...m, _isCotacao: false })),
+            ...cotacoes.map(c => ({ ...c, _isCotacao: true }))
+        ];
         
         if (!searchTerm) {
-            return fonteDados === 'ESTOQUE' 
-                ? fonte.filter(m => m.estoque > 0) 
-                : fonte; // Cotações não precisam ter estoque
+            // Sem busca: retornar materiais com estoque + todas as cotações
+            return todosItens.filter(m => 
+                (m as any)._isCotacao || m.estoque > 0
+            );
         }
         
-        return fonte.filter(m => {
-            const temEstoque = fonteDados === 'COTACOES' || m.estoque > 0;
+        // Com busca: filtrar por nome ou ID
+        return todosItens.filter(m => {
+            const temEstoque = (m as any)._isCotacao || m.estoque > 0;
             return temEstoque &&
                 (m.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                  m.id.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -251,90 +259,190 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
         );
     }, [caixasDisponiveis, cotacoes, fonteDados, searchCaixaTerm]);
 
+    // Helper para buscar item em materiais ou cotações
+    const getItemById = (id: string): Material | null => {
+        if (!id) return null;
+        // Se o ID começa com 'cotacao_', buscar nas cotações
+        if (id.startsWith('cotacao_')) {
+            const cotacao = cotacoes.find(c => c.id === id);
+            return cotacao || null;
+        }
+        // Caso contrário, buscar em materiais
+        return materiais.find(m => m.id === id) || null;
+    };
+
+    // Helper para obter preço do item (considera valorVenda para cotações)
+    const getItemPrice = (item: Material | null): number => {
+        if (!item) return 0;
+        // Se for cotação, usar valorVenda se disponível, senão usar preco (valorUnitario)
+        if ((item as any)._isCotacao) {
+            // Para cotações, o preco já é o valorUnitario, mas podemos ter valorVenda
+            return (item as any).valorVenda || item.preco || 0;
+        }
+        // Para materiais, usar preco (ou valorVenda se disponível)
+        return (item as any).valorVenda || item.preco || 0;
+    };
+
+    // Helper para renderizar item na lista de busca (com indicação de estoque/banco frio)
+    const renderItemInList = (material: Material, onClick: () => void, size: 'sm' | 'md' = 'md') => {
+        const isCotacao = (material as any)._isCotacao;
+        const precoVenda = getItemPrice(material);
+        const padding = size === 'sm' ? 'p-3' : 'p-4';
+        const textSize = size === 'sm' ? 'text-sm' : 'text-base';
+        const textSizeSmall = size === 'sm' ? 'text-xs' : 'text-sm';
+        
+        return (
+            <div
+                key={material.id}
+                className={`${padding} hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0 ${
+                    isCotacao ? 'bg-blue-50/50' : ''
+                }`}
+                onClick={onClick}
+            >
+                <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className={`font-semibold text-gray-900 ${textSize}`}>{material.nome}</p>
+                        {isCotacao && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                ❄️ Banco Frio
+                            </span>
+                        )}
+                    </div>
+                    <p className={`${textSizeSmall} text-gray-600`}>
+                        {isCotacao ? (
+                            <>
+                                <span className="text-gray-500 line-through mr-2">
+                                    Cotação: R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                                <span className="font-semibold text-blue-700">
+                                    Venda: R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                Estoque: {material.estoque} {material.unidadeMedida} • R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </>
+                        )}
+                    </p>
+                </div>
+                <PlusIcon className="w-5 h-5 text-blue-600" />
+            </div>
+        );
+    };
+
     const valorTotal = useMemo(() => {
         let total = 0;
         
         // Caixas
         config.caixas.forEach(item => {
-            const material = materiais.find(m => m.id === item.materialId);
-            if (material) total += material.preco * item.quantidade;
+            const material = getItemById(item.materialId);
+            if (material) {
+                const preco = getItemPrice(material);
+                total += preco * item.quantidade;
+            }
         });
         
         // Disjuntor Geral
         if (config.disjuntorGeral) {
-            const material = materiais.find(m => m.id === config.disjuntorGeral!.materialId);
-            if (material) total += material.preco * config.disjuntorGeral.quantidade;
+            const material = getItemById(config.disjuntorGeral.materialId);
+            if (material) {
+                const preco = getItemPrice(material);
+                total += preco * config.disjuntorGeral.quantidade;
+            }
         }
         
         // Barramento
         if (config.barramento) {
-            const material = materiais.find(m => m.id === config.barramento!.materialId);
-            if (material) total += material.preco * config.barramento.quantidade;
+            const material = getItemById(config.barramento.materialId);
+            if (material) {
+                const preco = getItemPrice(material);
+                total += preco * config.barramento.quantidade;
+            }
         }
         
         // Medidores
         config.medidores.forEach(item => {
-            const materialDisjuntor = materiais.find(m => m.id === item.disjuntorId);
-            if (materialDisjuntor) total += materialDisjuntor.preco * item.quantidade;
+            const materialDisjuntor = getItemById(item.disjuntorId);
+            if (materialDisjuntor) {
+                const preco = getItemPrice(materialDisjuntor);
+                total += preco * item.quantidade;
+            }
             
             if (item.medidorId) {
-                const materialMedidor = materiais.find(m => m.id === item.medidorId);
-                if (materialMedidor) total += materialMedidor.preco * item.quantidade;
+                const materialMedidor = getItemById(item.medidorId);
+                if (materialMedidor) {
+                    const preco = getItemPrice(materialMedidor);
+                    total += preco * item.quantidade;
+                }
             }
         });
         
         // Cabos
         config.cabos.forEach(item => {
-            const material = materiais.find(m => m.id === item.materialId);
+            const material = getItemById(item.materialId);
             if (material) {
+                const preco = getItemPrice(material);
                 const qtd = item.unidade === 'CM' ? item.quantidade / 100 : item.quantidade;
-                total += material.preco * qtd;
+                total += preco * qtd;
             }
         });
         
         // DPS
         if (config.dps) {
             config.dps.items.forEach(item => {
-                const material = materiais.find(m => m.id === item.materialId);
-                if (material) total += material.preco * item.quantidade;
+                const material = getItemById(item.materialId);
+                if (material) {
+                    const preco = getItemPrice(material);
+                    total += preco * item.quantidade;
+                }
             });
         }
         
         // Born
         if (config.born) {
             config.born.forEach(item => {
-                const material = materiais.find(m => m.id === item.materialId);
-                if (material) total += material.preco * item.quantidade;
+                const material = getItemById(item.materialId);
+                if (material) {
+                    const preco = getItemPrice(material);
+                    total += preco * item.quantidade;
+                }
             });
         }
         
         // Parafusos
         if (config.parafusos) {
             config.parafusos.forEach(item => {
-                const material = materiais.find(m => m.id === item.materialId);
-                if (material) total += material.preco * item.quantidade;
+                const material = getItemById(item.materialId);
+                if (material) {
+                    const preco = getItemPrice(material);
+                    total += preco * item.quantidade;
+                }
             });
         }
         
         // Trilhos
         if (config.trilhos) {
             config.trilhos.forEach(item => {
-                const material = materiais.find(m => m.id === item.materialId);
+                const material = getItemById(item.materialId);
                 if (material) {
+                    const preco = getItemPrice(material);
                     const qtd = item.unidade === 'CM' ? item.quantidade / 100 : item.quantidade;
-                    total += material.preco * qtd;
+                    total += preco * qtd;
                 }
             });
         }
         
         // Componentes
         config.componentes.forEach(item => {
-            const material = materiais.find(m => m.id === item.materialId);
-            if (material) total += material.preco * item.quantidade;
+            const material = getItemById(item.materialId);
+            if (material) {
+                const preco = getItemPrice(material);
+                total += preco * item.quantidade;
+            }
         });
         
         return total;
-    }, [config, materiais]);
+    }, [config, materiais, cotacoes]);
 
     // Helper para abrir diálogo de quantidade
     const abrirDialogoQuantidade = (material: Material, onConfirm: (qty: number) => void) => {
@@ -602,32 +710,58 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                     placeholder="Buscar material por nome ou código..."
                                     value={searchCaixaTerm}
                                     onChange={(e) => setSearchCaixaTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             
                             {/* Lista de materiais filtrados */}
                             {searchCaixaTerm && caixasMateriaisFiltrados.length > 0 && (
                                 <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-xl">
-                                    {caixasMateriaisFiltrados.slice(0, 10).map(material => (
-                                        <div
-                                            key={material.id}
-                                            className="p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0"
-                                            onClick={() => {
-                                                abrirDialogoQuantidade(material, (qty) => {
-                                                    handleAddCaixa(material.id, qty);
-                                                });
-                                            }}
-                                        >
-                                            <div>
-                                                <p className="font-semibold text-gray-900">{material.nome}</p>
-                                                <p className="text-sm text-gray-600">
-                                                    Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                </p>
+                                    {caixasMateriaisFiltrados.slice(0, 10).map(material => {
+                                        const isCotacao = (material as any)._isCotacao;
+                                        const precoVenda = getItemPrice(material);
+                                        return (
+                                            <div
+                                                key={material.id}
+                                                className={`p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0 ${
+                                                    isCotacao ? 'bg-blue-50/50' : ''
+                                                }`}
+                                                onClick={() => {
+                                                    abrirDialogoQuantidade(material, (qty) => {
+                                                        handleAddCaixa(material.id, qty);
+                                                    });
+                                                }}
+                                            >
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <p className="font-semibold text-gray-900">{material.nome}</p>
+                                                        {isCotacao && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                ❄️ Banco Frio
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-gray-600">
+                                                        {isCotacao ? (
+                                                            <>
+                                                                <span className="text-gray-500 line-through mr-2">
+                                                                    Cotação: R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                                <span className="font-semibold text-blue-700">
+                                                                    Venda: R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                Estoque: {material.estoque} {material.unidadeMedida} • R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                                <PlusIcon className="w-5 h-5 text-blue-600" />
                                             </div>
-                                            <PlusIcon className="w-5 h-5 text-purple-600" />
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                             
@@ -639,18 +773,29 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 ) : (
                                     <div className="space-y-2">
                                         {config.caixas.map((item, index) => {
-                                            const material = materiais.find(m => m.id === item.materialId);
+                                            const material = getItemById(item.materialId);
+                                            const preco = getItemPrice(material);
+                                            const isCotacao = material && (material as any)._isCotacao;
                                             return (
-                                                <div key={index} className="flex justify-between items-center bg-purple-50 border border-purple-200 p-3 rounded-lg">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                <div key={index} className={`flex justify-between items-center border p-3 rounded-lg ${
+                                                    isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200'
+                                                }`}>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                            {isCotacao && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                    ❄️ Banco Frio
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-sm text-gray-600">
-                                                            Qtd: {item.quantidade} • Subtotal: R$ {((material?.preco || 0) * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            Qtd: {item.quantidade} • Subtotal: R$ {(preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </p>
                                                     </div>
                                                     <button
                                                         onClick={() => handleRemoveCaixa(index)}
-                                                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
                                                     >
                                                         <TrashIcon className="w-5 h-5" />
                                                     </button>
@@ -666,7 +811,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                     // NOVO FLUXO: Alumínio ou Comando (caixa única de estoque)
                     return (
                         <div className="space-y-4">
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
+                            <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
                                 <h3 className="text-xl font-bold text-gray-800">
                                     Etapa 1: Seleção da Caixa de Estoque
                                 </h3>
@@ -681,7 +826,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             {/* Loading state */}
                             {isLoadingCaixas && (
                                 <div className="text-center py-8">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                                     <p className="text-gray-600 mt-3">Carregando caixas disponíveis...</p>
                                 </div>
                             )}
@@ -848,24 +993,38 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                         <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
                             <h4 className="font-semibold text-gray-800 mb-3">Disjuntor Geral</h4>
                             
-                            {config.disjuntorGeral ? (
-                                <div className="flex justify-between items-center bg-green-50 border border-green-200 p-3 rounded-lg">
-                                    <div>
-                                        <p className="font-semibold text-gray-900">
-                                            {materiais.find(m => m.id === config.disjuntorGeral?.materialId)?.nome || 'Material não encontrado'}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                            Qtd: {config.disjuntorGeral.quantidade} • Subtotal: R$ {((materiais.find(m => m.id === config.disjuntorGeral?.materialId)?.preco || 0) * config.disjuntorGeral.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </p>
+                            {config.disjuntorGeral ? (() => {
+                                const material = getItemById(config.disjuntorGeral.materialId);
+                                const preco = getItemPrice(material);
+                                const isCotacao = material && (material as any)._isCotacao;
+                                return (
+                                    <div className={`flex justify-between items-center border p-3 rounded-lg ${
+                                        isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'
+                                    }`}>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-semibold text-gray-900">
+                                                    {material?.nome || 'Material não encontrado'}
+                                                </p>
+                                                {isCotacao && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                        ❄️ Banco Frio
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-sm text-gray-600">
+                                                Qtd: {config.disjuntorGeral.quantidade} • Subtotal: R$ {(preco * config.disjuntorGeral.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setConfig(prev => ({ ...prev, disjuntorGeral: undefined }))}
+                                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => setConfig(prev => ({ ...prev, disjuntorGeral: undefined }))}
-                                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                    >
-                                        <TrashIcon className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            ) : (
+                                );
+                            })() : (
                                 <>
                                     <div className="relative mb-3">
                                         <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -874,32 +1033,24 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                             placeholder="Buscar disjuntor geral..."
                                             value={searchDisjuntorTerm}
                                             onChange={(e) => setSearchDisjuntorTerm(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                                         />
                                     </div>
                                     
                                     {searchDisjuntorTerm && disjuntoresFiltrados.length > 0 && (
                                         <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl">
-                                            {disjuntoresFiltrados.slice(0, 10).map(material => (
-                                                <div
-                                                    key={material.id}
-                                                    className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0"
-                                                    onClick={() => {
+                                            {disjuntoresFiltrados.slice(0, 10).map(material => 
+                                                renderItemInList(
+                                                    material,
+                                                    () => {
                                                         abrirDialogoQuantidade(material, (qty) => {
                                                             handleSetDisjuntorGeral(material.id, qty);
                                                             toast.success('Disjuntor geral adicionado!');
                                                         });
-                                                    }}
-                                                >
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 text-sm">{material.nome}</p>
-                                                        <p className="text-xs text-gray-600">
-                                                            Estoque: {material.estoque} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                        </p>
-                                                    </div>
-                                                    <PlusIcon className="w-5 h-5 text-purple-600" />
-                                                </div>
-                                            ))}
+                                                    },
+                                                    'sm'
+                                                )
+                                            )}
                                         </div>
                                     )}
                                 </>
@@ -910,24 +1061,38 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                         <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
                             <h4 className="font-semibold text-gray-800 mb-3">Barramento <span className="text-sm text-gray-500">(Opcional)</span></h4>
                             
-                            {config.barramento ? (
-                                <div className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-lg">
-                                    <div>
-                                        <p className="font-semibold text-gray-900">
-                                            {materiais.find(m => m.id === config.barramento?.materialId)?.nome || 'Material não encontrado'}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                            Qtd: {config.barramento.quantidade} • Subtotal: R$ {((materiais.find(m => m.id === config.barramento?.materialId)?.preco || 0) * config.barramento.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </p>
+                            {config.barramento ? (() => {
+                                const material = getItemById(config.barramento.materialId);
+                                const preco = getItemPrice(material);
+                                const isCotacao = material && (material as any)._isCotacao;
+                                return (
+                                    <div className={`flex justify-between items-center border p-3 rounded-lg ${
+                                        isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200'
+                                    }`}>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-semibold text-gray-900">
+                                                    {material?.nome || 'Material não encontrado'}
+                                                </p>
+                                                {isCotacao && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                        ❄️ Banco Frio
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-sm text-gray-600">
+                                                Qtd: {config.barramento.quantidade} • Subtotal: R$ {(preco * config.barramento.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setConfig(prev => ({ ...prev, barramento: undefined }))}
+                                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => setConfig(prev => ({ ...prev, barramento: undefined }))}
-                                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                    >
-                                        <TrashIcon className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            ) : (
+                                );
+                            })() : (
                                 <>
                                     <div className="relative mb-3">
                                         <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -936,32 +1101,24 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                             placeholder="Buscar barramento..."
                                             value={searchBarramentoTerm}
                                             onChange={(e) => setSearchBarramentoTerm(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                                         />
                                     </div>
                                     
                                     {searchBarramentoTerm && barramentosFiltrados.length > 0 && (
                                         <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl">
-                                            {barramentosFiltrados.slice(0, 10).map(material => (
-                                                <div
-                                                    key={material.id}
-                                                    className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0"
-                                                    onClick={() => {
+                                            {barramentosFiltrados.slice(0, 10).map(material => 
+                                                renderItemInList(
+                                                    material,
+                                                    () => {
                                                         abrirDialogoQuantidade(material, (qty) => {
                                                             handleSetBarramento(material.id, qty);
                                                             toast.success('Barramento adicionado!');
                                                         });
-                                                    }}
-                                                >
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 text-sm">{material.nome}</p>
-                                                        <p className="text-xs text-gray-600">
-                                                            Estoque: {material.estoque} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                        </p>
-                                                    </div>
-                                                    <PlusIcon className="w-5 h-5 text-purple-600" />
-                                                </div>
-                                            ))}
+                                                    },
+                                                    'sm'
+                                                )
+                                            )}
                                         </div>
                                     )}
                                 </>
@@ -984,33 +1141,25 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 placeholder="Buscar disjuntor ou medidor..."
                                 value={searchMedicaoDisjuntorTerm}
                                 onChange={(e) => setSearchMedicaoDisjuntorTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         
                         {/* Lista de materiais filtrados */}
                         {searchMedicaoDisjuntorTerm && medicaoDisjuntoresFiltrados.length > 0 && (
                             <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-xl">
-                                    {medicaoDisjuntoresFiltrados.slice(0, 10).map(material => (
-                                        <div
-                                            key={material.id}
-                                            className="p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0"
-                                            onClick={() => {
-                                                abrirDialogoQuantidade(material, (qty) => {
-                                                    handleAddMedidor(material.id, undefined, qty);
-                                                    toast.success('Medidor adicionado!');
-                                                });
-                                            }}
-                                        >
-                                        <div>
-                                            <p className="font-semibold text-gray-900">{material.nome}</p>
-                                            <p className="text-sm text-gray-600">
-                                                Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </p>
-                                        </div>
-                                        <PlusIcon className="w-5 h-5 text-purple-600" />
-                                    </div>
-                                ))}
+                                {medicaoDisjuntoresFiltrados.slice(0, 10).map(material => 
+                                    renderItemInList(
+                                        material,
+                                        () => {
+                                            abrirDialogoQuantidade(material, (qty) => {
+                                                handleAddMedidor(material.id, undefined, qty);
+                                                toast.success('Medidor adicionado!');
+                                            });
+                                        },
+                                        'md'
+                                    )
+                                )}
                             </div>
                         )}
                         
@@ -1022,18 +1171,29 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             ) : (
                                 <div className="space-y-2">
                                     {config.medidores.map((item, index) => {
-                                        const material = materiais.find(m => m.id === item.disjuntorId);
+                                        const material = getItemById(item.disjuntorId);
+                                        const preco = getItemPrice(material);
+                                        const isCotacao = material && (material as any)._isCotacao;
                                         return (
-                                            <div key={index} className="flex justify-between items-center bg-orange-50 border border-orange-200 p-3 rounded-lg">
-                                                <div>
-                                                    <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                            <div key={index} className={`flex justify-between items-center border p-3 rounded-lg ${
+                                                isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'
+                                            }`}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                        {isCotacao && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                ❄️ Banco Frio
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-600">
-                                                        Qtd: {item.quantidade}{item.medidorId ? ` • Medidor: ${item.medidorId}` : ''} • Subtotal: R$ {((material?.preco || 0) * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        Qtd: {item.quantidade}{item.medidorId ? ` • Medidor: ${item.medidorId}` : ''} • Subtotal: R$ {(preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </p>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRemoveMedidor(index)}
-                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
@@ -1060,35 +1220,60 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 placeholder="Buscar cabo..."
                                 value={searchCaboTerm}
                                 onChange={(e) => setSearchCaboTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         
                         {/* Lista de materiais filtrados */}
                         {searchCaboTerm && cabosFiltrados.length > 0 && (
                             <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-xl">
-                                {cabosFiltrados.slice(0, 10).map(material => (
+                                {cabosFiltrados.slice(0, 10).map(material => {
+                                    const isCotacao = (material as any)._isCotacao;
+                                    const precoVenda = getItemPrice(material);
+                                    return (
                                         <div
                                             key={material.id}
-                                            className="p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0"
+                                            className={`p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center border-b border-gray-100 last:border-b-0 ${
+                                                isCotacao ? 'bg-blue-50/50' : ''
+                                            }`}
                                             onClick={() => {
-                                                // Usar toast para escolher unidade
-                                                const unidade = 'METROS'; // Padrão metros
+                                                const unidade = 'METROS';
                                                 abrirDialogoQuantidade(material, (qty) => {
                                                     handleAddCabo(material.id, qty, unidade);
                                                     toast.success('Cabo adicionado!');
                                                 });
                                             }}
                                         >
-                                        <div>
-                                            <p className="font-semibold text-gray-900">{material.nome}</p>
-                                            <p className="text-sm text-gray-600">
-                                                Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m
-                                            </p>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <p className="font-semibold text-gray-900">{material.nome}</p>
+                                                    {isCotacao && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                            ❄️ Banco Frio
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-gray-600">
+                                                    {isCotacao ? (
+                                                        <>
+                                                            <span className="text-gray-500 line-through mr-2">
+                                                                Cotação: R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m
+                                                            </span>
+                                                            <span className="font-semibold text-blue-700">
+                                                                Venda: R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            Estoque: {material.estoque} {material.unidadeMedida} • R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m
+                                                        </>
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <PlusIcon className="w-5 h-5 text-blue-600" />
                                         </div>
-                                        <PlusIcon className="w-5 h-5 text-purple-600" />
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                         
@@ -1100,19 +1285,30 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             ) : (
                                 <div className="space-y-2">
                                     {config.cabos.map((item, index) => {
-                                        const material = materiais.find(m => m.id === item.materialId);
+                                        const material = getItemById(item.materialId);
+                                        const preco = getItemPrice(material);
                                         const qtdMetros = item.unidade === 'CM' ? item.quantidade / 100 : item.quantidade;
+                                        const isCotacao = material && (material as any)._isCotacao;
                                         return (
-                                            <div key={index} className="flex justify-between items-center bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
-                                                <div>
-                                                    <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                            <div key={index} className={`flex justify-between items-center border p-3 rounded-lg ${
+                                                isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-yellow-50 border-yellow-200'
+                                            }`}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                        {isCotacao && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                ❄️ Banco Frio
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-600">
-                                                        {item.quantidade} {item.unidade} ({qtdMetros}m) • Subtotal: R$ {((material?.preco || 0) * qtdMetros).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        {item.quantidade} {item.unidade} ({qtdMetros}m) • Subtotal: R$ {(preco * qtdMetros).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </p>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRemoveCabo(index)}
-                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
@@ -1140,7 +1336,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                     ...prev,
                                     dps: { classe: e.target.value as any, items: prev.dps?.items || [] }
                                 }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="CLASSE_1">Classe 1 (Proteção Primária)</option>
                                 <option value="CLASSE_2">Classe 2 (Proteção Secundária)</option>
@@ -1155,7 +1351,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 placeholder="Buscar DPS..."
                                 value={searchDPSTerm}
                                 onChange={(e) => setSearchDPSTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         
@@ -1179,7 +1375,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                                 Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </p>
                                         </div>
-                                        <PlusIcon className="w-5 h-5 text-purple-600" />
+                                        <PlusIcon className="w-5 h-5 text-blue-600" />
                                     </div>
                                 ))}
                             </div>
@@ -1193,18 +1389,29 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             ) : (
                                 <div className="space-y-2">
                                     {config.dps.items.map((item, index) => {
-                                        const material = materiais.find(m => m.id === item.materialId);
+                                        const material = getItemById(item.materialId);
+                                        const preco = getItemPrice(material);
+                                        const isCotacao = material && (material as any)._isCotacao;
                                         return (
-                                            <div key={index} className="flex justify-between items-center bg-red-50 border border-red-200 p-3 rounded-lg">
-                                                <div>
-                                                    <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                            <div key={index} className={`flex justify-between items-center border p-3 rounded-lg ${
+                                                isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'
+                                            }`}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                        {isCotacao && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                ❄️ Banco Frio
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-600">
-                                                        Qtd: {item.quantidade} • Subtotal: R$ {((material?.preco || 0) * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        Qtd: {item.quantidade} • Subtotal: R$ {(preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </p>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRemoveDPS(index)}
-                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
@@ -1233,7 +1440,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                     placeholder="Buscar borne..."
                                     value={searchBornTerm}
                                     onChange={(e) => setSearchBornTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             
@@ -1256,7 +1463,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                                     Estoque: {material.estoque} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </p>
                                             </div>
-                                            <PlusIcon className="w-5 h-5 text-purple-600" />
+                                            <PlusIcon className="w-5 h-5 text-blue-600" />
                                         </div>
                                     ))}
                                 </div>
@@ -1269,16 +1476,27 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 ) : (
                                     <div className="space-y-2">
                                         {config.born.map((item, index) => {
-                                            const material = materiais.find(m => m.id === item.materialId);
+                                            const material = getItemById(item.materialId);
+                                            const preco = getItemPrice(material);
+                                            const isCotacao = material && (material as any)._isCotacao;
                                             return (
-                                                <div key={index} className="flex justify-between items-center bg-green-50 border border-green-200 p-2 rounded-lg">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 text-sm">{material?.nome || 'Material não encontrado'}</p>
+                                                <div key={index} className={`flex justify-between items-center border p-2 rounded-lg ${
+                                                    isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'
+                                                }`}>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-semibold text-gray-900 text-sm">{material?.nome || 'Material não encontrado'}</p>
+                                                            {isCotacao && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                    ❄️ Banco Frio
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-xs text-gray-600">
-                                                            Qtd: {item.quantidade} • R$ {((material?.preco || 0) * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            Qtd: {item.quantidade} • R$ {(preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </p>
                                                     </div>
-                                                    <button onClick={() => handleRemoveBorn(index)} className="p-1 text-red-600 hover:bg-red-100 rounded-lg">
+                                                    <button onClick={() => handleRemoveBorn(index)} className="p-1 text-red-600 hover:bg-red-100 rounded-lg ml-2">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -1299,7 +1517,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                     placeholder="Buscar parafuso..."
                                     value={searchParafusoTerm}
                                     onChange={(e) => setSearchParafusoTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             
@@ -1322,7 +1540,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                                     Estoque: {material.estoque} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </p>
                                             </div>
-                                            <PlusIcon className="w-5 h-5 text-purple-600" />
+                                            <PlusIcon className="w-5 h-5 text-blue-600" />
                                         </div>
                                     ))}
                                 </div>
@@ -1335,16 +1553,27 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 ) : (
                                     <div className="space-y-2">
                                         {config.parafusos.map((item, index) => {
-                                            const material = materiais.find(m => m.id === item.materialId);
+                                            const material = getItemById(item.materialId);
+                                            const preco = getItemPrice(material);
+                                            const isCotacao = material && (material as any)._isCotacao;
                                             return (
-                                                <div key={index} className="flex justify-between items-center bg-blue-50 border border-blue-200 p-2 rounded-lg">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 text-sm">{material?.nome || 'Material não encontrado'}</p>
+                                                <div key={index} className={`flex justify-between items-center border p-2 rounded-lg ${
+                                                    isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200'
+                                                }`}>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-semibold text-gray-900 text-sm">{material?.nome || 'Material não encontrado'}</p>
+                                                            {isCotacao && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                    ❄️ Banco Frio
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-xs text-gray-600">
-                                                            Qtd: {item.quantidade} • R$ {((material?.preco || 0) * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            Qtd: {item.quantidade} • R$ {(preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </p>
                                                     </div>
-                                                    <button onClick={() => handleRemoveParafuso(index)} className="p-1 text-red-600 hover:bg-red-100 rounded-lg">
+                                                    <button onClick={() => handleRemoveParafuso(index)} className="p-1 text-red-600 hover:bg-red-100 rounded-lg ml-2">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -1371,7 +1600,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 placeholder="Buscar trilho DIN..."
                                 value={searchTrilhoTerm}
                                 onChange={(e) => setSearchTrilhoTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         
@@ -1396,7 +1625,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                                 Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m
                                             </p>
                                         </div>
-                                        <PlusIcon className="w-5 h-5 text-purple-600" />
+                                        <PlusIcon className="w-5 h-5 text-blue-600" />
                                     </div>
                                 ))}
                             </div>
@@ -1410,19 +1639,30 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             ) : (
                                 <div className="space-y-2">
                                     {config.trilhos.map((item, index) => {
-                                        const material = materiais.find(m => m.id === item.materialId);
+                                        const material = getItemById(item.materialId);
+                                        const preco = getItemPrice(material);
                                         const qtdMetros = item.unidade === 'CM' ? item.quantidade / 100 : item.quantidade;
+                                        const isCotacao = material && (material as any)._isCotacao;
                                         return (
-                                            <div key={index} className="flex justify-between items-center bg-indigo-50 border border-indigo-200 p-3 rounded-lg">
-                                                <div>
-                                                    <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                            <div key={index} className={`flex justify-between items-center border p-3 rounded-lg ${
+                                                isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200'
+                                            }`}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                        {isCotacao && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                ❄️ Banco Frio
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-600">
-                                                        {item.quantidade} {item.unidade} ({qtdMetros}m) • Subtotal: R$ {((material?.preco || 0) * qtdMetros).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        {item.quantidade} {item.unidade} ({qtdMetros}m) • Subtotal: R$ {(preco * qtdMetros).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </p>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRemoveTrilho(index)}
-                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
@@ -1449,7 +1689,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                 placeholder="Buscar componente..."
                                 value={searchComponenteTerm}
                                 onChange={(e) => setSearchComponenteTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         
@@ -1473,7 +1713,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                                 Estoque: {material.estoque} {material.unidadeMedida} • R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </p>
                                         </div>
-                                        <PlusIcon className="w-5 h-5 text-purple-600" />
+                                        <PlusIcon className="w-5 h-5 text-blue-600" />
                                     </div>
                                 ))}
                             </div>
@@ -1487,18 +1727,29 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             ) : (
                                 <div className="space-y-2">
                                     {config.componentes.map((item, index) => {
-                                        const material = materiais.find(m => m.id === item.materialId);
+                                        const material = getItemById(item.materialId);
+                                        const preco = getItemPrice(material);
+                                        const isCotacao = material && (material as any)._isCotacao;
                                         return (
-                                            <div key={index} className="flex justify-between items-center bg-purple-50 border border-purple-200 p-3 rounded-lg">
-                                                <div>
-                                                    <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                            <div key={index} className={`flex justify-between items-center border p-3 rounded-lg ${
+                                                isCotacao ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200'
+                                            }`}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-semibold text-gray-900">{material?.nome || 'Material não encontrado'}</p>
+                                                        {isCotacao && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                ❄️ Banco Frio
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-600">
-                                                        Qtd: {item.quantidade} • Subtotal: R$ {((material?.preco || 0) * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        Qtd: {item.quantidade} • Subtotal: R$ {(preco * item.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </p>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRemoveComponente(index)}
-                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors ml-2"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
@@ -1514,7 +1765,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
             default:
                 return (
                     <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <span className="text-3xl">🚧</span>
                         </div>
                         <h3 className="text-xl font-bold text-gray-800 mb-2">
@@ -1535,15 +1786,15 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-dark-card rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/30">
+                <div className="p-6 border-b border-gray-200 dark:border-dark-border" style={{ backgroundColor: '#0a1a2f' }}>
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Criar Quadro Elétrico Modular</h2>
-                            <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">Configure seu quadro elétrico personalizado</p>
+                            <h2 className="text-2xl font-bold text-white">Criar Quadro Elétrico Modular</h2>
+                            <p className="text-sm text-gray-300 mt-1">Configure seu quadro elétrico personalizado</p>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                            className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
                         >
                             <XMarkIcon className="w-6 h-6" />
                         </button>
@@ -1552,81 +1803,56 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                     {/* Informações básicas */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">Nome do Quadro *</label>
+                            <label className="block text-sm font-semibold text-gray-200 mb-1">Nome do Quadro *</label>
                             <input
                                 type="text"
                                 value={nomeQuadro}
                                 onChange={(e) => setNomeQuadro(e.target.value)}
-                                className="input-field"
+                                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Ex: Quadro Medidor 3 Fases"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">Tipo</label>
+                            <label className="block text-sm font-semibold text-gray-200 mb-1">Tipo</label>
                             <select
                                 value={tipoQuadro}
                                 onChange={(e) => setTipoQuadro(e.target.value as any)}
-                                className="select-field"
+                                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
-                                <option value="POLICARBONATO">Policarbonato</option>
-                                <option value="ALUMINIO">Alumínio</option>
-                                <option value="COMANDO">Comando</option>
+                                <option value="POLICARBONATO" className="bg-gray-800">Policarbonato</option>
+                                <option value="ALUMINIO" className="bg-gray-800">Alumínio</option>
+                                <option value="COMANDO" className="bg-gray-800">Comando</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-1">Descrição</label>
+                            <label className="block text-sm font-semibold text-gray-200 mb-1">Descrição</label>
                             <input
                                 type="text"
                                 value={descricaoQuadro}
                                 onChange={(e) => setDescricaoQuadro(e.target.value)}
-                                className="input-field"
+                                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Opcional"
                             />
                         </div>
                     </div>
                     
-                    {/* Toggle Estoque / Cotações */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border-2 border-purple-200 dark:border-purple-700">
+                    {/* Informação sobre Fonte de Dados */}
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border-2 border-white/20">
                         <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Fonte de Dados</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {fonteDados === 'ESTOQUE' 
-                                        ? '📦 Usando itens do estoque real' 
-                                        : '❄️ Usando itens do banco frio (cotações)'}
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-white mb-1">💡 Fonte de Dados</p>
+                                <p className="text-xs text-gray-200">
+                                    Você pode selecionar itens tanto do <strong className="text-white">estoque real</strong> quanto do <strong className="text-white">banco frio (cotações)</strong> em qualquer etapa.
+                                    Itens do banco frio serão marcados com ❄️ e precisam ser comprados antes de usar o quadro em obras.
                                 </p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setFonteDados('ESTOQUE')}
-                                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                                        fonteDados === 'ESTOQUE'
-                                            ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                    }`}
-                                >
-                                    📦 Estoque Real
-                                </button>
-                                <button
-                                    onClick={() => setFonteDados('COTACOES')}
-                                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                                        fonteDados === 'COTACOES'
-                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                    }`}
-                                >
-                                    ❄️ Banco Frio (Cotações)
-                                </button>
                             </div>
                         </div>
-                        {fonteDados === 'COTACOES' && (
-                            <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                                <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                                    <strong>⚠️ Atenção:</strong> Itens de cotações não estão em estoque. 
-                                    Será necessário realizar a compra antes de iniciar o projeto.
-                                </p>
-                            </div>
-                        )}
+                        <div className="mt-3 p-3 bg-yellow-500/20 border border-yellow-400/30 rounded-lg">
+                            <p className="text-sm text-yellow-100">
+                                <strong>⚠️ Atenção:</strong> Itens de cotações (banco frio) não estão em estoque físico. 
+                                Será necessário realizar a compra antes de iniciar o projeto.
+                            </p>
+                        </div>
                     </div>
                     
                     {/* Barra de progresso */}
@@ -1635,7 +1861,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                             <div
                                 key={etapa.id}
                                 className={`h-2 flex-1 rounded-full transition-all cursor-pointer ${
-                                    etapa.id <= etapaAtual ? 'bg-purple-600' : 'bg-gray-200'
+                                    etapa.id <= etapaAtual ? 'bg-blue-500' : 'bg-white/20'
                                 } hover:opacity-80`}
                                 onClick={() => setEtapaAtual(etapa.id)}
                                 title={etapa.nome}
@@ -1648,7 +1874,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                 <div className="flex-1 overflow-y-auto p-6">
                     {loading ? (
                         <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                             <p className="text-gray-600">Carregando materiais...</p>
                         </div>
                     ) : (
@@ -1661,7 +1887,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                     <div className="flex justify-between items-center">
                         <div>
                             <p className="text-sm text-gray-600">Valor Total Estimado</p>
-                            <p className="text-3xl font-bold text-purple-700">
+                            <p className="text-3xl font-bold text-blue-700">
                                 R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </p>
                         </div>
@@ -1699,7 +1925,7 @@ const CriacaoQuadroModular: React.FC<CriacaoQuadroModularProps> = ({ isOpen, onC
                                         }
                                         setEtapaAtual(e => e + 1);
                                     }}
-                                    className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all font-semibold"
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-semibold"
                                 >
                                     Próxima Etapa →
                                 </button>

@@ -4,6 +4,15 @@ import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
 import { alocacaoObraService, type AlocacaoDTO } from '../../services/AlocacaoObraService';
 
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
+
 // Icons
 const CalendarIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -23,11 +32,39 @@ const ExclamationTriangleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 type StatusLabel = 'Planejada' | 'EmAndamento' | 'Concluida' | 'Cancelada' | string;
 
-const EquipesGantt: React.FC = () => {
-  const [alocacoes, setAlocacoes] = useState<AlocacaoDTO[]>([]);
+interface Equipe {
+  id: string;
+  nome: string;
+  tipo: string;
+  ativa: boolean;
+  membros?: any[];
+}
+
+interface Obra {
+  id: string;
+  nomeObra: string;
+  status: string;
+}
+
+interface EquipesGanttProps {
+  equipes?: Equipe[];
+  obras?: Obra[];
+  alocacoes?: AlocacaoDTO[];
+  onRefresh?: () => void;
+}
+
+const EquipesGantt: React.FC<EquipesGanttProps> = ({ 
+  equipes = [], 
+  obras = [], 
+  alocacoes: alocacoesProp = [],
+  onRefresh 
+}) => {
+  const [alocacoes, setAlocacoes] = useState<AlocacaoDTO[]>(alocacoesProp);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const calendarRef = useRef<FullCalendar>(null);
+  const [selectedEvent, setSelectedEvent] = useState<AlocacaoDTO | null>(null);
+  const [showEventDialog, setShowEventDialog] = useState(false);
 
   // Filtros
   const [filtroStatus, setFiltroStatus] = useState<'TODAS' | 'Planejada' | 'EmAndamento' | 'Concluida' | 'Cancelada'>('TODAS');
@@ -44,7 +81,8 @@ const EquipesGantt: React.FC = () => {
     setFiltroAno(filtroAnoDraft);
   };
 
-  // Carregar todas as alocações (globais)
+
+  // Carregar todas as alocações (globais) - apenas se não foram passadas como prop
   const loadAlocacoes = async () => {
     try {
       const response = await alocacaoObraService.getAllAlocacoes();
@@ -61,6 +99,15 @@ const EquipesGantt: React.FC = () => {
   };
 
   useEffect(() => {
+
+    // Se alocações foram passadas como prop, usar elas
+    if (alocacoesProp.length > 0) {
+      setAlocacoes(alocacoesProp);
+      setLoading(false);
+      return;
+    }
+
+    // Caso contrário, carregar do backend
     const run = async () => {
       setLoading(true);
       setError(null);
@@ -72,7 +119,36 @@ const EquipesGantt: React.FC = () => {
     };
 
     run();
-  }, []);
+
+  }, [alocacoesProp]);
+
+  const getEquipeInfo = (alocacao: AlocacaoDTO) => {
+    if (alocacao.equipe) {
+      return alocacao.equipe;
+    }
+
+    if (alocacao.equipeId) {
+      const equipeFallback = equipes.find(eq => eq.id === alocacao.equipeId);
+      if (equipeFallback) {
+        return {
+          id: equipeFallback.id,
+          nome: equipeFallback.nome,
+          tipo: equipeFallback.tipo,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const getDataFimSafe = (alocacao: AlocacaoDTO) => {
+    return (
+      alocacao.dataFimPrevisto ||
+      (alocacao as any).dataFim ||
+      alocacao.dataFimReal ||
+      alocacao.dataInicio
+    );
+  };
 
   // Filtragem por status e período (mês/ano)
   const alocacoesFiltradas = React.useMemo(() => {
@@ -83,7 +159,12 @@ const EquipesGantt: React.FC = () => {
       if (filtroStatus !== 'TODAS' && a.status !== filtroStatus) return false;
       // Período (interseção)
       const aInicio = new Date(a.dataInicio as any);
-      const aFim = new Date(a.dataFimPrevisto as any);
+      const aFim = new Date(getDataFimSafe(a) as any);
+
+      if (Number.isNaN(aInicio.getTime()) || Number.isNaN(aFim.getTime())) {
+        return false;
+      }
+
       const intersects = aInicio <= fimMes && aFim >= inicioMes;
       return intersects;
     });
@@ -93,30 +174,48 @@ const EquipesGantt: React.FC = () => {
   const calendarResources = Array.from(
     new Map(
       alocacoesFiltradas
-        .filter(a => a.equipe)
-        .map(a => [a.equipe!.id, {
-          id: a.equipe!.id,
-          title: a.equipe!.nome,
-          extendedProps: { tipo: a.equipe!.tipo }
-        }])
+        .map(a => {
+          const equipeInfo = getEquipeInfo(a);
+          if (!equipeInfo) return null;
+          return [
+            equipeInfo.id,
+            {
+              id: equipeInfo.id,
+              title: equipeInfo.nome,
+              extendedProps: { tipo: equipeInfo.tipo },
+            },
+          ] as const;
+        })
+        .filter((entry): entry is readonly [string, { id: string; title: string; extendedProps: { tipo: string } }] => entry !== null)
     ).values()
   );
 
-  const calendarEvents = alocacoesFiltradas.map(a => ({
-    id: a.id,
-    resourceId: a.equipe?.id || a.equipeId || '',
-    title: a.projeto?.titulo || a.projeto?.id || 'Projeto',
-    start: a.dataInicio as any,
-    end: a.dataFimPrevisto as any,
-    backgroundColor: getStatusColor(a.status as StatusLabel),
-    borderColor: getStatusColor(a.status as StatusLabel),
-    extendedProps: {
-      status: a.status as StatusLabel,
-      observacoes: a.observacoes,
-      equipe: a.equipe,
-      projeto: a.projeto
-    }
-  }));
+  const calendarEvents = alocacoesFiltradas
+    .map(a => {
+      const equipeInfo = getEquipeInfo(a);
+      const resourceId = equipeInfo?.id || a.equipeId;
+
+      if (!resourceId) {
+        return null;
+      }
+
+      return {
+        id: a.id,
+        resourceId,
+        title: a.projeto?.titulo || a.projeto?.id || 'Projeto',
+        start: a.dataInicio as any,
+        end: getDataFimSafe(a) as any,
+        backgroundColor: getStatusColor(a.status as StatusLabel),
+        borderColor: getStatusColor(a.status as StatusLabel),
+        extendedProps: {
+          status: a.status as StatusLabel,
+          observacoes: a.observacoes,
+          equipe: equipeInfo,
+          projeto: a.projeto,
+        },
+      };
+    })
+    .filter((event): event is NonNullable<typeof event> => event !== null);
 
   const getStatusColor = (status: StatusLabel) => {
     switch (status) {
@@ -179,7 +278,8 @@ const EquipesGantt: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm font-medium text-brand-gray-600">Equipes Ativas</p>
               <p className="text-2xl font-bold text-brand-gray-900">
-                {equipes.filter(e => e.status === 'ativo').length}
+
+                {equipes.filter(e => e.ativa).length}
               </p>
             </div>
           </div>
@@ -205,7 +305,8 @@ const EquipesGantt: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm font-medium text-brand-gray-600">Obras em Andamento</p>
               <p className="text-2xl font-bold text-brand-gray-900">
-                {obras.filter(o => o.status === 'em_andamento').length}
+
+                {obras.filter(o => o.status === 'ANDAMENTO' || o.status === 'em_andamento').length}
               </p>
             </div>
           </div>
@@ -312,14 +413,11 @@ const EquipesGantt: React.FC = () => {
                 }}
                 eventClick={(info) => {
                   const event = info.event;
-                  const status = event.extendedProps.status as StatusLabel;
-                  
-                  alert(`
-                    Projeto: ${event.title}
-                    Status: ${getStatusText(status)}
-                    Período: ${event.start?.toLocaleDateString()} - ${event.end?.toLocaleDateString()}
-                    ${event.extendedProps.observacoes ? `Observações: ${event.extendedProps.observacoes}` : ''}
-                  `);
+                  const alocacao = alocacoes.find(a => a.id === event.id);
+                  if (alocacao) {
+                    setSelectedEvent(alocacao);
+                    setShowEventDialog(true);
+                  }
                 }}
               />
             </div>
@@ -349,6 +447,77 @@ const EquipesGantt: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Dialog de Detalhes da Alocação */}
+      <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>📅 Detalhes da Alocação</DialogTitle>
+            <DialogDescription>
+              Informações sobre a alocação da equipe
+            </DialogDescription>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Projeto:</p>
+                <p className="text-sm text-gray-900">{selectedEvent.projeto?.titulo || 'Sem projeto'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Equipe:</p>
+                <p className="text-sm text-gray-900">{selectedEvent.equipe?.nome || 'Sem equipe'}</p>
+                <p className="text-xs text-gray-500">{selectedEvent.equipe?.tipo || ''}</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Status:</p>
+                <span className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
+                  selectedEvent.status === 'EmAndamento' ? 'bg-green-100 text-green-800' :
+                  selectedEvent.status === 'Planejada' ? 'bg-blue-100 text-blue-800' :
+                  selectedEvent.status === 'Concluida' ? 'bg-orange-100 text-orange-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {getStatusText(selectedEvent.status as StatusLabel)}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Período:</p>
+                <p className="text-sm text-gray-900">
+                  {new Date(selectedEvent.dataInicio).toLocaleDateString('pt-BR')} até{' '}
+                  {new Date(selectedEvent.dataFimPrevisto).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+              {selectedEvent.observacoes && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Observações:</p>
+                  <p className="text-sm text-gray-900">{selectedEvent.observacoes}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <button
+              onClick={() => {
+                setShowEventDialog(false);
+                setSelectedEvent(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+            >
+              Fechar
+            </button>
+            {onRefresh && (
+              <button
+                onClick={() => {
+                  onRefresh();
+                  toast.success('Dados atualizados!');
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+              >
+                Atualizar
+              </button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

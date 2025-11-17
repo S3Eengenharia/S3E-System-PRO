@@ -385,6 +385,15 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
         return;
       }
 
+
+      // ✅ Verificar se há obra vinculada ao projeto
+      const obraVinculada = await prisma.obra.findUnique({
+        where: { projetoId: id },
+        include: {
+          tarefas: { select: { id: true } }
+        }
+      });
+
       // Log de auditoria antes de excluir
       console.log('═══════════════════════════════════════════════════════════');
       console.log('⚠️  EXCLUSÃO PERMANENTE DE PROJETO');
@@ -395,9 +404,24 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
       console.log(`📅 Criado em: ${projeto.createdAt.toLocaleString('pt-BR')}`);
       console.log(`🔑 Usuário: ${userId} (Role: ${userRole})`);
       console.log(`⏰ Data/Hora: ${new Date().toLocaleString('pt-BR')}`);
+
+      if (obraVinculada) {
+        console.log(`🏗️  Obra vinculada: ${obraVinculada.nomeObra} (ID: ${obraVinculada.id}, Status: ${obraVinculada.status}, Tarefas: ${obraVinculada.tarefas.length})`);
+        console.log(`⚠️  A obra vinculada será EXCLUÍDA PERMANENTEMENTE junto com o projeto`);
+      }
       console.log('═══════════════════════════════════════════════════════════');
 
       // ⚠️ ATENÇÃO: Isso vai excluir permanentemente o projeto e todas as relações em cascata
+      // O onDelete: Cascade no schema já cuida da exclusão da obra, mas vamos fazer explicitamente
+      // para ter logs melhores e garantir que todas as relações sejam tratadas corretamente
+      if (obraVinculada) {
+        console.log(`🗑️  Excluindo obra vinculada: ${obraVinculada.nomeObra} (ID: ${obraVinculada.id})`);
+        await prisma.obra.delete({
+          where: { id: obraVinculada.id }
+        });
+        console.log(`✅ Obra excluída permanentemente: ${obraVinculada.id}`);
+      }
+
       await prisma.projeto.delete({
         where: { id }
       });
@@ -412,14 +436,24 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
             action: 'DELETE_PERMANENT',
             entity: 'Projeto',
             entityId: id,
-            description: `Excluiu permanentemente o projeto "${projeto.titulo}"`,
+
+            description: obraVinculada 
+              ? `Excluiu permanentemente o projeto "${projeto.titulo}" e a obra vinculada "${obraVinculada.nomeObra}"`
+              : `Excluiu permanentemente o projeto "${projeto.titulo}"`,
             ipAddress: req.ip || req.socket.remoteAddress,
             userAgent: req.headers['user-agent'],
             metadata: {
               projectTitle: projeto.titulo,
               clientName: projeto.cliente?.nome,
               valorTotal: projeto.valorTotal,
-              status: projeto.status
+
+              status: projeto.status,
+              obraExcluida: obraVinculada ? {
+                obraId: obraVinculada.id,
+                obraNome: obraVinculada.nomeObra,
+                obraStatus: obraVinculada.status,
+                totalTarefas: obraVinculada.tarefas.length
+              } : null
             }
           }
         });
@@ -429,20 +463,39 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
 
       res.json({
         success: true,
-        message: '⚠️ Projeto excluído PERMANENTEMENTE do banco de dados',
+
+        message: obraVinculada 
+          ? `⚠️ Projeto "${projeto.titulo}" e obra vinculada "${obraVinculada.nomeObra}" excluídos PERMANENTEMENTE do banco de dados`
+          : '⚠️ Projeto excluído PERMANENTEMENTE do banco de dados',
         audit: {
           action: 'DELETE_PERMANENT',
           projectId: id,
           projectTitle: projeto.titulo,
           deletedBy: userId,
           deletedByRole: userRole,
-          timestamp: new Date().toISOString()
+
+          timestamp: new Date().toISOString(),
+          obraExcluida: obraVinculada ? {
+            obraId: obraVinculada.id,
+            obraNome: obraVinculada.nomeObra,
+            obraStatus: obraVinculada.status
+          } : null
         }
       });
       return;
     }
 
     // SOFT DELETE (comportamento padrão)
+
+    // ✅ Verificar se há obra vinculada ao projeto
+    const obraVinculada = await prisma.obra.findUnique({
+      where: { projetoId: id },
+      include: {
+        tarefas: { select: { id: true } },
+        projeto: { select: { id: true, titulo: true } }
+      }
+    });
+
     // Verificar se projeto tem alocações ativas
     const alocacoesAtivas = await prisma.alocacaoObra.count({
       where: { 
@@ -457,6 +510,26 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
         error: 'Não é possível cancelar projeto com alocações ativas'
       });
       return;
+    }
+
+    // ✅ Excluir obra vinculada antes de cancelar o projeto
+    if (obraVinculada) {
+      console.log(`🗑️  Excluindo obra vinculada ao projeto: ${obraVinculada.nomeObra} (ID: ${obraVinculada.id}, Status: ${obraVinculada.status})`);
+      
+      // Verificar se a obra tem tarefas em andamento
+      const tarefasEmAndamento = obraVinculada.tarefas.length;
+      
+      if (tarefasEmAndamento > 0 && obraVinculada.status === 'ANDAMENTO') {
+        console.log(`⚠️  Obra possui ${tarefasEmAndamento} tarefa(s) e está em andamento`);
+      }
+
+      // Excluir obra permanentemente (ou soft delete se preferir)
+      // Como a obra está vinculada ao projeto, vamos excluir permanentemente
+      await prisma.obra.delete({
+        where: { id: obraVinculada.id }
+      });
+      
+      console.log(`✅ Obra excluída: ${obraVinculada.id}`);
     }
 
     // Cancelar projeto
@@ -478,13 +551,23 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
           action: 'UPDATE',
           entity: 'Projeto',
           entityId: id,
-          description: `Cancelou o projeto "${projeto.titulo}"`,
+
+          description: obraVinculada 
+            ? `Cancelou o projeto "${projeto.titulo}" e excluiu a obra vinculada "${obraVinculada.nomeObra}"`
+            : `Cancelou o projeto "${projeto.titulo}"`,
           ipAddress: req.ip || req.socket.remoteAddress,
           userAgent: req.headers['user-agent'],
           metadata: {
             projectTitle: projeto.titulo,
             oldStatus: projeto.status,
-            newStatus: 'CANCELADO'
+
+            newStatus: 'CANCELADO',
+            obraExcluida: obraVinculada ? {
+              obraId: obraVinculada.id,
+              obraNome: obraVinculada.nomeObra,
+              obraStatus: obraVinculada.status,
+              totalTarefas: obraVinculada.tarefas.length
+            } : null
           }
         }
       });
@@ -494,7 +577,14 @@ export const deleteProjeto = async (req: Request, res: Response): Promise<void> 
 
     res.json({
       success: true,
-      message: 'Projeto cancelado com sucesso'
+      message: obraVinculada 
+        ? `Projeto "${projeto.titulo}" cancelado e obra vinculada "${obraVinculada.nomeObra}" excluída com sucesso`
+        : 'Projeto cancelado com sucesso',
+      obraExcluida: obraVinculada ? {
+        id: obraVinculada.id,
+        nome: obraVinculada.nomeObra,
+        status: obraVinculada.status
+      } : null
     });
   } catch (error) {
     console.error('Erro ao cancelar projeto:', error);

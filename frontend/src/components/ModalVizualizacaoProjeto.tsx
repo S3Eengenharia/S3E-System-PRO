@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { etapasAdminService, type EtapaAdmin, type ListaEtapasResponse } from '../services/etapasAdminService';
+
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -446,6 +448,13 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     }
   }
 
+
+  // Fechar modais com ESC
+  useEscapeKey(etapaModalOpen, () => setEtapaModalOpen(false));
+  useEscapeKey(taskModalOpen, () => setTaskModalOpen(false));
+  useEscapeKey(uploadModalOpen, () => setUploadModalOpen(false));
+  useEscapeKey(clienteModalOpen, () => setClienteModalOpen(false));
+
   async function handleExcluirEtapa(etapa: EtapaAdmin) {
     setAlertConfig({
       title: '🗑️ Excluir Etapa',
@@ -641,42 +650,93 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   }, [etapasResp, tasks, projeto.status]);
 
   async function handleIniciarObra() {
-    const materiaisProjeto = (orcamentoCompleto?.items || projeto.orcamento?.items || []) as OrcamentoItemRef[];
-    if (materiaisProjeto && materiaisProjeto.length > 0) {
-      const itensSemEstoque = materiaisProjeto.filter((item) => {
-        const quantidadeNecessaria = Number(item.quantidade ?? 0);
-        if (quantidadeNecessaria <= 0) return false;
-        const isBancoFrio = (item.tipo || '').toUpperCase() === 'COTACAO' || !!item.cotacao;
-        const possuiMaterialEstoque = !!item.material;
-        if (!isBancoFrio && !possuiMaterialEstoque) {
-          // Serviços, kits ou itens sem material associado não bloqueiam automaticamente
-          return false;
-        }
-        const estoqueDisponivel = Number(item.material?.estoque ?? 0);
-        return estoqueDisponivel < quantidadeNecessaria;
-      });
 
-      if (itensSemEstoque.length > 0) {
-        const resumoPendencias = itensSemEstoque
-          .slice(0, 4)
-          .map((pendente) => {
-            const nome = pendente.material?.nome || pendente.cotacao?.nome || pendente.kit?.nome || 'Item sem identificação';
-            const quantidade = Number(pendente.quantidade ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(Number(pendente.quantidade ?? 0)) ? 0 : 2 });
-            return `• ${nome} (Necessário: ${quantidade})`;
-          })
-          .join('\n');
-
-        toast.error('Materiais pendentes para iniciar a obra', {
-          description: `${resumoPendencias}${itensSemEstoque.length > 4 ? '\n• ...' : ''}\nRegularize o estoque para liberar a etapa de obras.`,
+    try {
+      // ✅ Verificar disponibilidade de estoque antes de criar obra
+      setLoadingAcao(true);
+      console.log('🔍 Verificando disponibilidade de estoque para o projeto:', projeto.id);
+      
+      const verificacaoResponse = await axiosApiService.get(`/api/obras/verificar-estoque/${projeto.id}`);
+      
+      if (!verificacaoResponse.success || !verificacaoResponse.data) {
+        toast.error('Erro ao verificar estoque', {
+          description: 'Não foi possível verificar a disponibilidade de estoque. Tente novamente.',
         });
-        setActiveTab('Materiais');
+        setLoadingAcao(false);
         return;
       }
+
+      const verificacao = verificacaoResponse.data;
+      
+      if (!verificacao.disponivel) {
+        const itensSemEstoque = verificacao.itensSemEstoque || [];
+        const itensBancoFrio = itensSemEstoque.filter((item: any) => item.origem === 'Banco Frio');
+        const itensEstoqueReal = itensSemEstoque.filter((item: any) => item.origem === 'Estoque Real');
+        const itensKit = itensSemEstoque.filter((item: any) => item.origem === 'Kit');
+        
+        // Construir mensagem detalhada
+        let mensagem = '❌ Não é possível criar a obra. Os seguintes materiais estão faltando em estoque:\n\n';
+        
+        if (itensBancoFrio.length > 0) {
+          mensagem += '⚠️ ITENS DO BANCO FRIO (precisam ser comprados):\n';
+          itensBancoFrio.slice(0, 5).forEach((item: any, idx: number) => {
+            mensagem += `  ${idx + 1}. ${item.nome} - Necessário: ${item.quantidadeNecessaria} unidades${item.falta > 0 ? ` (Faltam: ${item.falta})` : ''}\n`;
+          });
+          if (itensBancoFrio.length > 5) {
+            mensagem += `  ... e mais ${itensBancoFrio.length - 5} item(ns) do banco frio\n`;
+          }
+          mensagem += '\n';
+        }
+        
+        if (itensEstoqueReal.length > 0) {
+          mensagem += '📦 ITENS DO ESTOQUE REAL (faltam unidades):\n';
+          itensEstoqueReal.slice(0, 5).forEach((item: any, idx: number) => {
+            mensagem += `  ${idx + 1}. ${item.nome} - Necessário: ${item.quantidadeNecessaria}, Disponível: ${item.quantidadeDisponivel} (Faltam: ${item.falta})\n`;
+          });
+          if (itensEstoqueReal.length > 5) {
+            mensagem += `  ... e mais ${itensEstoqueReal.length - 5} item(ns) do estoque real\n`;
+          }
+          mensagem += '\n';
+        }
+        
+        if (itensKit.length > 0) {
+          mensagem += '🧩 COMPONENTES DE KIT (faltam unidades):\n';
+          itensKit.slice(0, 5).forEach((item: any, idx: number) => {
+            mensagem += `  ${idx + 1}. ${item.nome}${item.origemKit ? ` (${item.origemKit})` : ''} - Necessário: ${item.quantidadeNecessaria}, Disponível: ${item.quantidadeDisponivel} (Faltam: ${item.falta})\n`;
+          });
+          if (itensKit.length > 5) {
+            mensagem += `  ... e mais ${itensKit.length - 5} componente(s) de kit\n`;
+          }
+          mensagem += '\n';
+        }
+        
+        mensagem += '⚠️ Por favor, realize as compras necessárias antes de criar a obra.';
+        
+        toast.error('Materiais pendentes para iniciar a obra', {
+          description: mensagem,
+          duration: 8000,
+        });
+        
+        setActiveTab('Materiais');
+        setLoadingAcao(false);
+        return;
+      }
+      
+      // ✅ Estoque validado, prosseguir com criação da obra
+      console.log('✅ Validação de estoque passou. Todos os materiais estão disponíveis.');
+    } catch (error: any) {
+      console.error('❌ Erro ao verificar estoque:', error);
+      toast.error('Erro ao verificar estoque', {
+        description: error?.response?.data?.message || error?.message || 'Não foi possível verificar a disponibilidade de estoque. Tente novamente.',
+      });
+      setLoadingAcao(false);
+      return;
     }
 
+    // Se chegou aqui, a validação passou
     setAlertConfig({
       title: '🚀 Iniciar Obra',
-      description: 'Deseja iniciar a obra? Isso criará automaticamente uma nova entrada no Kanban de Obras na etapa Backlog.',
+      description: 'Todos os materiais estão disponíveis em estoque. Deseja iniciar a obra? Isso criará automaticamente uma nova entrada no Kanban de Obras na etapa Backlog.',
       onConfirm: async () => {
         try {
           setLoadingAcao(true);
@@ -696,7 +756,8 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
             console.log('✅ Nenhuma obra existente, criando nova...');
           }
           
-          // Gerar obra automaticamente (backend já atualiza status do projeto)
+
+          // Gerar obra automaticamente (backend já valida estoque novamente e atualiza status do projeto)
           const obraData = {
             projetoId: projeto.id,
             nomeObra: projeto.titulo,
@@ -715,7 +776,17 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
         } catch (error: any) {
           console.error('❌ Erro ao iniciar obra:', error);
           const mensagem = error?.response?.data?.message || error?.message || 'Erro ao iniciar obra';
-          toast.error(`❌ ${mensagem}`);
+
+          
+          // Se o erro for relacionado a estoque, mostrar mensagem mais detalhada
+          if (mensagem.includes('materiais estão faltando') || mensagem.includes('estoque')) {
+            toast.error('❌ Não foi possível criar a obra', {
+              description: mensagem,
+              duration: 8000,
+            });
+          } else {
+            toast.error(`❌ ${mensagem}`);
+          }
         } finally {
           setLoadingAcao(false);
         }

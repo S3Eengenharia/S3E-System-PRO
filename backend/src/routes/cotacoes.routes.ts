@@ -8,9 +8,12 @@ import {
   atualizarCotacao,
   deletarCotacao,
   importarCotacoes,
+  previewImportacao,
   gerarTemplate,
-  exportarCotacoes
+  exportarCotacoes,
+  deletarCotacoesEmLote
 } from '../controllers/cotacoesController.js';
+import { authenticate, authorize } from '../middlewares/auth.js';
 
 const router = Router();
 
@@ -41,14 +44,16 @@ router.get('/template', gerarTemplate);
 router.get('/exportar', exportarCotacoes);
 
 // Rotas de importação
+router.post('/preview-importacao', upload.single('arquivo'), previewImportacao);
 router.post('/importar', upload.single('arquivo'), importarCotacoes);
 
 // Rotas CRUD
 router.get('/', listarCotacoes);
 router.get('/:id', buscarCotacao);
-router.post('/', criarCotacao);
-router.put('/:id', atualizarCotacao);
-router.delete('/:id', deletarCotacao);
+router.post('/', authenticate, authorize('admin', 'gerente', 'engenheiro', 'orcamentista', 'desenvolvedor'), criarCotacao);
+router.put('/:id', authenticate, authorize('admin', 'gerente', 'engenheiro', 'orcamentista', 'desenvolvedor'), atualizarCotacao);
+router.delete('/:id', authenticate, authorize('admin', 'gerente', 'engenheiro', 'orcamentista', 'desenvolvedor'), deletarCotacao);
+router.delete('/bulk', authenticate, authorize('admin', 'gerente', 'engenheiro', 'orcamentista', 'desenvolvedor'), deletarCotacoesEmLote);
 
 export default router;
 

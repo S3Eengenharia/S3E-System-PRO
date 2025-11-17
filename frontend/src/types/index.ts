@@ -308,6 +308,7 @@ export interface Budget {
 export enum CatalogItemType {
   Produto = 'Produto',
   Kit = 'Kit',
+  Servico = 'Servico',
 }
 
 export interface Product {
@@ -319,6 +320,13 @@ export interface Product {
     price: number;
     stock: number;
     imageUrl?: string;
+    category?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    isActive?: boolean;
+    temItensCotacao?: boolean;
+    itensFaltantes?: any[];
+    statusEstoque?: string;
 }
 
 export interface KitProduct {
@@ -343,6 +351,23 @@ export interface Service {
     description: string;
     type: ServiceType;
     price: number;
+    category?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    isActive?: boolean;
+}
+
+export interface ServiceCatalogItem {
+    id: string;
+    type: CatalogItemType.Servico;
+    name: string;
+    description: string;
+    price: number;
+    category?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    isActive?: boolean;
+    internalCode?: string;
 }
 
 
@@ -450,9 +475,16 @@ export interface Kit {
     price: number;
     imageUrl?: string;
     configuration?: KitConfiguration;
+    category?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    isActive?: boolean;
+    temItensCotacao?: boolean;
+    itensFaltantes?: any[];
+    statusEstoque?: string;
 }
 
-export type CatalogItem = Product | Kit;
+export type CatalogItem = Product | Kit | ServiceCatalogItem;
 
 // Stock Movement Types
 export interface StockMovement {
@@ -627,7 +659,11 @@ export interface MaterialItem {
     supplierId?: string;
     supplierName?: string;
     supplier?: { id: string; name: string }; // Objeto supplier do backend
-    price: number;
+
+    price: number; // Preço de custo (última compra)
+    valorVenda?: number; // Preço de venda (usado em orçamentos)
+    porcentagemLucro?: number; // Porcentagem de lucro ((valorVenda - price) / price * 100)
+    estoque?: number; // Quantidade em estoque (alias para stock)
 }
 
 

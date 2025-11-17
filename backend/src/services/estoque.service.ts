@@ -247,7 +247,13 @@ export class EstoqueService {
         const orcamento = await prisma.orcamento.findUnique({
             where: { id: orcamentoId },
             include: {
-                items: true
+                items: {
+                    include: {
+                        material: true,
+                        cotacao: true,
+                        kit: true
+                    }
+                }
             }
         });
 
@@ -258,8 +264,97 @@ export class EstoqueService {
         const verificacoes = [];
 
         for (const item of orcamento.items) {
-            if (item.tipo === 'MATERIAL' && item.materialId) {
-                const material = await prisma.material.findUnique({
+            // ITENS DO TIPO COTACAO (Banco Frio)
+            if (item.tipo === 'COTACAO' && item.cotacaoId) {
+                const cotacao = item.cotacao;
+                if (!cotacao) {
+                    verificacoes.push({
+                        tipo: 'COTACAO',
+                        cotacaoId: item.cotacaoId,
+                        nome: 'Cotação não encontrada',
+                        quantidadeNecessaria: item.quantidade,
+                        quantidadeDisponivel: 0,
+                        suficiente: false,
+                        falta: item.quantidade,
+                        origem: 'Banco Frio',
+                        precisaComprar: true,
+                        mensagem: 'Item do banco frio não possui material correspondente em estoque. É necessário realizar a compra.'
+                    });
+                    continue;
+                }
+
+                // Buscar material correspondente em estoque por nome similar ou NCM
+                // Primeiro tentar por nome exato (case-insensitive)
+                let materialEmEstoque = await prisma.material.findFirst({
+                    where: {
+                        AND: [
+                            { nome: { equals: cotacao.nome, mode: 'insensitive' } },
+                            { estoque: { gt: 0 } }
+                        ]
+                    }
+                });
+
+                // Se não encontrou, tentar por NCM (se a cotação tiver NCM)
+                if (!materialEmEstoque && cotacao.ncm) {
+                    materialEmEstoque = await prisma.material.findFirst({
+                        where: {
+                            ncm: cotacao.ncm,
+                            estoque: { gt: 0 }
+                        }
+                    });
+                }
+
+                // Se não encontrou, buscar qualquer material com nome similar
+                if (!materialEmEstoque) {
+                    const nomeNormalizado = cotacao.nome.toLowerCase().trim();
+                    const materiaisComEstoque = await prisma.material.findMany({
+                        where: {
+                            estoque: { gt: 0 },
+                            nome: { contains: nomeNormalizado.substring(0, 20), mode: 'insensitive' }
+                        }
+                    });
+                    materialEmEstoque = materiaisComEstoque[0] || null;
+                }
+
+                if (!materialEmEstoque) {
+                    // Não existe material em estoque correspondente à cotação
+                    verificacoes.push({
+                        tipo: 'COTACAO',
+                        cotacaoId: item.cotacaoId,
+                        nome: cotacao.nome,
+                        quantidadeNecessaria: item.quantidade,
+                        quantidadeDisponivel: 0,
+                        suficiente: false,
+                        falta: item.quantidade,
+                        origem: 'Banco Frio',
+                        precisaComprar: true,
+                        mensagem: `Item "${cotacao.nome}" do banco frio não possui material correspondente em estoque. É necessário realizar a compra antes de criar a obra.`
+                    });
+                } else {
+                    // Existe material, verificar se tem estoque suficiente
+                    const suficiente = materialEmEstoque.estoque >= item.quantidade;
+                    verificacoes.push({
+                        tipo: 'COTACAO',
+                        cotacaoId: item.cotacaoId,
+                        materialId: materialEmEstoque.id,
+                        nome: cotacao.nome,
+                        nomeMaterialEstoque: materialEmEstoque.nome,
+                        sku: materialEmEstoque.sku,
+                        quantidadeNecessaria: item.quantidade,
+                        quantidadeDisponivel: materialEmEstoque.estoque,
+                        suficiente,
+                        falta: Math.max(0, item.quantidade - materialEmEstoque.estoque),
+                        origem: 'Banco Frio',
+                        precisaComprar: !suficiente,
+                        mensagem: suficiente 
+                            ? `Item do banco frio tem material correspondente em estoque (${materialEmEstoque.nome})`
+                            : `Item "${cotacao.nome}" do banco frio tem material correspondente mas falta ${Math.max(0, item.quantidade - materialEmEstoque.estoque)} unidades em estoque. É necessário realizar a compra.`
+                    });
+                }
+            }
+            // ITENS DO TIPO MATERIAL (Estoque Real)
+            else if (item.tipo === 'MATERIAL' && item.materialId) {
+                const material = item.material || await prisma.material.findUnique({
                     where: { id: item.materialId }
                 });
 
@@ -272,14 +367,35 @@ export class EstoqueService {
                         quantidadeNecessaria: item.quantidade,
                         quantidadeDisponivel: material.estoque,
                         suficiente: material.estoque >= item.quantidade,
-                        falta: Math.max(0, item.quantidade - material.estoque)
+                        falta: Math.max(0, item.quantidade - material.estoque),
+                        origem: 'Estoque Real',
+                        precisaComprar: material.estoque < item.quantidade,
+                        mensagem: material.estoque >= item.quantidade
+                            ? 'Item disponível em estoque'
+                            : `Faltam ${Math.max(0, item.quantidade - material.estoque)} unidades em estoque. É necessário realizar a compra.`
+                    });
+                } else {
+                    verificacoes.push({
+                        tipo: 'MATERIAL',
+                        materialId: item.materialId,
+                        nome: 'Material não encontrado',
+                        quantidadeNecessaria: item.quantidade,
+                        quantidadeDisponivel: 0,
+                        suficiente: false,
+                        falta: item.quantidade,
+                        origem: 'Estoque Real',
+                        precisaComprar: true,
+                        mensagem: 'Material não encontrado no sistema. É necessário cadastrar e realizar a compra.'
                     });
                 }
-            } else if (item.tipo === 'KIT' && item.kitId) {
+            } 
+            // ITENS DO TIPO KIT
+            else if (item.tipo === 'KIT' && item.kitId) {
                 const componentesKit = await this.expandirKit(item.kitId);
                 
                 for (const componente of componentesKit) {
                     const quantidadeTotal = componente.quantidade * item.quantidade;
+                    const suficiente = componente.estoqueAtual >= quantidadeTotal;
                     
                     verificacoes.push({
                         tipo: 'KIT_COMPONENTE',
@@ -288,27 +404,69 @@ export class EstoqueService {
                         sku: componente.materialSku,
                         quantidadeNecessaria: quantidadeTotal,
                         quantidadeDisponivel: componente.estoqueAtual,
-                        suficiente: componente.estoqueAtual >= quantidadeTotal,
+                        suficiente,
                         falta: Math.max(0, quantidadeTotal - componente.estoqueAtual),
-                        origemKit: `${item.quantidade}x Kit`
+                        origemKit: `${item.quantidade}x Kit`,
+                        origem: 'Kit',
+                        precisaComprar: !suficiente,
+                        mensagem: suficiente
+                            ? 'Componente do kit disponível em estoque'
+                            : `Componente do kit: faltam ${Math.max(0, quantidadeTotal - componente.estoqueAtual)} unidades. É necessário realizar a compra.`
                     });
                 }
             }
+            // ITENS DO TIPO SERVICO, QUADRO_PRONTO, CUSTO_EXTRA não precisam de estoque
         }
 
         const temEstoqueSuficiente = verificacoes.every(v => v.suficiente);
         const itensSemEstoque = verificacoes.filter(v => !v.suficiente);
+        const itensPrecisamComprar = verificacoes.filter(v => v.precisaComprar);
 
         return {
             disponivel: temEstoqueSuficiente,
             verificacoes,
             itensSemEstoque,
+            itensPrecisamComprar,
             resumo: {
                 totalItens: verificacoes.length,
                 itensDisponiveis: verificacoes.filter(v => v.suficiente).length,
-                itensSemEstoque: itensSemEstoque.length
+                itensSemEstoque: itensSemEstoque.length,
+                itensPrecisamComprar: itensPrecisamComprar.length
             }
         };
+    }
+
+    /**
+     * Verifica disponibilidade de estoque para um projeto (através do orçamento)
+     */
+    static async verificarDisponibilidadeProjeto(projetoId: string) {
+        const projeto = await prisma.projeto.findUnique({
+            where: { id: projetoId },
+            include: {
+                orcamento: {
+                    include: {
+                        items: {
+                            include: {
+                                material: true,
+                                cotacao: true,
+                                kit: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!projeto) {
+            throw new Error('Projeto não encontrado');
+        }
+
+        if (!projeto.orcamentoId) {
+            throw new Error('Projeto não possui orçamento vinculado');
+        }
+
+        // Usar o método existente de verificação de orçamento
+        return await this.verificarDisponibilidadeOrcamento(projeto.orcamentoId);
     }
 }
 

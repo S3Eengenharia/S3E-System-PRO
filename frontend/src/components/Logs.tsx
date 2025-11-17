@@ -101,10 +101,10 @@ const Logs: React.FC<LogsProps> = ({ toggleSidebar }) => {
         try {
             setLoading(true);
             // TODO: Implementar endpoint real
-            const response = await axiosApiService.get('/api/logs/audit');
+            const response = await axiosApiService.get<{ logs?: AuditLog[]; stats?: SystemStats }>('/api/logs/audit');
             if (response.success && response.data) {
-                setLogs(response.data.logs || []);
-                setStats(response.data.stats || stats);
+                setLogs((response.data as any).logs || []);
+                setStats((response.data as any).stats || stats);
             }
         } catch (error) {
             console.error('Erro ao carregar logs:', error);

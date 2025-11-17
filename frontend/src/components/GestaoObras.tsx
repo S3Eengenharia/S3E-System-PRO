@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
+import EquipesGantt from './Obras/EquipesGantt';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { toast } from 'sonner';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -263,14 +265,19 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 // O backend retorna { success: true, data: [...] }
                 let alocacoesArray: any[] = [];
                 
+                // Type guard para verificar se é array
                 if (Array.isArray(response.data)) {
                     alocacoesArray = response.data;
-                } else if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray(response.data.data)) {
-                    alocacoesArray = response.data.data;
                 } else if (response.data && typeof response.data === 'object') {
-                    // Pode ser um objeto único, não um array
-                    console.warn('⚠️ Resposta não é um array:', response.data);
-                    alocacoesArray = [];
+                    // Verificar se tem estrutura aninhada { data: [...] }
+                    const dataObj = response.data as any;
+                    if ('data' in dataObj && Array.isArray(dataObj.data)) {
+                        alocacoesArray = dataObj.data;
+                    } else {
+                        // Pode ser um objeto único, não um array
+                        console.warn('⚠️ Resposta não é um array:', response.data);
+                        alocacoesArray = [];
+                    }
                 }
                 
                 console.log('✅ Alocações carregadas:', alocacoesArray.length, 'alocações');
@@ -515,6 +522,10 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             ativa: true
         });
     };
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(isAlocacaoModalOpen, () => setIsAlocacaoModalOpen(false));
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1287,6 +1298,14 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
 
             {activeTab === 'gantt' && (
                 <div className="space-y-6">
+                    <EquipesGantt
+                        equipes={equipes}
+                        obras={obras}
+                        alocacoes={alocacoes}
+                        onRefresh={async () => {
+                            await Promise.all([loadEquipes(), loadAlocacoes(false), loadObras()]);
+                        }}
+                    />
                     {/* Header */}
                     <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

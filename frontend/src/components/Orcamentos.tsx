@@ -6,6 +6,8 @@ import { axiosApiService } from '../services/axiosApi';
 import ViewToggle from './ui/ViewToggle';
 import { ENDPOINTS } from '../config/api';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
+
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
     generateEmptyTemplate,
     generateExampleTemplate,
@@ -52,6 +54,11 @@ const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
 );
+const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+);
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.432 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -77,6 +84,8 @@ interface Material {
     sku: string;
     unidadeMedida: string;
     preco: number;
+    valorVenda?: number; // Preço de venda (usado em orçamentos)
+    porcentagemLucro?: number; // Porcentagem de lucro
     estoque: number;
     categoria: string;
     ativo: boolean;
@@ -101,6 +110,7 @@ interface OrcamentoItem {
     unidadeMedida: string;
     quantidade: number;
     custoUnit: number;
+    precoBase?: number; // Base do preço de venda (valorVenda || preco) sem BDI - usado para recalcular quando BDI muda
     precoUnit: number;
     subtotal: number;
     orcamentoId?: string;
@@ -192,6 +202,43 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const [kits, setKits] = useState<any[]>([]);
     const [servicos, setServicos] = useState<any[]>([]);
     const [quadrosProntos, setQuadrosProntos] = useState<any[]>([]);
+    
+    // Estados para modal de comparação (estoque vs banco frio)
+    const [modalExpandido, setModalExpandido] = useState(false);
+    const [materiaisComEstoque, setMateriaisComEstoque] = useState<Material[]>([]);
+    const [cotacoesBancoFrio, setCotacoesBancoFrio] = useState<any[]>([]);
+    const [searchEstoque, setSearchEstoque] = useState('');
+    const [searchCotacoes, setSearchCotacoes] = useState('');
+    const [searchGlobalComparacao, setSearchGlobalComparacao] = useState('');
+    const [materialSelecionadoComparacao, setMaterialSelecionadoComparacao] = useState<Material | null>(null);
+    const [cotacaoSelecionadaComparacao, setCotacaoSelecionadaComparacao] = useState<any | null>(null);
+    const [materiaisSelecionadosComparacao, setMateriaisSelecionadosComparacao] = useState<Set<string>>(new Set());
+    const [cotacoesSelecionadasComparacao, setCotacoesSelecionadasComparacao] = useState<Set<string>>(new Set());
+    
+    // Estado para busca global e modo de adição
+    const [buscaGlobal, setBuscaGlobal] = useState('');
+    const [modoAdicao, setModoAdicao] = useState<'materiais' | 'servicos' | 'kits' | 'quadros' | 'cotacoes' | 'manual' | 'comparacao'>('materiais');
+    const [resultadosBuscaGlobal, setResultadosBuscaGlobal] = useState<{
+        materiais: Material[];
+        servicos: any[];
+        kits: any[];
+        quadros: any[];
+        cotacoes: any[];
+    }>({
+        materiais: [],
+        servicos: [],
+        kits: [],
+        quadros: [],
+        cotacoes: []
+    });
+    const [novoItemManual, setNovoItemManual] = useState({
+        nome: '',
+        descricao: '',
+        unidadeMedida: 'UN',
+        quantidade: 1,
+        custoUnit: 0,
+        tipo: 'MATERIAL' as const
+    });
 
     // Carregar dados iniciais usando os serviços adequados
     const loadData = async () => {
@@ -372,6 +419,105 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             );
     }, [quadrosProntos, itemSearchTerm]);
 
+    // Alias para compatibilidade com modal de comparação
+    const filteredQuadros = filteredQuadrosProntos;
+
+    // Popular materiais com estoque e cotações do banco frio para comparação
+    useEffect(() => {
+        if (Array.isArray(materiais)) {
+            setMateriaisComEstoque(materiais.filter(m => m.ativo && (m.estoque ?? 0) > 0));
+        }
+        if (Array.isArray(cotacoes)) {
+            setCotacoesBancoFrio(cotacoes.filter(c => c.ativo !== false));
+        }
+    }, [materiais, cotacoes]);
+
+    // Filtrar materiais com estoque para comparação
+    const filteredMateriaisEstoque = useMemo(() => {
+        const termoBusca = searchGlobalComparacao || searchEstoque;
+        if (!termoBusca) return materiaisComEstoque || [];
+        return (materiaisComEstoque || []).filter(material =>
+            material && (
+                (material.nome || '').toLowerCase().includes(termoBusca.toLowerCase()) ||
+                (material.sku || '').toLowerCase().includes(termoBusca.toLowerCase())
+            )
+        );
+    }, [materiaisComEstoque, searchEstoque, searchGlobalComparacao]);
+
+    // Filtrar cotações para comparação
+    const filteredCotacoesComparacao = useMemo(() => {
+        const termoBusca = searchGlobalComparacao || searchCotacoes;
+        if (!termoBusca) return cotacoesBancoFrio || [];
+        return (cotacoesBancoFrio || []).filter(cotacao =>
+            cotacao && (
+                (cotacao.nome || '').toLowerCase().includes(termoBusca.toLowerCase()) ||
+                (cotacao.ncm || '').toLowerCase().includes(termoBusca.toLowerCase()) ||
+                (cotacao.fornecedorNome || '').toLowerCase().includes(termoBusca.toLowerCase())
+            )
+        );
+    }, [cotacoesBancoFrio, searchCotacoes, searchGlobalComparacao]);
+
+    // Busca global em todos os tipos de itens
+    useEffect(() => {
+        if (!buscaGlobal.trim()) {
+            setResultadosBuscaGlobal({
+                materiais: [],
+                servicos: [],
+                kits: [],
+                quadros: [],
+                cotacoes: []
+            });
+            return;
+        }
+
+        const termo = buscaGlobal.toLowerCase();
+        
+        const materiaisEncontrados = (materiais || [])
+            .filter(m => m && m.ativo && (m.estoque ?? 0) > 0)
+            .filter(m => 
+                (m.nome || '').toLowerCase().includes(termo) ||
+                (m.sku || '').toLowerCase().includes(termo)
+            );
+
+        const servicosEncontrados = (servicos || [])
+            .filter(s => s && s.ativo)
+            .filter(s =>
+                (s.nome || '').toLowerCase().includes(termo) ||
+                (s.codigo || '').toLowerCase().includes(termo) ||
+                (s.descricao || '').toLowerCase().includes(termo)
+            );
+
+        const kitsEncontrados = (kits || [])
+            .filter(k => k && k.ativo)
+            .filter(k =>
+                (k.nome || '').toLowerCase().includes(termo) ||
+                (k.descricao || '').toLowerCase().includes(termo)
+            );
+
+        const quadrosEncontrados = (quadrosProntos || [])
+            .filter(q => q && q.ativo)
+            .filter(q =>
+                (q.nome || '').toLowerCase().includes(termo) ||
+                (q.descricao || '').toLowerCase().includes(termo)
+            );
+
+        const cotacoesEncontradas = (cotacoes || [])
+            .filter(c => c && c.ativo !== false)
+            .filter(c =>
+                (c.nome || '').toLowerCase().includes(termo) ||
+                (c.ncm || '').toLowerCase().includes(termo) ||
+                (c.fornecedorNome || '').toLowerCase().includes(termo)
+            );
+
+        setResultadosBuscaGlobal({
+            materiais: materiaisEncontrados,
+            servicos: servicosEncontrados,
+            kits: kitsEncontrados,
+            quadros: quadrosEncontrados,
+            cotacoes: cotacoesEncontradas
+        });
+    }, [buscaGlobal, materiais, servicos, kits, quadrosProntos, cotacoes]);
+
     // Filtrar orçamentos
     const filteredOrcamentos = useMemo(() => {
         if (!Array.isArray(orcamentos)) return [];
@@ -432,14 +578,61 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             });
             // Mapear ItemOrcamento para OrcamentoItem
             const mappedItems = (orcamento.items || []).map((item: any) => {
-                // Se custoUnit for 0 ou null, tentar buscar do material
+                // Se custoUnit for 0 ou null, tentar buscar do material ou kit
                 let custoUnitFinal = item.custoUnitario || item.custoUnit || 0;
                 let precoUnitFinal = item.precoUnitario || item.precoUnit || 0;
+                
+                // Calcular precoBase: se tiver material, usar valorVenda || preco, senão calcular a partir do precoUnit
+                let precoBase: number | undefined;
+                
+                if (item.tipo === 'KIT' && item.kitId) {
+                    // Se for kit, buscar o kit completo para calcular o preço
+                    const kitCompleto = kits.find((k: any) => k.id === item.kitId);
+                    if (kitCompleto && kitCompleto.items) {
+                        // Calcular custo total do kit (soma dos preços de compra dos materiais do estoque real)
+                        const custoTotalKit = kitCompleto.items.reduce((sum: number, kitItem: any) => {
+                            const precoCompra = kitItem.material?.preco || 0;
+                            return sum + (precoCompra * kitItem.quantidade);
+                        }, 0);
+                        
+                        // Calcular preço de venda total do kit (soma dos valorVenda || preco dos materiais do estoque real)
+                        let precoVendaTotalKit = kitCompleto.items.reduce((sum: number, kitItem: any) => {
+                            const precoVenda = kitItem.material?.valorVenda || kitItem.material?.preco || 0;
+                            return sum + (precoVenda * kitItem.quantidade);
+                        }, 0);
+                        
+                        // IMPORTANTE: Incluir itens do banco frio no cálculo do preço de venda
+                        if (kitCompleto.itensFaltantes && Array.isArray(kitCompleto.itensFaltantes) && kitCompleto.itensFaltantes.length > 0) {
+                            const precoVendaBancoFrio = kitCompleto.itensFaltantes.reduce((sum: number, itemBancoFrio: any) => {
+                                const precoUnit = itemBancoFrio.precoUnit || itemBancoFrio.preco || itemBancoFrio.valorUnitario || 0;
+                                const quantidade = itemBancoFrio.quantidade || 0;
+                                return sum + (precoUnit * quantidade);
+                            }, 0);
+                            precoVendaTotalKit += precoVendaBancoFrio;
+                        }
+                        
+                        custoUnitFinal = custoTotalKit;
+                        precoBase = precoVendaTotalKit;
+                        precoUnitFinal = precoVendaTotalKit * (1 + (orcamento.bdi || 0) / 100);
+                    } else if (precoUnitFinal > 0 && orcamento.bdi) {
+                        // Se não encontrou o kit, calcular base a partir do precoUnit e BDI
+                        precoBase = precoUnitFinal / (1 + (orcamento.bdi || 0) / 100);
+                    }
+                } else if (item.material) {
+                    // Usar valorVenda do material se disponível, senão usar preco
+                    precoBase = item.material.valorVenda || item.material.preco || 0;
+                } else if (precoUnitFinal > 0 && orcamento.bdi) {
+                    // Calcular base a partir do precoUnit e BDI atual
+                    precoBase = precoUnitFinal / (1 + (orcamento.bdi || 0) / 100);
+                }
                 
                 // Se ainda estiver zerado, tentar buscar do material vinculado
                 if (custoUnitFinal === 0 && item.material) {
                     custoUnitFinal = item.material.preco || 0;
-                    precoUnitFinal = custoUnitFinal * (1 + (orcamento.bdi || 0) / 100);
+                    if (!precoBase) {
+                        precoBase = item.material.valorVenda || item.material.preco || 0;
+                    }
+                    precoUnitFinal = (precoBase || custoUnitFinal) * (1 + (orcamento.bdi || 0) / 100);
                 }
                 
                 const subtotalCalculado = precoUnitFinal * (item.quantidade || 1);
@@ -451,11 +644,12 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     kitId: item.kitId,
                     quadroId: item.quadroId,
                     servicoId: item.servicoId,
-                    nome: item.nome || item.material?.nome || item.descricao || 'Item',
+                    nome: item.nome || item.material?.nome || item.kit?.nome || item.descricao || 'Item',
                     descricao: item.descricao || '',
                     unidadeMedida: item.unidadeMedida || item.material?.unidadeMedida || 'UN',
                     quantidade: item.quantidade || 1,
                     custoUnit: custoUnitFinal,
+                    precoBase: precoBase, // Armazenar base para recalcular quando BDI mudar
                     precoUnit: precoUnitFinal,
                     subtotal: item.subtotal || subtotalCalculado,
                     orcamentoId: item.orcamentoId
@@ -527,6 +721,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         setItems([]);
     };
 
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(showItemModal, () => setShowItemModal(false));
+
     // Funções de Exportação/Importação
     const handleExportTemplate = () => {
         try {
@@ -566,10 +765,10 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                     impostoPercentual: orc.impostoPercentual,
                     condicaoPagamento: orc.condicaoPagamento,
                     items: (orc.items || []).map(item => ({
-                        tipo: item.tipo as any,
+                        tipo: item.tipo as 'MATERIAL' | 'KIT' | 'SERVICO' | 'QUADRO_PRONTO' | 'CUSTO_EXTRA' | 'COTACAO',
                         materialId: item.materialId,
                         materialNome: item.nome,
-                        nome: item.nome,
+                        nome: (item.nome || item.descricao || 'Item sem nome') as string,
                         descricao: item.descricao,
                         unidadeMedida: item.unidadeMedida || 'UN',
                         quantidade: item.quantidade,
@@ -741,7 +940,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     };
 
     // Adicionar item ao orçamento
-    const handleAddItem = (material: Material) => {
+    const handleAddItem = (material: Material, manterModalAberto = false) => {
+        // Usar valorVenda se disponível, senão usar preco (preço de compra)
+        const precoVenda = material.valorVenda || material.preco;
+        const precoBase = precoVenda; // Armazenar base para recalcular quando BDI mudar
+        
         const newItem: OrcamentoItem = {
             tipo: 'MATERIAL',
             materialId: material.id,
@@ -749,19 +952,26 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             descricao: material.nome, // Usar o nome como descrição
             unidadeMedida: material.unidadeMedida,
             quantidade: 1,
-            custoUnit: material.preco,
-            precoUnit: material.preco * (1 + formState.bdi / 100),
-            subtotal: material.preco * (1 + formState.bdi / 100)
+            custoUnit: material.preco, // Custo sempre é o preço de compra
+            precoBase: precoBase, // Base do preço de venda (sem BDI)
+            precoUnit: precoBase * (1 + formState.bdi / 100), // Preço unitário usa valorVenda || preco
+            subtotal: precoBase * (1 + formState.bdi / 100)
         };
 
         setItems(prev => [...prev, newItem]);
-        setShowItemModal(false);
+        if (!manterModalAberto) {
+            setShowItemModal(false);
+        }
         setItemSearchTerm('');
         toast.success('Material adicionado ao orçamento');
     };
 
     // Adicionar cotação ao orçamento (BANCO FRIO)
-    const handleAddCotacao = (cotacao: any) => {
+    const handleAddCotacao = (cotacao: any, manterModalAberto = false) => {
+        // Usar valorVenda se disponível, senão calcular 40% acima do valorUnitario
+        const valorVenda = cotacao.valorVenda || cotacao.valorUnitario * 1.4;
+        const precoBase = valorVenda; // Base para recalcular quando BDI mudar
+        
         const newItem: OrcamentoItem = {
             tipo: 'COTACAO',
             cotacaoId: cotacao.id,
@@ -770,19 +980,183 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             dataAtualizacaoCotacao: cotacao.dataAtualizacao,
             unidadeMedida: 'UN',
             quantidade: 1,
-            custoUnit: cotacao.valorUnitario,
-            precoUnit: cotacao.valorUnitario * (1 + formState.bdi / 100),
-            subtotal: cotacao.valorUnitario * (1 + formState.bdi / 100)
+            custoUnit: cotacao.valorUnitario, // Custo é sempre o valor da cotação
+            precoBase: precoBase, // Base do preço de venda (sem BDI)
+            precoUnit: precoBase * (1 + formState.bdi / 100), // Preço unitário usa valorVenda
+            subtotal: precoBase * (1 + formState.bdi / 100)
         };
 
         setItems(prev => [...prev, newItem]);
-        setShowItemModal(false);
+        if (!manterModalAberto) {
+            setShowItemModal(false);
+        }
         setItemSearchTerm('');
-        toast.success(`Cotação adicionada do banco frio`);
+        
+        // Verificar se a cotação tem mais de 30 dias
+        if (cotacao.dataAtualizacao) {
+            const dataAtualizacao = new Date(cotacao.dataAtualizacao);
+            const diasDesdeAtualizacao = Math.floor((new Date().getTime() - dataAtualizacao.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (diasDesdeAtualizacao > 30) {
+                toast.warning(`⚠️ Cotação antiga: ${diasDesdeAtualizacao} dias desde a última atualização`, {
+                    description: `A cotação "${cotacao.nome}" foi atualizada há mais de 30 dias. Considere realizar uma nova cotação.`,
+                    duration: 5000
+                });
+            } else {
+                toast.success(`Cotação adicionada do banco frio`);
+            }
+        } else {
+            toast.success(`Cotação adicionada do banco frio`);
+        }
+    };
+
+    // Funções para modal de comparação
+    const toggleMaterialSelecionado = (materialId: string) => {
+        setMateriaisSelecionadosComparacao(prev => {
+            const novo = new Set(prev);
+            if (novo.has(materialId)) {
+                novo.delete(materialId);
+            } else {
+                novo.add(materialId);
+            }
+            return novo;
+        });
+    };
+
+    const toggleCotacaoSelecionada = (cotacaoId: string) => {
+        setCotacoesSelecionadasComparacao(prev => {
+            const novo = new Set(prev);
+            if (novo.has(cotacaoId)) {
+                novo.delete(cotacaoId);
+            } else {
+                novo.add(cotacaoId);
+            }
+            return novo;
+        });
+    };
+
+    const handleAddItemComValidacao = (material?: Material, cotacao?: any, quantidade?: number) => {
+        const qtd = quantidade || 1;
+        
+        // Validar estoque se for material
+        if (material) {
+            if (material.estoque < qtd) {
+                toast.error('Estoque insuficiente', {
+                    description: `Estoque disponível: ${material.estoque} ${material.unidadeMedida}. Solicitado: ${qtd} ${material.unidadeMedida}`
+                });
+                return;
+            }
+            
+            // Usar handleAddItem existente
+            const precoVenda = material.valorVenda || material.preco;
+            const precoBase = precoVenda;
+            
+            const newItem: OrcamentoItem = {
+                tipo: 'MATERIAL',
+                materialId: material.id,
+                nome: material.nome,
+                descricao: material.nome,
+                unidadeMedida: material.unidadeMedida,
+                quantidade: qtd,
+                custoUnit: material.preco,
+                precoBase: precoBase,
+                precoUnit: precoBase * (1 + formState.bdi / 100),
+                subtotal: precoBase * (1 + formState.bdi / 100) * qtd
+            };
+            
+            setItems(prev => [...prev, newItem]);
+            toast.success('Material adicionado', {
+                description: `${material.nome} (${qtd} ${material.unidadeMedida}) - Estoque: ${material.estoque} ${material.unidadeMedida}`
+            });
+        }
+        
+        // Adicionar cotação se fornecida
+        if (cotacao) {
+            const valorVenda = cotacao.valorVenda || cotacao.valorUnitario * 1.4;
+            const precoBase = valorVenda;
+            
+            const newItem: OrcamentoItem = {
+                tipo: 'COTACAO',
+                cotacaoId: cotacao.id,
+                nome: cotacao.nome,
+                descricao: cotacao.nome,
+                unidadeMedida: cotacao.unidadeMedida || 'UN',
+                quantidade: qtd,
+                custoUnit: cotacao.valorUnitario || 0,
+                precoBase: precoBase,
+                precoUnit: precoBase * (1 + formState.bdi / 100),
+                subtotal: precoBase * (1 + formState.bdi / 100) * qtd,
+                dataAtualizacaoCotacao: cotacao.dataAtualizacao
+            };
+            
+            setItems(prev => [...prev, newItem]);
+            toast.success('Cotação adicionada', {
+                description: `${cotacao.nome} do banco frio - Fornecedor: ${cotacao.fornecedorNome || 'N/A'}`
+            });
+        }
+        
+        // Limpar seleções
+        setMaterialSelecionadoComparacao(null);
+        setCotacaoSelecionadaComparacao(null);
+        setMateriaisSelecionadosComparacao(new Set());
+        setCotacoesSelecionadasComparacao(new Set());
+    };
+
+    const handleInserirSelecionados = () => {
+        let inseridos = 0;
+        
+        // Inserir materiais selecionados
+        materiaisSelecionadosComparacao.forEach(materialId => {
+            const material = materiaisComEstoque.find(m => m.id === materialId);
+            if (material) {
+                handleAddItemComValidacao(material, undefined, 1);
+                inseridos++;
+            }
+        });
+        
+        // Inserir cotações selecionadas
+        cotacoesSelecionadasComparacao.forEach(cotacaoId => {
+            const cotacao = cotacoesBancoFrio.find(c => c.id === cotacaoId);
+            if (cotacao) {
+                handleAddItemComValidacao(undefined, cotacao, 1);
+                inseridos++;
+            }
+        });
+        
+        if (inseridos > 0) {
+            toast.success(`${inseridos} item(ns) inserido(s) com sucesso!`);
+            // Limpar seleções
+            setMateriaisSelecionadosComparacao(new Set());
+            setCotacoesSelecionadasComparacao(new Set());
+        }
     };
 
     // Adicionar kit ao orçamento
-    const handleAddKit = (kit: any) => {
+    const handleAddKit = (kit: any, manterModalAberto = false) => {
+        // Calcular custo total do kit (soma dos preços de compra dos materiais do estoque real)
+        const custoTotalKit = kit.items?.reduce((sum: number, kitItem: any) => {
+            const precoCompra = kitItem.material?.preco || 0;
+            return sum + (precoCompra * kitItem.quantidade);
+        }, 0) || 0;
+
+        // Calcular preço de venda total do kit (soma dos valorVenda || preco dos materiais do estoque real)
+        let precoVendaTotalKit = kit.items?.reduce((sum: number, kitItem: any) => {
+            const precoVenda = kitItem.material?.valorVenda || kitItem.material?.preco || 0;
+            return sum + (precoVenda * kitItem.quantidade);
+        }, 0) || 0;
+
+        // IMPORTANTE: Incluir itens do banco frio no cálculo do preço de venda
+        if (kit.itensFaltantes && Array.isArray(kit.itensFaltantes) && kit.itensFaltantes.length > 0) {
+            const precoVendaBancoFrio = kit.itensFaltantes.reduce((sum: number, itemBancoFrio: any) => {
+                const precoUnit = itemBancoFrio.precoUnit || itemBancoFrio.preco || itemBancoFrio.valorUnitario || 0;
+                const quantidade = itemBancoFrio.quantidade || 0;
+                return sum + (precoUnit * quantidade);
+            }, 0);
+            precoVendaTotalKit += precoVendaBancoFrio;
+        }
+
+        const precoBase = precoVendaTotalKit; // Base para recalcular quando BDI mudar
+        
         const newItem: OrcamentoItem = {
             tipo: 'KIT',
             kitId: kit.id,
@@ -790,19 +1164,23 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             descricao: kit.descricao || kit.nome,
             unidadeMedida: 'UN',
             quantidade: 1,
-            custoUnit: kit.precoVenda || kit.custoTotal || 0,
-            precoUnit: (kit.precoVenda || kit.custoTotal || 0) * (1 + formState.bdi / 100),
-            subtotal: (kit.precoVenda || kit.custoTotal || 0) * (1 + formState.bdi / 100)
+            custoUnit: custoTotalKit, // Custo é sempre a soma dos preços de compra
+            precoBase: precoBase, // Base do preço de venda (sem BDI)
+            precoUnit: precoBase * (1 + formState.bdi / 100), // Preço unitário usa valorVenda || preco
+            subtotal: precoBase * (1 + formState.bdi / 100)
         };
 
         setItems(prev => [...prev, newItem]);
-        setShowItemModal(false);
+        if (!manterModalAberto) {
+            setShowItemModal(false);
+        }
         setItemSearchTerm('');
         toast.success('Kit adicionado ao orçamento');
     };
 
     // Adicionar serviço ao orçamento
-    const handleAddServico = (servico: any) => {
+    const handleAddServico = (servico: any, manterModalAberto = false) => {
+        const precoBase = servico.precoUnitario || servico.preco || 0;
         const newItem: OrcamentoItem = {
             tipo: 'SERVICO',
             servicoId: servico.id,
@@ -811,19 +1189,27 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
             descricao: servico.descricao || servico.nome,
             unidadeMedida: servico.unidadeMedida || 'UN',
             quantidade: 1,
-            custoUnit: servico.precoUnitario || servico.preco || 0,
-            precoUnit: (servico.precoUnitario || servico.preco || 0) * (1 + formState.bdi / 100),
-            subtotal: (servico.precoUnitario || servico.preco || 0) * (1 + formState.bdi / 100)
+            custoUnit: precoBase,
+            precoBase: precoBase,
+            precoUnit: precoBase * (1 + formState.bdi / 100),
+            subtotal: precoBase * (1 + formState.bdi / 100)
         };
 
         setItems(prev => [...prev, newItem]);
-        setShowItemModal(false);
+        if (!manterModalAberto) {
+            setShowItemModal(false);
+        }
         setItemSearchTerm('');
         toast.success('Serviço adicionado ao orçamento');
     };
 
+    // Adicionar quadro ao orçamento (alias para handleAddQuadroPronto)
+    const handleAddQuadro = (quadro: any, manterModalAberto = false) => {
+        return handleAddQuadroPronto(quadro, manterModalAberto);
+    };
+
     // Adicionar quadro pronto ao orçamento
-    const handleAddQuadroPronto = (quadro: any) => {
+    const handleAddQuadroPronto = (quadro: any, manterModalAberto = false) => {
         const newItem: OrcamentoItem = {
             tipo: 'QUADRO_PRONTO',
             quadroId: quadro.id,
@@ -837,9 +1223,62 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         };
 
         setItems(prev => [...prev, newItem]);
-        setShowItemModal(false);
+        if (!manterModalAberto) {
+            setShowItemModal(false);
+        }
         setItemSearchTerm('');
         toast.success('Quadro pronto adicionado ao orçamento');
+    };
+
+    // Adicionar item manual (sem estoque)
+    const handleAddItemManual = () => {
+        // Validação
+        if (!novoItemManual.nome.trim()) {
+            toast.error('Nome do item obrigatório', {
+                description: 'Digite o nome ou descrição do item'
+            });
+            return;
+        }
+        if (novoItemManual.custoUnit <= 0) {
+            toast.error('Custo unitário inválido', {
+                description: 'Digite um custo unitário maior que zero'
+            });
+            return;
+        }
+        if (novoItemManual.quantidade <= 0) {
+            toast.error('Quantidade inválida', {
+                description: 'Digite uma quantidade maior que zero'
+            });
+            return;
+        }
+
+        const precoBase = novoItemManual.custoUnit;
+        const precoUnit = precoBase * (1 + formState.bdi / 100);
+
+        const newItem: OrcamentoItem = {
+            tipo: novoItemManual.tipo,
+            nome: novoItemManual.nome,
+            descricao: novoItemManual.descricao || novoItemManual.nome,
+            unidadeMedida: novoItemManual.unidadeMedida,
+            quantidade: novoItemManual.quantidade,
+            custoUnit: precoBase,
+            precoBase: precoBase,
+            precoUnit: precoUnit,
+            subtotal: precoUnit * novoItemManual.quantidade
+        };
+
+        setItems(prev => [...prev, newItem]);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        setNovoItemManual({
+            nome: '',
+            descricao: '',
+            unidadeMedida: 'UN',
+            quantidade: 1,
+            custoUnit: 0,
+            tipo: 'MATERIAL'
+        });
+        toast.success('Item manual adicionado ao orçamento');
     };
 
     // Remover item
@@ -851,12 +1290,12 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
     const handleUpdateItemQuantity = (index: number, quantidade: number) => {
         setItems(prev => prev.map((item, i) => {
             if (i === index) {
-                const precoUnit = item.custoUnit * (1 + formState.bdi / 100);
+                // Manter o precoUnit existente (já calculado com valorVenda || preco)
+                // Apenas recalcular o subtotal com a nova quantidade
                 return {
                     ...item,
                     quantidade,
-                    precoUnit,
-                    subtotal: precoUnit * quantidade
+                    subtotal: item.precoUnit * quantidade
                 };
             }
             return item;
@@ -868,7 +1307,9 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
         setFormState(prev => ({ ...prev, bdi: newBdi }));
 
         setItems(prev => prev.map(item => {
-            const precoUnit = item.custoUnit * (1 + newBdi / 100);
+            // Usar precoBase se disponível (valorVenda || preco), senão usar custoUnit como fallback
+            const basePreco = item.precoBase !== undefined ? item.precoBase : item.custoUnit;
+            const precoUnit = basePreco * (1 + newBdi / 100);
             return {
                 ...item,
                 precoUnit,
@@ -1529,7 +1970,8 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             {filteredOrcamentos.map((orcamento, index) => (
                                 <tr key={orcamento.id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4 text-center">
-                                        <span className="text-sm font-semibold text-gray-600">{index + 1}</span>
+
+                                        <span className="text-sm font-semibold text-gray-600">{orcamento.numeroSequencial || index + 1}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <p className="font-semibold text-gray-900">{orcamento.cliente?.nome || 'N/A'}</p>
@@ -2096,354 +2538,1178 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                 </div>
             )}
 
-            {/* MODAL DE SELEÇÃO DE ITENS */}
+            {/* MODAL DE SELEÇÃO DE ITENS - COM COMPARAÇÃO */}
             {showItemModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-strong w-full max-w-4xl max-h-[80vh] overflow-hidden">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-dark-border" style={{ background: '#0a1a2f' }}>
-                            <div>
-                                <h3 className="text-xl font-bold text-white">Adicionar Item ao Orçamento</h3>
-                                <p className="text-sm text-white/80 mt-1">Escolha o tipo e selecione o item</p>
+                    <div className={`bg-white dark:bg-dark-card rounded-2xl shadow-2xl ${modalExpandido ? 'max-w-[95vw] w-full' : 'max-w-4xl w-full'} max-h-[95vh] overflow-hidden flex flex-col transition-all duration-300`}>
+                        {/* Header com Abas */}
+                        <div className="p-6 border-b border-gray-200 dark:border-dark-border" style={{ backgroundColor: '#0a1a2f' }}>
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex-1">
+                                    <h3 className="text-xl font-bold text-white">Adicionar Item ao Orçamento</h3>
+                                    <p className="text-sm text-white/80 mt-1">Escolha como deseja adicionar o item</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowItemModal(false);
+                                        setItemSearchTerm('');
+                                        setModoAdicao('materiais');
+                                        setModalExpandido(false);
+                                        setMaterialSelecionadoComparacao(null);
+                                        setCotacaoSelecionadaComparacao(null);
+                                        setMateriaisSelecionadosComparacao(new Set());
+                                        setCotacoesSelecionadasComparacao(new Set());
+                                        setSearchEstoque('');
+                                        setSearchCotacoes('');
+                                        setSearchGlobalComparacao('');
+                                        setBuscaGlobal('');
+                                    }}
+                                    className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
                             </div>
-                            <button onClick={() => setShowItemModal(false)} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
-                                <XMarkIcon className="w-6 h-6" />
-                            </button>
+
+                            {/* Campo de Busca Universal no Header */}
+                            {!modalExpandido && (
+                                <div className="mb-4">
+                                    <div className="relative">
+                                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
+                                        <input
+                                            type="text"
+                                            value={buscaGlobal}
+                                            onChange={(e) => setBuscaGlobal(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/40 transition-all"
+                                            placeholder="🔍 Buscar em todos os itens (Materiais, Serviços, Kits, Quadros, Cotações)..."
+                                            style={{ color: 'white' }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Abas */}
+                            <div className="flex gap-2 flex-wrap items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (modalExpandido) {
+                                            setModalExpandido(false);
+                                            setModoAdicao('materiais');
+                                        } else {
+                                            setModalExpandido(true);
+                                            setModoAdicao('comparacao');
+                                        }
+                                    }}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                                        modalExpandido
+                                            ? 'bg-green-500 text-white hover:bg-green-600'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                    title="Expandir para comparar estoque real com banco frio"
+                                >
+                                    {modalExpandido ? (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                                            </svg>
+                                            Comparação Ativa
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                            </svg>
+                                            Comparar Estoque vs Banco Frio
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setModoAdicao('materiais');
+                                        setModalExpandido(false);
+                                    }}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'materiais' && !modalExpandido
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    📦 Materiais
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('servicos')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'servicos'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    🔧 Serviços
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('kits')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'kits'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    📦 Kits
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('quadros')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'quadros'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    ⚡ Quadros
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('cotacoes')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'cotacoes'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    🏷️ Cotações
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModoAdicao('manual')}
+                                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                                        modoAdicao === 'manual'
+                                            ? 'bg-white text-indigo-700'
+                                            : 'bg-white/20 text-white hover:bg-white/30'
+                                    }`}
+                                >
+                                    ✏️ Manual
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="p-6">
-                            {/* Seletor de Tipo de Item */}
-                            <div className="mb-6">
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-3">Tipo de Item</label>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setTipoItemSelecionado('material')}
-                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
-                                            tipoItemSelecionado === 'material'
-                                                ? 'bg-blue-100 border-blue-500 text-blue-800'
-                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        📦 Material
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setTipoItemSelecionado('servico')}
-                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
-                                            tipoItemSelecionado === 'servico'
-                                                ? 'bg-purple-100 border-purple-500 text-purple-800'
-                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        🔧 Serviço
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setTipoItemSelecionado('cotacao')}
-                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
-                                            tipoItemSelecionado === 'cotacao'
-                                                ? 'bg-green-100 border-green-500 text-green-800'
-                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        🏷️ Cotações
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setTipoItemSelecionado('quadro')}
-                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
-                                            tipoItemSelecionado === 'quadro'
-                                                ? 'bg-yellow-100 border-yellow-500 text-yellow-800'
-                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        ⚡ Quadro Pronto
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setTipoItemSelecionado('kit')}
-                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
-                                            tipoItemSelecionado === 'kit'
-                                                ? 'bg-indigo-100 border-indigo-500 text-indigo-800'
-                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        🎁 Kit
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setTipoItemSelecionado('extra')}
-                                        className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${
-                                            tipoItemSelecionado === 'extra'
-                                                ? 'bg-red-100 border-red-500 text-red-800'
-                                                : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        💵 Custo Extra
-                                    </button>
-                                </div>
-                            </div>
+                        {/* Conteúdo do Modal */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {/* Resultados da Busca Global */}
+                            {!modalExpandido && (
+                                <div className="mb-6">
+                                    {buscaGlobal.trim() && (
+                                        <div className="mt-4 space-y-4">
+                                            {/* Materiais */}
+                                            {resultadosBuscaGlobal.materiais.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                        <span>📦</span> Materiais ({resultadosBuscaGlobal.materiais.length})
+                                                    </h4>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                        {resultadosBuscaGlobal.materiais.map(material => (
+                                                            <button
+                                                                key={material.id}
+                                                                type="button"
+                                                                onClick={() => handleAddItem(material, true)}
+                                                                className="w-full text-left p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
+                                                            >
+                                                                <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
+                                                                <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
+                                                                    SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida}
+                                                                    <br />
+                                                                    Custo: R$ {(material.preco ?? 0).toFixed(2)}
+                                                                    {material.valorVenda && (
+                                                                        <> • Venda: R$ {(material.valorVenda ?? 0).toFixed(2)} 
+                                                                        {material.porcentagemLucro && ` (${(material.porcentagemLucro ?? 0).toFixed(2)}% lucro)`}
+                                                                        </>
+                                                                    )}
+                                                                </p>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
 
-                            <div className="mb-4">
-                                <div className="relative">
-                                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar materiais por nome ou SKU..."
-                                        value={itemSearchTerm}
-                                        onChange={(e) => setItemSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
+                                            {/* Serviços */}
+                                            {resultadosBuscaGlobal.servicos.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                        <span>🔧</span> Serviços ({resultadosBuscaGlobal.servicos.length})
+                                                    </h4>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                        {resultadosBuscaGlobal.servicos.map(servico => (
+                                                            <button
+                                                                key={servico.id}
+                                                                type="button"
+                                                                onClick={() => handleAddServico(servico, true)}
+                                                                className="w-full text-left p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700 transition-all"
+                                                            >
+                                                                <p className="font-semibold text-gray-900 dark:text-dark-text">{servico.nome}</p>
+                                                                <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
+                                                                    Código: {servico.codigo || 'N/A'} • Preço: R$ {(servico.preco ?? 0).toFixed(2)}/{servico.unidade || 'un'}
+                                                                </p>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
 
-                            {/* Renderização baseada no tipo selecionado */}
-                            <div className="max-h-96 overflow-y-auto">
-                                {/* Lista de Materiais */}
-                                {tipoItemSelecionado === 'material' && (
-                                    filteredMaterials.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            {/* Kits */}
+                                            {resultadosBuscaGlobal.kits.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                        <span>📦</span> Kits ({resultadosBuscaGlobal.kits.length})
+                                                    </h4>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                        {resultadosBuscaGlobal.kits.map(kit => (
+                                                            <button
+                                                                key={kit.id}
+                                                                type="button"
+                                                                onClick={() => handleAddKit(kit, true)}
+                                                                className="w-full text-left p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 hover:border-green-300 dark:hover:border-green-700 transition-all"
+                                                            >
+                                                                <p className="font-semibold text-gray-900 dark:text-dark-text">{kit.nome}</p>
+                                                                <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
+                                                                    {kit.items?.length || 0} itens • Preço: R$ {((kit.precoSugerido ?? kit.custoTotal) ?? 0).toFixed(2)}
+                                                                </p>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Quadros */}
+                                            {resultadosBuscaGlobal.quadros.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                        <span>⚡</span> Quadros ({resultadosBuscaGlobal.quadros.length})
+                                                    </h4>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                        {resultadosBuscaGlobal.quadros.map(quadro => (
+                                                            <button
+                                                                key={quadro.id}
+                                                                type="button"
+                                                                onClick={() => handleAddQuadro(quadro, true)}
+                                                                className="w-full text-left p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700 transition-all"
+                                                            >
+                                                                <p className="font-semibold text-gray-900 dark:text-dark-text">{quadro.nome}</p>
+                                                                <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
+                                                                    Custo: R$ {(quadro.custoTotal ?? 0).toFixed(2)} • Preço: R$ {((quadro.precoSugerido ?? quadro.custoTotal) ?? 0).toFixed(2)}
+                                                                </p>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Cotações */}
+                                            {resultadosBuscaGlobal.cotacoes.length > 0 && (
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                        <span>🏷️</span> Cotações - Banco Frio ({resultadosBuscaGlobal.cotacoes.length})
+                                                    </h4>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                        {resultadosBuscaGlobal.cotacoes.map(cotacao => (
+                                                            <button
+                                                                key={cotacao.id}
+                                                                type="button"
+                                                                onClick={() => handleAddCotacao(cotacao, true)}
+                                                                className="w-full text-left p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-semibold">
+                                                                        📦 Banco Frio
+                                                                    </span>
+                                                                </div>
+                                                                <p className="font-semibold text-gray-900 dark:text-dark-text">{cotacao.nome}</p>
+                                                                <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
+                                                                    NCM: {cotacao.ncm || 'N/A'} • Fornecedor: {cotacao.fornecedorNome || 'N/A'} • Valor: R$ {cotacao.valorUnitario?.toFixed(2) || '0.00'}
+                                                                </p>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Nenhum resultado */}
+                                            {Object.values(resultadosBuscaGlobal).every(arr => arr.length === 0) && (
+                                                <div className="text-center py-8 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                                    <p className="text-gray-500 dark:text-dark-text-secondary">Nenhum item encontrado para "{buscaGlobal}"</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Comparação Estoque vs Banco Frio (Modal Expandido) */}
+                            {modalExpandido && modoAdicao === 'comparacao' && (
+                                <div className="space-y-4">
+                                    {/* Busca Global para Comparação */}
+                                    <div className="mb-4">
+                                        <div className="relative">
+                                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={searchGlobalComparacao}
+                                                onChange={(e) => {
+                                                    setSearchGlobalComparacao(e.target.value);
+                                                    setSearchEstoque(e.target.value);
+                                                    setSearchCotacoes(e.target.value);
+                                                }}
+                                                className="input-field w-full pl-10"
+                                                placeholder="🔍 Buscar em ambos os painéis (Materiais e Cotações)..."
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                            💡 A busca filtra simultaneamente os materiais com estoque e as cotações do banco frio
+                                        </p>
+                                    </div>
+
+                                    {/* Indicador de seleção múltipla */}
+                                    {(materiaisSelecionadosComparacao.size > 0 || cotacoesSelecionadasComparacao.size > 0) && (
+                                        <div className="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                                            <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                {materiaisSelecionadosComparacao.size + cotacoesSelecionadasComparacao.size} item(ns) selecionado(s)
+                                                {materiaisSelecionadosComparacao.size > 0 && (
+                                                    <span className="ml-2 text-purple-700 dark:text-purple-400 font-normal">
+                                                        ({materiaisSelecionadosComparacao.size} material(is))
+                                                    </span>
+                                                )}
+                                                {cotacoesSelecionadasComparacao.size > 0 && (
+                                                    <span className="ml-2 text-purple-700 dark:text-purple-400 font-normal">
+                                                        ({cotacoesSelecionadasComparacao.size} cotação(ões))
+                                                    </span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-6">
+                                        {/* Painel Esquerdo: Materiais com Estoque Real */}
+                                        <div className="border-r border-gray-200 dark:border-dark-border pr-6">
+                                            <div className="mb-4">
+                                                <h4 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                    <span className="text-2xl">📦</span>
+                                                    Materiais com Estoque Real
+                                                    {searchGlobalComparacao && (
+                                                        <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                                                            ({filteredMateriaisEstoque.length} encontrados)
+                                                        </span>
+                                                    )}
+                                                </h4>
+                                                {!searchGlobalComparacao && (
+                                                    <input
+                                                        type="text"
+                                                        value={searchEstoque}
+                                                        onChange={(e) => setSearchEstoque(e.target.value)}
+                                                        className="input-field w-full"
+                                                        placeholder="🔍 Buscar material por nome ou SKU..."
+                                                    />
+                                                )}
+                                            </div>
+                                        
+                                        <div className="space-y-2 max-h-[calc(95vh-250px)] overflow-y-auto">
+                                            {filteredMateriaisEstoque.length === 0 ? (
+                                                <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                                    <p className="text-gray-500 dark:text-dark-text-secondary">Nenhum material com estoque encontrado</p>
+                                                </div>
+                                            ) : (
+                                                filteredMateriaisEstoque.map(material => {
+                                                    const estaSelecionado = materialSelecionadoComparacao?.id === material.id;
+                                                    const estaSelecionadoMultiplo = materiaisSelecionadosComparacao.has(material.id);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={material.id}
+                                                            className={`p-4 border-2 rounded-lg transition-all ${
+                                                                estaSelecionado || estaSelecionadoMultiplo
+                                                                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                                                                    : 'border-gray-200 dark:border-dark-border hover:border-indigo-300 dark:hover:border-indigo-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start gap-3">
+                                                                {/* Checkbox */}
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={estaSelecionadoMultiplo}
+                                                                    onChange={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleMaterialSelecionado(material.id);
+                                                                    }}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                                                />
+                                                                
+                                                                <div 
+                                                                    className="flex-1 cursor-pointer"
+                                                                    onClick={(e) => {
+                                                                        if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'BUTTON') {
+                                                                            return;
+                                                                        }
+                                                                        setMaterialSelecionadoComparacao(material);
+                                                                        const cotacaoCorrespondente = filteredCotacoesComparacao.find(c => 
+                                                                            c.nome?.toLowerCase().includes(material.nome.toLowerCase()) ||
+                                                                            c.ncm === material.sku
+                                                                        );
+                                                                        if (cotacaoCorrespondente) {
+                                                                            setCotacaoSelecionadaComparacao(cotacaoCorrespondente);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
+                                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                                        SKU: {material.sku}
+                                                                    </p>
+
+                                                                    <div className="mt-2 flex flex-col gap-2">
+                                                                        <div className="flex items-center gap-4 text-xs">
+                                                                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded font-semibold">
+                                                                                Estoque: {material.estoque} {material.unidadeMedida}
+                                                                            </span>
+                                                                            <span className="text-gray-600 dark:text-gray-400">
+                                                                                Custo: R$ {(material.preco ?? 0).toFixed(2)}
+                                                                            </span>
+                                                                        </div>
+                                                                        {material.valorVenda && (
+                                                                            <div className="flex items-center gap-4 text-xs">
+                                                                                <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded font-semibold">
+                                                                                    Venda: R$ {(material.valorVenda ?? 0).toFixed(2)}
+                                                                                </span>
+                                                                                {material.porcentagemLucro && (
+                                                                                    <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded font-semibold">
+                                                                                        {(material.porcentagemLucro ?? 0).toFixed(2)}% lucro
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                {estaSelecionado && (
+                                                                    <div className="ml-2">
+                                                                        <CheckIcon className="w-5 h-5 text-indigo-600" />
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                {estaSelecionado && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleAddItemComValidacao(material, undefined, 1);
+                                                                        }}
+                                                                        className="ml-2 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors font-semibold whitespace-nowrap"
+                                                                    >
+                                                                        Inserir
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Painel Direito: Cotações (Banco Frio) */}
+                                    <div className="pl-6">
+                                        <div className="mb-4">
+                                            <h4 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-2 flex items-center gap-2">
+                                                <span className="text-2xl">🏷️</span>
+                                                Cotações (Banco Frio)
+                                                {searchGlobalComparacao && (
+                                                    <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                                                        ({filteredCotacoesComparacao.length} encontradas)
+                                                    </span>
+                                                )}
+                                            </h4>
+                                            {!searchGlobalComparacao && (
+                                                <input
+                                                    type="text"
+                                                    value={searchCotacoes}
+                                                    onChange={(e) => setSearchCotacoes(e.target.value)}
+                                                    className="input-field w-full"
+                                                    placeholder="🔍 Buscar cotação por nome, NCM ou fornecedor..."
+                                                />
+                                            )}
+                                        </div>
+                                        
+                                        <div className="space-y-2 max-h-[calc(95vh-250px)] overflow-y-auto">
+                                            {filteredCotacoesComparacao.length === 0 ? (
+                                                <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                                    <p className="text-gray-500 dark:text-dark-text-secondary">Nenhuma cotação encontrada</p>
+                                                </div>
+                                            ) : (
+                                                filteredCotacoesComparacao.map(cotacao => {
+                                                    const estaSelecionada = cotacaoSelecionadaComparacao?.id === cotacao.id;
+                                                    const estaSelecionadaMultiplo = cotacoesSelecionadasComparacao.has(cotacao.id);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={cotacao.id}
+                                                            className={`p-4 border-2 rounded-lg transition-all ${
+                                                                estaSelecionada || estaSelecionadaMultiplo
+                                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                                                                    : 'border-gray-200 dark:border-dark-border hover:border-blue-300 dark:hover:border-blue-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start gap-3">
+                                                                {/* Checkbox */}
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={estaSelecionadaMultiplo}
+                                                                    onChange={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleCotacaoSelecionada(cotacao.id);
+                                                                    }}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                                
+                                                                <div 
+                                                                    className="flex-1 cursor-pointer"
+                                                                    onClick={(e) => {
+                                                                        if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'BUTTON') {
+                                                                            return;
+                                                                        }
+                                                                        setCotacaoSelecionadaComparacao(cotacao);
+                                                                        const materialCorrespondente = filteredMateriaisEstoque.find(m => 
+                                                                            m.nome.toLowerCase().includes(cotacao.nome?.toLowerCase() || '') ||
+                                                                            m.sku === cotacao.ncm
+                                                                        );
+                                                                        if (materialCorrespondente) {
+                                                                            setMaterialSelecionadoComparacao(materialCorrespondente);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-semibold">
+                                                                            📦 Banco Frio
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{cotacao.nome}</p>
+                                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                                        NCM: {cotacao.ncm || 'N/A'} • Fornecedor: {cotacao.fornecedorNome || 'N/A'}
+                                                                    </p>
+                                                                    <div className="mt-2 flex items-center gap-4 text-xs">
+                                                                        <span className="text-gray-600 dark:text-gray-400">
+                                                                            Valor: R$ {cotacao.valorUnitario?.toFixed(2) || '0.00'}
+                                                                        </span>
+                                                                        {cotacao.dataAtualizacao && (
+                                                                            <span className="text-gray-500 dark:text-gray-500">
+                                                                                Atualizado: {new Date(cotacao.dataAtualizacao).toLocaleDateString('pt-BR')}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                {estaSelecionada && (
+                                                                    <div className="ml-2">
+                                                                        <CheckIcon className="w-5 h-5 text-blue-600" />
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                {estaSelecionada && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleAddItemComValidacao(undefined, cotacao, 1);
+                                                                        }}
+                                                                        className="ml-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-semibold whitespace-nowrap"
+                                                                    >
+                                                                        Inserir
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                    </div>
+
+                                    {/* Painel de Comparação e Validação */}
+                                    {modalExpandido && (materialSelecionadoComparacao || cotacaoSelecionadaComparacao) && (
+                                        <div className="mt-6 p-4 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 border-2 border-indigo-200 dark:border-indigo-800 rounded-xl">
+                                            <h5 className="font-bold text-gray-900 dark:text-dark-text mb-3 flex items-center gap-2">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                Comparação e Validação
+                                            </h5>
+                                            
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                {/* Material Selecionado */}
+                                                {materialSelecionadoComparacao && (
+                                                    <div className="bg-white dark:bg-dark-card p-4 rounded-lg border border-gray-200 dark:border-dark-border">
+                                                        <p className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">📦 Material (Estoque Real)</p>
+                                                        <p className="font-bold text-gray-900 dark:text-dark-text">{materialSelecionadoComparacao.nome}</p>
+                                                        <div className="mt-2 space-y-1 text-xs">
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                <strong>Estoque:</strong> {materialSelecionadoComparacao.estoque} {materialSelecionadoComparacao.unidadeMedida}
+                                                            </p>
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                <strong>Custo:</strong> R$ {(materialSelecionadoComparacao.preco ?? 0).toFixed(2)}
+                                                            </p>
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                <strong>SKU:</strong> {materialSelecionadoComparacao.sku}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Cotação Selecionada */}
+                                                {cotacaoSelecionadaComparacao && (
+                                                    <div className="bg-white dark:bg-dark-card p-4 rounded-lg border border-gray-200 dark:border-dark-border">
+                                                        <p className="text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">🏷️ Cotação (Banco Frio)</p>
+                                                        <p className="font-bold text-gray-900 dark:text-dark-text">{cotacaoSelecionadaComparacao.nome}</p>
+                                                        <div className="mt-2 space-y-1 text-xs">
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                <strong>Fornecedor:</strong> {cotacaoSelecionadaComparacao.fornecedorNome || 'N/A'}
+                                                            </p>
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                <strong>Valor:</strong> R$ {cotacaoSelecionadaComparacao.valorUnitario?.toFixed(2) || '0.00'}
+                                                            </p>
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                <strong>NCM:</strong> {cotacaoSelecionadaComparacao.ncm || 'N/A'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Validação e Comparação */}
+                                            {materialSelecionadoComparacao && (
+                                                <div className="mb-4">
+                                                    <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                        Quantidade Desejada
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0.01"
+                                                        step="0.01"
+                                                        defaultValue="1"
+                                                        id="quantidadeComparacao"
+                                                        className="input-field w-full"
+                                                        placeholder="Digite a quantidade"
+                                                    />
+                                                    <div className="mt-2 p-3 bg-white dark:bg-dark-card rounded-lg border border-gray-200 dark:border-dark-border">
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                            <strong>Validação:</strong> {materialSelecionadoComparacao.estoque > 0 
+                                                                ? `✅ Estoque disponível: ${materialSelecionadoComparacao.estoque} ${materialSelecionadoComparacao.unidadeMedida}`
+                                                                : '❌ Sem estoque disponível'}
+                                                        </p>
+                                                        {cotacaoSelecionadaComparacao && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                                <strong>Comparação:</strong> {(materialSelecionadoComparacao.preco ?? 0) < (cotacaoSelecionadaComparacao.valorUnitario ?? 0)
+                                                                    ? `💰 Estoque é mais barato (R$ ${((cotacaoSelecionadaComparacao.valorUnitario ?? 0) - (materialSelecionadoComparacao.preco ?? 0)).toFixed(2)} de diferença)`
+                                                                    : `💰 Cotação é mais barata (R$ ${((materialSelecionadoComparacao.preco ?? 0) - (cotacaoSelecionadaComparacao.valorUnitario ?? 0)).toFixed(2)} de diferença)`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Botões de Ação */}
+                                            <div className="flex gap-3 flex-wrap">
+                                                {materialSelecionadoComparacao && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const qtdInput = document.getElementById('quantidadeComparacao') as HTMLInputElement;
+                                                            const qtd = parseFloat(qtdInput?.value || '1');
+                                                            handleAddItemComValidacao(materialSelecionadoComparacao, undefined, qtd);
+                                                        }}
+                                                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+                                                    >
+                                                        Adicionar do Estoque
+                                                    </button>
+                                                )}
+                                                {cotacaoSelecionadaComparacao && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const qtdInput = document.getElementById('quantidadeComparacao') as HTMLInputElement;
+                                                            const qtd = parseFloat(qtdInput?.value || '1');
+                                                            handleAddItemComValidacao(undefined, cotacaoSelecionadaComparacao, qtd);
+                                                        }}
+                                                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                                                    >
+                                                        Adicionar do Banco Frio
+                                                    </button>
+                                                )}
+                                                
+                                                {/* Botão para inserção múltipla */}
+                                                {(materiaisSelecionadosComparacao.size > 0 || cotacoesSelecionadasComparacao.size > 0) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleInserirSelecionados}
+                                                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 transition-colors font-semibold flex items-center justify-center gap-2"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                        </svg>
+                                                        Inserir {materiaisSelecionadosComparacao.size + cotacoesSelecionadasComparacao.size} Item(ns) Selecionado(s)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Materiais */}
+                            {!modalExpandido && !buscaGlobal.trim() && modoAdicao !== 'comparacao' && modoAdicao === 'materiais' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar material por nome ou SKU..."
+                                        />
+                                    </div>
+
+                                    {filteredMaterials.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <span className="text-2xl">📦</span>
                                             </div>
-                                            <p className="text-gray-500 font-medium">Nenhum material disponível</p>
-                                            <p className="text-gray-400 text-sm mt-1">Verifique se há materiais cadastrados com estoque</p>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum material encontrado</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">Tente ajustar a busca ou criar manualmente</p>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {filteredMaterials.map((material) => (
-                                                <div
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredMaterials.map(material => (
+                                                <button
                                                     key={material.id}
-                                                    className="bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-dark-border p-4 rounded-xl hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer group"
+                                                    type="button"
                                                     onClick={() => handleAddItem(material)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
                                                 >
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h4 className="font-semibold text-gray-900 dark:text-dark-text group-hover:text-blue-900 dark:group-hover:text-blue-400">{material.nome}</h4>
-                                                        <span className="px-2 py-1 text-xs font-bold bg-green-100 text-green-800 rounded-lg">
-                                                            Estoque: {material.estoque}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-1">SKU: {material.sku}</p>
-                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">Unidade: {material.unidadeMedida}</p>
-                                                    <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
-                                                        R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{material.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        SKU: {material.sku} • Estoque: {material.estoque} {material.unidadeMedida}
+                                                        <br />
+                                                        Custo: R$ {(material.preco ?? 0).toFixed(2)}
+                                                        {material.valorVenda && (
+                                                            <> • Venda: R$ {(material.valorVenda ?? 0).toFixed(2)} 
+                                                            {material.porcentagemLucro && ` (${(material.porcentagemLucro ?? 0).toFixed(2)}% lucro)`}
+                                                            </>
+                                                        )}
                                                     </p>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
-                                    )
-                                )}
+                                    )}
+                                </div>
+                            )}
 
-                                {/* Lista de Cotações (BANCO FRIO) */}
-                                {tipoItemSelecionado === 'cotacao' && (
-                                    filteredCotacoes.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                <span className="text-2xl">🏷️</span>
-                                            </div>
-                                            <p className="text-gray-500 font-medium">Nenhuma cotação disponível</p>
-                                            <p className="text-gray-400 text-sm mt-1">Cadastre cotações na página de Cotações</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            {filteredCotacoes.map((cotacao) => (
-                                                <div
-                                                    key={cotacao.id}
-                                                    className="bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-dark-border p-4 rounded-xl hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 transition-all cursor-pointer group"
-                                                    onClick={() => handleAddCotacao(cotacao)}
-                                                >
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex-1">
-                                                            <h4 className="font-semibold text-gray-900 dark:text-dark-text group-hover:text-green-900 dark:group-hover:text-green-400 mb-2">
-                                                                {cotacao.nome}
-                                                            </h4>
-                                                            <div className="space-y-1">
-                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
-                                                                    📋 NCM: {cotacao.ncm || 'N/A'}
-                                                                </p>
-                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
-                                                                    🏢 Fornecedor: {cotacao.fornecedorNome || 'N/A'}
-                                                                </p>
-                                                                <p className="text-xs text-blue-600 dark:text-blue-400">
-                                                                    📅 Atualizado em {new Date(cotacao.dataAtualizacao).toLocaleDateString('pt-BR')}
-                                                                </p>
-                                                            </div>
-                                                            {cotacao.observacoes && (
-                                                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-2 italic">
-                                                                    {cotacao.observacoes}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-right ml-4">
-                                                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-bold mb-2 inline-block">
-                                                                📦 Banco Frio
-                                                            </span>
-                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                                                                R$ {cotacao.valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )
-                                )}
+                            {/* Modo: Serviços */}
+                            {!modalExpandido && !buscaGlobal.trim() && modoAdicao !== 'comparacao' && modoAdicao === 'servicos' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar serviço por nome ou código..."
+                                        />
+                                    </div>
 
-                                {/* Lista de Kits */}
-                                {tipoItemSelecionado === 'kit' && (
-                                    filteredKits.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                <span className="text-2xl">🎁</span>
-                                            </div>
-                                            <p className="text-gray-500 font-medium">Nenhum kit disponível</p>
-                                            <p className="text-gray-400 text-sm mt-1">Cadastre kits na página de Catálogo</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            {filteredKits.map((kit) => (
-                                                <div
-                                                    key={kit.id}
-                                                    className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-2 border-indigo-200 dark:border-indigo-800 p-4 rounded-xl hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-lg transition-all cursor-pointer group"
-                                                    onClick={() => handleAddKit(kit)}
-                                                >
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <h4 className="font-bold text-lg text-gray-900 dark:text-dark-text group-hover:text-indigo-900 dark:group-hover:text-indigo-400">
-                                                                    {kit.nome}
-                                                                </h4>
-                                                            </div>
-                                                            {kit.descricao && (
-                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">
-                                                                    {kit.descricao}
-                                                                </p>
-                                                            )}
-                                                            {kit.items && (
-                                                                <p className="text-xs text-indigo-600 dark:text-indigo-400">
-                                                                    📦 {kit.items.length} {kit.items.length === 1 ? 'item' : 'itens'}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-right ml-4">
-                                                            <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-lg text-xs font-bold mb-2 inline-block">
-                                                                🎁 Kit
-                                                            </span>
-                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                                                                R$ {(kit.precoVenda || kit.custoTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )
-                                )}
-
-                                {/* Lista de Serviços */}
-                                {tipoItemSelecionado === 'servico' && (
-                                    filteredServicos.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    {filteredServicos.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <span className="text-2xl">🔧</span>
                                             </div>
-                                            <p className="text-gray-500 font-medium">Nenhum serviço disponível</p>
-                                            <p className="text-gray-400 text-sm mt-1">Cadastre serviços na página de Catálogo</p>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum serviço encontrado</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">Cadastre serviços na página de Serviços</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-3">
-                                            {filteredServicos.map((servico) => (
-                                                <div
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredServicos.map(servico => (
+                                                <button
                                                     key={servico.id}
-                                                    className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-2 border-blue-200 dark:border-blue-800 p-4 rounded-xl hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg transition-all cursor-pointer group"
+                                                    type="button"
                                                     onClick={() => handleAddServico(servico)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700 transition-all"
                                                 >
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <h4 className="font-bold text-lg text-gray-900 dark:text-dark-text group-hover:text-blue-900 dark:group-hover:text-blue-400">
-                                                                    {servico.nome}
-                                                                </h4>
-                                                            </div>
-                                                            {servico.descricao && (
-                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">
-                                                                    {servico.descricao}
-                                                                </p>
-                                                            )}
-                                                            <p className="text-xs text-blue-600 dark:text-blue-400">
-                                                                📏 Unidade: {servico.unidadeMedida || 'UN'}
-                                                            </p>
-                                                        </div>
-                                                        <div className="text-right ml-4">
-                                                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-bold mb-2 inline-block">
-                                                                🔧 Serviço
-                                                            </span>
-                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                                                                R$ {(servico.precoUnitario || servico.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{servico.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        Código: {servico.codigo || 'N/A'} • Tipo: {servico.tipo || 'N/A'} • Preço: R$ {(servico.preco ?? 0).toFixed(2)}/{servico.unidade || 'un'}
+                                                    </p>
+                                                    {servico.descricao && (
+                                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{servico.descricao}</p>
+                                                    )}
+                                                </button>
                                             ))}
                                         </div>
-                                    )
-                                )}
+                                    )}
+                                </div>
+                            )}
 
-                                {/* Lista de Quadros Prontos */}
-                                {tipoItemSelecionado === 'quadro' && (
-                                    filteredQuadrosProntos.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            {/* Modo: Kits */}
+                            {!modalExpandido && !buscaGlobal.trim() && modoAdicao !== 'comparacao' && modoAdicao === 'kits' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar kit por nome..."
+                                        />
+                                    </div>
+
+                                    {filteredKits.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">📦</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum kit disponível</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">
+                                                A funcionalidade de kits será implementada em breve
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredKits.map(kit => (
+                                                <button
+                                                    key={kit.id}
+                                                    type="button"
+                                                    onClick={() => handleAddKit(kit)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 hover:border-green-300 dark:hover:border-green-700 transition-all"
+                                                >
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{kit.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        {kit.items.length} itens • Custo Total: R$ {kit.custoTotal.toFixed(2)} • Preço: R$ {(kit.precoSugerido || kit.custoTotal).toFixed(2)}
+                                                    </p>
+                                                    {kit.descricao && (
+                                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{kit.descricao}</p>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Quadros */}
+                            {!modalExpandido && !buscaGlobal.trim() && modoAdicao !== 'comparacao' && modoAdicao === 'quadros' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar quadro por nome..."
+                                        />
+                                    </div>
+
+                                    {filteredQuadros.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <span className="text-2xl">⚡</span>
                                             </div>
-                                            <p className="text-gray-500 font-medium">Nenhum quadro pronto disponível</p>
-                                            <p className="text-gray-400 text-sm mt-1">Funcionalidade será implementada em breve</p>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhum quadro encontrado</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">
+                                                Monte quadros no módulo de Catálogo
+                                            </p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-3">
-                                            {filteredQuadrosProntos.map((quadro) => (
-                                                <div
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredQuadros.map(quadro => (
+                                                <button
                                                     key={quadro.id}
-                                                    className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-2 border-yellow-200 dark:border-yellow-800 p-4 rounded-xl hover:border-yellow-400 dark:hover:border-yellow-600 hover:shadow-lg transition-all cursor-pointer group"
-                                                    onClick={() => handleAddQuadroPronto(quadro)}
+                                                    type="button"
+                                                    onClick={() => handleAddQuadro(quadro)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-300 dark:hover:border-amber-700 transition-all"
+                                                >
+                                                    <p className="font-semibold text-gray-900 dark:text-dark-text">{quadro.nome}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                        Custo: R$ {(quadro.custoTotal ?? 0).toFixed(2)} • Preço: R$ {((quadro.precoSugerido ?? quadro.custoTotal) ?? 0).toFixed(2)}
+                                                    </p>
+                                                    {quadro.descricao && (
+                                                        <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{quadro.descricao}</p>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Modo: Cotações (Banco Frio) */}
+                            {!modalExpandido && !buscaGlobal.trim() && modoAdicao !== 'comparacao' && modoAdicao === 'cotacoes' && (
+                                <div>
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={itemSearchTerm}
+                                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                                            className="input-field"
+                                            placeholder="🔍 Buscar cotação por nome, NCM ou fornecedor..."
+                                        />
+                                    </div>
+
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg mb-4">
+                                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                                            📦 <strong>Banco Frio:</strong> Materiais cotados com fornecedores, sem necessidade de estoque físico.
+                                        </p>
+                                    </div>
+
+                                    {filteredCotacoes.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <span className="text-2xl">🏷️</span>
+                                            </div>
+                                            <p className="text-gray-500 dark:text-dark-text-secondary font-medium">Nenhuma cotação encontrada</p>
+                                            <p className="text-gray-400 dark:text-dark-text-secondary text-sm mt-1">
+                                                Cadastre cotações na página de Cotações
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {filteredCotacoes.map(cotacao => (
+                                                <button
+                                                    key={cotacao.id}
+                                                    type="button"
+                                                    onClick={() => handleAddCotacao(cotacao)}
+                                                    className="w-full text-left p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-dark-border rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all"
                                                 >
                                                     <div className="flex justify-between items-start">
                                                         <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <h4 className="font-bold text-lg text-gray-900 dark:text-dark-text group-hover:text-yellow-900 dark:group-hover:text-yellow-400">
-                                                                    {quadro.nome}
-                                                                </h4>
-                                                            </div>
-                                                            {quadro.descricao && (
-                                                                <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">
-                                                                    {quadro.descricao}
-                                                                </p>
+                                                            <p className="font-semibold text-gray-900 dark:text-dark-text">{cotacao.nome}</p>
+                                                            <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                                                                NCM: {cotacao.ncm || 'N/A'} • Fornecedor: {cotacao.fornecedorNome || 'N/A'}
+                                                            </p>
+                                                            {cotacao.observacoes && (
+                                                                <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">{cotacao.observacoes}</p>
                                                             )}
                                                         </div>
                                                         <div className="text-right ml-4">
-                                                            <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-lg text-xs font-bold mb-2 inline-block">
-                                                                ⚡ Quadro Pronto
-                                                            </span>
-                                                            <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                                                                R$ {(quadro.precoVenda || quadro.custoTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                                                                R$ {cotacao.valorUnitario.toFixed(2)}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
+                                                                Atualizado em {new Date(cotacao.dataAtualizacao).toLocaleDateString('pt-BR')}
                                                             </p>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
-                                    )
-                                )}
+                                    )}
+                                </div>
+                            )}
 
-                                {/* Mensagem para custos extras (ainda não implementado) */}
-                                {tipoItemSelecionado === 'extra' && (
-                                    <div className="text-center py-12">
-                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <span className="text-2xl">⚙️</span>
-                                        </div>
-                                        <p className="text-gray-500 font-medium">Funcionalidade em desenvolvimento</p>
-                                        <p className="text-gray-400 text-sm mt-1">Custos extras serão implementados em breve</p>
+                            {/* Modo: Criar Manualmente */}
+                            {!modalExpandido && !buscaGlobal.trim() && modoAdicao !== 'comparacao' && modoAdicao === 'manual' && (
+                                <div className="space-y-6">
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg mb-6">
+                                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                                            💡 <strong>Dica:</strong> Use esta opção para adicionar materiais/serviços que ainda não foram comprados.
+                                            Ideal para orçamentos baseados em cotações de fornecedores.
+                                        </p>
                                     </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Tipo de Item
+                                            </label>
+                                            <select
+                                                value={novoItemManual.tipo}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, tipo: e.target.value as any }))}
+                                                className="select-field"
+                                            >
+                                                <option value="MATERIAL">Material</option>
+                                                <option value="SERVICO">Serviço</option>
+                                                <option value="KIT">Kit</option>
+                                                <option value="CUSTO_EXTRA">Custo Extra</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Nome/Descrição do Item
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={novoItemManual.nome}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, nome: e.target.value }))}
+                                                className="input-field"
+                                                placeholder="Ex: Disjuntor 32A Tripolar, Instalação de Quadro, etc."
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Descrição Técnica (Opcional)
+                                            </label>
+                                            <textarea
+                                                value={novoItemManual.descricao}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, descricao: e.target.value }))}
+                                                rows={2}
+                                                className="textarea-field"
+                                                placeholder="Detalhes técnicos, especificações, normas..."
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Unidade de Medida
+                                            </label>
+                                            <select
+                                                value={novoItemManual.unidadeMedida}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, unidadeMedida: e.target.value }))}
+                                                className="select-field"
+                                            >
+                                                <option value="UN">Unidade (UN)</option>
+                                                <option value="M">Metro (M)</option>
+                                                <option value="M²">Metro Quadrado (M²)</option>
+                                                <option value="M³">Metro Cúbico (M³)</option>
+                                                <option value="KG">Quilograma (KG)</option>
+                                                <option value="L">Litro (L)</option>
+                                                <option value="CX">Caixa (CX)</option>
+                                                <option value="PC">Peça (PC)</option>
+                                                <option value="SERV">Serviço (SERV)</option>
+                                                <option value="HR">Hora (HR)</option>
+                                                <option value="VERBA">Verba (VERBA)</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Quantidade
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={novoItemManual.quantidade}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
+                                                min="0.01"
+                                                step="0.01"
+                                                className="input-field"
+                                                placeholder="0"
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-text mb-2">
+                                                Custo Unitário (R$)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={novoItemManual.custoUnit}
+                                                onChange={(e) => setNovoItemManual(prev => ({ ...prev, custoUnit: parseFloat(e.target.value) || 0 }))}
+                                                min="0"
+                                                step="0.01"
+                                                className="input-field"
+                                                placeholder="0,00"
+                                            />
+                                            <p className="text-xs text-gray-500 dark:text-dark-text-secondary mt-2">
+                                                💡 Digite o custo real do material/serviço (sem BDI). O preço de venda será calculado automaticamente com a margem de {formState.bdi}%.
+                                            </p>
+                                        </div>
+
+                                        {/* Preview do Cálculo */}
+                                        {novoItemManual.custoUnit > 0 && novoItemManual.quantidade > 0 && (
+                                            <div className="md:col-span-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+                                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                                    <div>
+                                                        <p className="text-gray-600 dark:text-dark-text-secondary mb-1">Custo Total</p>
+                                                        <p className="text-lg font-bold text-gray-900 dark:text-dark-text">
+                                                            R$ {(novoItemManual.custoUnit * novoItemManual.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-600 dark:text-dark-text-secondary mb-1">Preço Unit. (com BDI)</p>
+                                                        <p className="text-lg font-bold text-indigo-700 dark:text-indigo-300">
+                                                            R$ {(novoItemManual.custoUnit * (1 + formState.bdi / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-600 dark:text-dark-text-secondary mb-1">Preço Total</p>
+                                                        <p className="text-lg font-bold text-green-700 dark:text-green-300">
+                                                            R$ {(novoItemManual.custoUnit * (1 + formState.bdi / 100) * novoItemManual.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-dark-border flex justify-between items-center gap-3">
+                            <div className="flex-1">
+                                {/* Botão para inserção múltipla quando há itens selecionados via checkbox */}
+                                {modoAdicao === 'comparacao' && (materiaisSelecionadosComparacao.size > 0 || cotacoesSelecionadasComparacao.size > 0) && (
+                                    <button
+                                        type="button"
+                                        onClick={handleInserirSelecionados}
+                                        className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 transition-colors font-semibold flex items-center gap-2"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Inserir {materiaisSelecionadosComparacao.size + cotacoesSelecionadasComparacao.size} Item(ns) Selecionado(s)
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowItemModal(false);
+                                        setItemSearchTerm('');
+                                        setModoAdicao('materiais');
+                                        setModalExpandido(false);
+                                        setMaterialSelecionadoComparacao(null);
+                                        setCotacaoSelecionadaComparacao(null);
+                                        setMateriaisSelecionadosComparacao(new Set());
+                                        setCotacoesSelecionadasComparacao(new Set());
+                                        setSearchEstoque('');
+                                        setSearchCotacoes('');
+                                        setSearchGlobalComparacao('');
+                                        setBuscaGlobal('');
+                                        setNovoItemManual({
+                                            nome: '',
+                                            descricao: '',
+                                            unidadeMedida: 'UN',
+                                            quantidade: 1,
+                                            custoUnit: 0,
+                                            tipo: 'MATERIAL'
+                                        });
+                                    }}
+                                    className="btn-secondary"
+                                >
+                                    Cancelar
+                                </button>
+                                {modoAdicao === 'manual' && (
+                                    <button
+                                        type="button"
+                                        onClick={handleAddItemManual}
+                                        className="btn-primary flex items-center gap-2"
+                                    >
+                                        <PlusIcon className="w-5 h-5" />
+                                        Adicionar Item
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -2474,6 +3740,197 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                         Cliente
                                     </h3>
                                     <p className="text-gray-900 dark:text-white font-medium">{orcamentoToView.cliente?.nome || 'N/A'}</p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>📊</span>
+                                        Status
+                                    </h3>
+                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getStatusClass(orcamentoToView.status)}`}>
+                                        {orcamentoToView.status === 'Pendente' && '⏳ '}
+                                        {orcamentoToView.status === 'Aprovado' && '✅ '}
+                                        {orcamentoToView.status === 'Recusado' && '❌ '}
+                                        {orcamentoToView.status}
+                                    </span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>💰</span>
+                                        Total
+                                    </h3>
+                                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">R$ {orcamentoToView.precoVenda?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>📅</span>
+                                        Data
+                                    </h3>
+                                    <p className="text-gray-900 dark:text-white">{orcamentoToView.dataCriacao ? new Date(orcamentoToView.dataCriacao).toLocaleDateString('pt-BR') : new Date(orcamentoToView.createdAt).toLocaleDateString('pt-BR')}</p>
+                                </div>
+                            </div>
+
+                            {/* Endereço da Obra */}
+                            {(orcamentoToView.enderecoObra || orcamentoToView.cidade || orcamentoToView.bairro || orcamentoToView.cep) && (
+                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                                        <span>🏗️</span>
+                                        Endereço da Obra
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {orcamentoToView.enderecoObra && (
+                                            <p className="text-gray-900 dark:text-white">
+                                                <span className="font-semibold">Endereço:</span> {orcamentoToView.enderecoObra}
+                                            </p>
+                                        )}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                            {orcamentoToView.bairro && (
+                                                <p className="text-gray-900 dark:text-white">
+                                                    <span className="font-semibold">Bairro:</span> {orcamentoToView.bairro}
+                                                </p>
+                                            )}
+                                            {orcamentoToView.cidade && (
+                                                <p className="text-gray-900 dark:text-white">
+                                                    <span className="font-semibold">Cidade:</span> {orcamentoToView.cidade}
+                                                </p>
+                                            )}
+                                            {orcamentoToView.cep && (
+                                                <p className="text-gray-900 dark:text-white">
+                                                    <span className="font-semibold">CEP:</span> {orcamentoToView.cep}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {orcamentoToView.responsavelObra && (
+                                            <p className="text-gray-900 dark:text-white mt-2">
+                                                <span className="font-semibold">Responsável pela Obra:</span> {orcamentoToView.responsavelObra}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Descrição */}
+                            {orcamentoToView.descricao && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>📝</span>
+                                        Descrição
+                                    </h3>
+                                    <p className="text-gray-900 dark:text-white">{orcamentoToView.descricao}</p>
+                                </div>
+                            )}
+
+                            {/* Itens do Orçamento */}
+                            {orcamentoToView.items && orcamentoToView.items.length > 0 && (
+                                <div>
+                                    <h3 className="font-semibold text-gray-800 mb-4">Itens do Orçamento</h3>
+                                    <div className="space-y-3">
+                                        {orcamentoToView.items.map((item: any, index: number) => (
+                                            <div key={index} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <h4 className="font-semibold text-gray-900 dark:text-white">{item.nome}</h4>
+                                                        {item.descricao && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.descricao}</p>
+                                                        )}
+                                                        <div className="mt-2 flex gap-4 text-sm text-gray-600 dark:text-gray-400">
+                                                            <span>Qtd: {item.quantidade} {item.unidadeMedida}</span>
+                                                            <span>Unit: R$ {item.precoUnit?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-lg font-bold text-purple-700 dark:text-purple-400">
+                                                            R$ {item.subtotal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Observações */}
+                            {orcamentoToView.observacoes && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl">
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                        <span>💬</span>
+                                        Observações
+                                    </h3>
+                                    <p className="text-gray-900 dark:text-white">{orcamentoToView.observacoes}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer do Modal */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button
+                                onClick={() => setOrcamentoToView(null)}
+                                className="btn-secondary"
+                            >
+                                Fechar
+                            </button>
+                            {orcamentoToView.status === 'Pendente' && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            handleAprovarOrcamento(orcamentoToView.id);
+                                            setOrcamentoToView(null);
+                                        }}
+                                        className="btn-primary bg-green-600 hover:bg-green-700"
+                                    >
+                                        ✅ Aprovar
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            handleRecusarOrcamento(orcamentoToView.id);
+                                            setOrcamentoToView(null);
+                                        }}
+                                        className="btn-primary bg-red-600 hover:bg-red-700"
+                                    >
+                                        ❌ Recusar
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Customização de PDF */}
+            {showPDFCustomization && orcamentoForPDF && (
+                <PDFCustomizationModal
+                    isOpen={showPDFCustomization}
+                    onClose={() => {
+                        setShowPDFCustomization(false);
+                        setOrcamentoForPDF(null);
+                    }}
+                    orcamentoId={orcamentoForPDF.id}
+                    orcamentoData={prepararDadosParaPDF(orcamentoForPDF)}
+                    onGeneratePDF={() => {
+                        console.log('✅ PDF gerado com sucesso!');
+                        toast.success('PDF personalizado gerado com sucesso!');
+                        // Fechar modal após gerar (opcional)
+                        setShowPDFCustomization(false);
+                        setOrcamentoForPDF(null);
+                    }}
+                />
+            )}
+
+            {/* Modal de Preview de Importação */}
+            {modalPreviewImportOpen && dadosParaImportar && orcamentoToView && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-200 dark:border-dark-border bg-gradient-to-r from-blue-600 to-blue-500">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <DocumentArrowUpIcon className="w-7 h-7 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">Preview de Importação</h3>
+                                        <p className="text-gray-900 dark:text-white font-medium">{orcamentoToView.cliente?.nome || 'N/A'}</p>
+                                    </div>
                                 </div>
                                 <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
                                     <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
@@ -2630,7 +4087,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                             {/* Ações do Orçamento */}
                             <div className="flex gap-3 pt-6 border-t border-gray-100">
                                 <button
-                                    onClick={() => handleGerarPDFProfissional(orcamentoToView)}
+                                    onClick={() => orcamentoToView && handleGerarPDFProfissional(orcamentoToView)}
                                     className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#0a1a2f] hover:bg-[#0d2240] dark:bg-gradient-to-r dark:from-purple-600 dark:to-indigo-600 text-white rounded-xl dark:hover:from-purple-700 dark:hover:to-indigo-700 transition-all shadow-medium font-semibold"
                                     title="Gerar PDF com marca d'água padrão S3E"
                                 >
@@ -2641,8 +4098,11 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        setOrcamentoToView(null);
-                                        handlePersonalizarPDF(orcamentoToView);
+                                        if (orcamentoToView) {
+                                            const orcamentoCopy = orcamentoToView;
+                                            setOrcamentoToView(null);
+                                            handlePersonalizarPDF(orcamentoCopy);
+                                        }
                                     }}
                                     className="btn-success flex items-center gap-2"
                                     title="Personalizar PDF com logo e folha timbrada"
@@ -2803,7 +4263,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                                                 <div className="text-red-600 dark:text-red-400">
                                                                     <p className="font-semibold">❌ Erros</p>
                                                                     <ul className="text-xs mt-1">
-                                                                        {orcamento.errosOrcamento.map((erro, i) => (
+                                                                        {orcamento.errosOrcamento.map((erro: string, i: number) => (
                                                                             <li key={i}>• {erro}</li>
                                                                         ))}
                                                                     </ul>
@@ -2861,7 +4321,7 @@ const Orcamentos: React.FC<OrcamentosProps> = ({ toggleSidebar }) => {
                                     <>
                                         ✅ Confirmar Importação
                                     </>
-                                )}
+                                )}    
                             </button>
                         </div>
                     </div>

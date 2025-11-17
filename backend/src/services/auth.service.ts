@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { generateToken } from './jwt.service';
+import { generateToken, verifyToken } from './jwt.service';
+import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
 
@@ -246,6 +247,153 @@ export const emailExists = async (email: string): Promise<boolean> => {
   });
 
   return !!user;
+};
+
+/**
+ * Gera um token de recuperação de senha para um usuário
+ * 
+ * @param email - Email do usuário
+ * @returns Token JWT temporário (válido por 1 hora)
+ * @throws Error se o email não estiver cadastrado
+ */
+export const generatePasswordResetToken = async (email: string): Promise<string> => {
+  // 1. Verificar se o usuário existe
+  const user = await prisma.user.findUnique({
+    where: { email }
+  });
+
+  if (!user) {
+    // Por segurança, não revelar se o email existe ou não
+    throw new Error('Se o email estiver cadastrado, você receberá instruções para redefinir sua senha');
+  }
+
+  if (!user.active) {
+    throw new Error('Usuário inativo. Entre em contato com o administrador.');
+  }
+
+  // 2. Gerar token JWT temporário (expira em 1 hora)
+  const token = generateToken(
+    { 
+      id: user.id, 
+      role: user.role
+    },
+    '1h', // Expira em 1 hora
+    { 
+      email: user.email,
+      type: 'password-reset' // Tipo especial para reset de senha
+    }
+  );
+
+  // Enviar email com o link de recuperação
+  try {
+    const { sendPasswordResetEmail } = await import('./email.service.js');
+    await sendPasswordResetEmail(user.email, token, user.name);
+  } catch (error) {
+    console.error('❌ Erro ao enviar email de recuperação:', error);
+    // Continuar mesmo se o email falhar (o token ainda é válido)
+    // Em desenvolvimento, logar o link para facilitar testes
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔐 Token de recuperação gerado para ${email}: ${token.substring(0, 20)}...`);
+      const frontendUrl = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+      console.log(`📧 Link de recuperação: ${frontendUrl}/reset-password?token=${token}`);
+    }
+  }
+
+  return token;
+};
+
+/**
+ * Valida um token de recuperação de senha
+ * 
+ * @param token - Token JWT de recuperação
+ * @returns true se o token é válido, false caso contrário
+ */
+export const validatePasswordResetToken = async (token: string): Promise<boolean> => {
+  try {
+    // Verificar se o token é válido usando o serviço JWT
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // Verificar se é um token de reset de senha
+    if (decoded.type !== 'password-reset') {
+      return false;
+    }
+
+    // Verificar se o usuário ainda existe e está ativo
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId || decoded.id }
+    });
+
+    return !!user && user.active;
+  } catch (error) {
+    // Token inválido ou expirado
+    return false;
+  }
+};
+
+/**
+ * Redefine a senha de um usuário usando um token de recuperação
+ * 
+ * @param token - Token JWT de recuperação
+ * @param newPassword - Nova senha
+ * @throws Error se o token for inválido ou expirado
+ */
+export const resetPasswordWithToken = async (token: string, newPassword: string): Promise<void> => {
+  try {
+    // 1. Validar e decodificar o token
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // 2. Verificar se é um token de reset de senha
+    if (decoded.type !== 'password-reset') {
+      throw new Error('Token inválido');
+    }
+
+    // 3. Verificar se o usuário existe e está ativo
+    const userId = decoded.userId || decoded.id;
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      throw new Error('Usuário não encontrado');
+    }
+
+    if (!user.active) {
+      throw new Error('Usuário inativo');
+    }
+
+    // 4. Hash da nova senha
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 5. Atualizar senha no banco
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword }
+    });
+
+    // 6. Registrar no audit log
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          action: 'PASSWORD_RESET',
+          description: `Usuário ${user.name} redefiniu a senha via recuperação`,
+          ipAddress: null,
+          userAgent: null
+        }
+      });
+    } catch (logError) {
+      console.error('Erro ao registrar reset de senha no audit log:', logError);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('jwt')) {
+      throw new Error('Token inválido ou expirado');
+    }
+    throw error;
+  }
 };
 
 /**

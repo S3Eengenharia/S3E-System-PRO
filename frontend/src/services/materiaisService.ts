@@ -6,7 +6,10 @@ export interface Material {
   codigo: string;
   descricao: string;
   unidade: string;
-  preco: number;
+
+  preco: number; // Preço de custo (última compra)
+  valorVenda?: number; // Preço de venda (usado em orçamentos)
+  porcentagemLucro?: number; // Porcentagem de lucro ((valorVenda - preco) / preco * 100)
   estoque: number;
   estoqueMinimo: number;
   categoria?: string;
@@ -113,6 +116,9 @@ class MateriaisService {
     descricao: string;
     unidade: string;
     preco: number;
+
+    valorVenda?: number;
+    porcentagemLucro?: number;
     estoque: number;
     estoqueMinimo: number;
     categoria?: string;

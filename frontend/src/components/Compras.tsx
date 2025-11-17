@@ -7,6 +7,8 @@ import { comprasService } from '../services/comprasService';
 import ViewToggle from './ui/ViewToggle';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
 
+import { useEscapeKey } from '../hooks/useEscapeKey';
+
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -299,6 +301,17 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         setIsModalOpen(false);
         resetForm();
     };
+
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(isXMLModalOpen, () => setIsXMLModalOpen(false));
+    useEscapeKey(isReceivingModalOpen, () => {
+        setIsReceivingModalOpen(false);
+        setPurchaseToView(null);
+    });
+    useEscapeKey(!!purchaseToView, () => setPurchaseToView(null));
+    useEscapeKey(!!purchaseToDelete, () => setPurchaseToDelete(null));
 
     const handleAddProduct = () => {
         if (!productToAdd.id || !productToAdd.quantity || !productToAdd.cost) {

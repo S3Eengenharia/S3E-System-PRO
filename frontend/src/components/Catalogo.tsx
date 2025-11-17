@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { CatalogItem, CatalogItemType, Product, Kit, KitProduct, Service, KitService, ServiceType, KitConfiguration, MaterialItem } from '../types';
+import { CatalogItem, CatalogItemType, Product, Kit, KitProduct, Service, ServiceCatalogItem, KitService, ServiceType, KitConfiguration, MaterialItem } from '../types';
 import { axiosApiService } from '../services/axiosApi';
+import { servicosService } from '../services/servicosService';
 import { ENDPOINTS } from '../config/api';
 import CriacaoQuadroModular from './CriacaoQuadroModular';
 import CriacaoKitModal from './CriacaoKitModal';
 import ViewToggle from './ui/ViewToggle';
+
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -28,6 +31,11 @@ const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
 );
+const CubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9-9" />
+    </svg>
+);
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.432 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -42,11 +50,6 @@ const PencilIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.124-2.038-2.124H9.038c-1.128 0-2.038.944-2.038 2.124v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-    </svg>
-);
-const CubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
     </svg>
 );
 const Squares2x2Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -95,11 +98,34 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                 if (kitsResponse.success && kitsResponse.data) {
                     const kits = Array.isArray(kitsResponse.data) ? kitsResponse.data : [];
                     kits.forEach((kit: any) => {
+                        // Calcular preço total incluindo itens do banco frio
+                        let precoTotal = 0;
+                        
+                        // Somar itens do estoque real
+                        if (kit.items && Array.isArray(kit.items)) {
+                            kit.items.forEach((item: any) => {
+                                const precoVenda = item.material?.valorVenda || item.material?.preco || 0;
+                                precoTotal += (item.quantidade || 0) * precoVenda;
+                            });
+                        }
+                        
+                        // Somar itens do banco frio
+                        if (kit.itensFaltantes && Array.isArray(kit.itensFaltantes) && kit.itensFaltantes.length > 0) {
+                            kit.itensFaltantes.forEach((item: any) => {
+                                const precoUnit = item.precoUnit || item.preco || item.valorUnitario || 0;
+                                const quantidade = item.quantidade || 0;
+                                precoTotal += precoUnit * quantidade;
+                            });
+                        }
+                        
+                        // Usar preço calculado se for maior que 0, senão usar o preço salvo
+                        const precoFinal = precoTotal > 0 ? precoTotal : (kit.preco || 0);
+                        
                         catalogItems.push({
                             id: kit.id,
                             name: kit.nome,
                             description: kit.descricao || 'Kit sem descrição',
-                            price: kit.preco || 0,
+                            price: precoFinal,
                             category: kit.tipo || 'Kit',
                             type: 'Kit' as CatalogItemType,
                             createdAt: kit.createdAt || new Date().toISOString(),
@@ -152,7 +178,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             filtered = filtered.filter(item =>
                 item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.category.toLowerCase().includes(searchTerm.toLowerCase())
+                (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
 
@@ -187,7 +213,28 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             // Carregar detalhes completos do kit
             const response = await axiosApiService.get(`${ENDPOINTS.KITS}/${item.id}`);
             if (response.success && response.data) {
-                setKitParaEditar(response.data);
+
+                // Garantir que itensFaltantes seja um array para o modal de edição
+                const kitData: any = { ...response.data };
+                if (kitData.itensFaltantes) {
+                    // Se for string JSON, fazer parse
+                    if (typeof kitData.itensFaltantes === 'string') {
+                        try {
+                            kitData.itensFaltantes = JSON.parse(kitData.itensFaltantes);
+                        } catch (e) {
+                            console.error('Erro ao fazer parse de itensFaltantes:', e);
+                            kitData.itensFaltantes = [];
+                        }
+                    }
+                    // Garantir que seja array
+                    if (!Array.isArray(kitData.itensFaltantes)) {
+                        kitData.itensFaltantes = [];
+                    }
+                } else {
+                    kitData.itensFaltantes = [];
+                }
+                
+                setKitParaEditar(kitData);
                 setShowKitModal(true);
             }
         } catch (error) {
@@ -201,6 +248,16 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
         setItemToEdit(null);
     };
 
+
+    // Fechar modais com ESC
+    useEscapeKey(isModalOpen, handleCloseModal);
+    useEscapeKey(showKitModal, () => {
+        setShowKitModal(false);
+        setKitParaEditar(null);
+    });
+    useEscapeKey(showQuadroModal, () => setShowQuadroModal(false));
+    useEscapeKey(!!itemToDelete, () => setItemToDelete(null));
+
     const handleViewItem = async (item: CatalogItem) => {
         setSelectedItem(item);
         
@@ -209,14 +266,44 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             try {
                 setLoadingKitDetalhes(true);
                 const response = await axiosApiService.get(`${ENDPOINTS.KITS}/${item.id}`);
-                console.log('📦 Detalhes do kit carregados:', response.data);
-                console.log('   - Items:', response.data?.items?.length || 0);
-                console.log('   - ItensFaltantes:', response.data?.itensFaltantes);
-                console.log('   - temItensCotacao:', response.data?.temItensCotacao);
-                console.log('   - statusEstoque:', response.data?.statusEstoque);
+                const kitData = response.data as any;
+                console.log('📦 Detalhes do kit carregados:', kitData);
+                console.log('   - Items:', kitData?.items?.length || 0);
+
+                console.log('   - ItensFaltantes (raw):', kitData?.itensFaltantes);
+                console.log('   - ItensFaltantes (type):', typeof kitData?.itensFaltantes);
+                console.log('   - temItensCotacao:', kitData?.temItensCotacao);
+                console.log('   - statusEstoque:', kitData?.statusEstoque);
                 
-                if (response.success && response.data) {
-                    setKitDetalhes(response.data);
+                if (response.success && kitData) {
+
+                    // Garantir que itensFaltantes seja um array
+                    const kitDataProcessed: any = { ...kitData };
+                    
+                    // Processar itensFaltantes - pode vir como objeto, array, string JSON ou null
+                    let itensFaltantesProcessados: any[] = [];
+                    if (kitDataProcessed.itensFaltantes) {
+                        if (typeof kitDataProcessed.itensFaltantes === 'string') {
+                            try {
+                                const parsed = JSON.parse(kitDataProcessed.itensFaltantes);
+                                itensFaltantesProcessados = Array.isArray(parsed) ? parsed : [parsed];
+                            } catch (e) {
+                                console.error('Erro ao fazer parse de itensFaltantes:', e);
+                                itensFaltantesProcessados = [];
+                            }
+                        } else if (Array.isArray(kitDataProcessed.itensFaltantes)) {
+                            itensFaltantesProcessados = kitDataProcessed.itensFaltantes;
+                        } else if (typeof kitDataProcessed.itensFaltantes === 'object') {
+                            // Se for um objeto único, converter para array
+                            itensFaltantesProcessados = [kitDataProcessed.itensFaltantes];
+                        }
+                    }
+                    
+                    kitDataProcessed.itensFaltantes = itensFaltantesProcessados;
+                    
+                    console.log('   - ItensFaltantes (processed):', kitDataProcessed.itensFaltantes);
+                    console.log('   - ItensFaltantes (length):', kitDataProcessed.itensFaltantes.length);
+                    setKitDetalhes(kitDataProcessed);
                 }
             } catch (error) {
                 console.error('Erro ao carregar detalhes do kit:', error);
@@ -267,10 +354,11 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                     });
                 }
             } else if (itemToDelete.type === CatalogItemType.Servico) {
-                const response = await servicosService.desativar(itemToDelete.id);
+                const servicoItem = itemToDelete as ServiceCatalogItem;
+                const response = await servicosService.desativar(servicoItem.id);
                 if (response.success) {
                     toast.success('Serviço removido com sucesso!', {
-                        description: `"${itemToDelete.name}" foi desativado`,
+                        description: `"${servicoItem.name}" foi desativado`,
                         icon: '🗑️'
                     });
                     setItemToDelete(null);
@@ -541,21 +629,26 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                     <p className="text-2xl font-bold text-teal-700">
                                         R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </p>
+                                    {(item as any).valorVenda && (item as any).valorVenda !== item.price && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Venda: R$ {(item as any).valorVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
                             {/* Informações */}
                             <div className="space-y-2 mb-4">
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600">
                                     <span>📂</span>
-                                    <span className="truncate">{item.category}</span>
+                                    <span className="truncate">{item.category || 'Sem categoria'}</span>
                                 </div>
                                 <div className="text-sm text-gray-600">
                                     <p className="line-clamp-2">{item.description}</p>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
                                     <span>📅</span>
-                                    <span>Criado em: {new Date(item.createdAt).toLocaleDateString('pt-BR')}</span>
+                                    <span>Criado em: {item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : 'Data não disponível'}</span>
                                 </div>
                             </div>
 
@@ -633,7 +726,7 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Item</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Tipo</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Categoria</th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Preço</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Preço / Venda</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Ações</th>
                             </tr>
@@ -665,11 +758,16 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                             {getTypeIcon(item.type)} {getTypeName(item.type)}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{item.category}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">{item.category || 'Sem categoria'}</td>
                                     <td className="px-6 py-4 text-right">
                                         <p className="text-lg font-bold text-teal-700">
                                             R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
+                                        {(item as any).valorVenda && (item as any).valorVenda !== item.price && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Venda: R$ {(item as any).valorVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`px-3 py-1 text-xs font-bold rounded-lg ${
@@ -770,125 +868,230 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
             {/* MODAL DE VISUALIZAÇÃO */}
             {selectedItem && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-teal-50">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900">Detalhes do Item</h2>
-                                <p className="text-sm text-gray-600 mt-1">Informações completas do item</p>
+                    <div className="bg-white rounded-2xl shadow-strong max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+                        {/* Header fixo */}
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-teal-50 via-blue-50 to-purple-50 flex-shrink-0">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-lg">
+                                    <CubeIcon className="w-7 h-7 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-3xl font-bold text-gray-900">Detalhes do Item</h2>
+                                    <p className="text-sm text-gray-600 mt-1">Informações completas do item</p>
+                                </div>
                             </div>
-                            <button onClick={handleCloseViewModal} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl">
+                            <button onClick={handleCloseViewModal} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl transition-colors">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Nome</h3>
-                                    <p className="text-gray-900 font-medium">{selectedItem.name}</p>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Tipo</h3>
-                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${getTypeColor(selectedItem.type)}`}>
-                                        {getTypeIcon(selectedItem.type)} {getTypeName(selectedItem.type)}
-                                    </span>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Preço</h3>
-                                    <p className="text-2xl font-bold text-teal-700">
-                                        R$ {selectedItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </p>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Categoria</h3>
-                                    <p className="text-gray-900 font-medium">{selectedItem.category}</p>
-                                </div>
-                            </div>
+                        {/* Conteúdo scrollável */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {/* Informações principais em layout horizontal */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                                {/* Coluna 1: Informações Básicas */}
+                                <div className="lg:col-span-2 space-y-4">
+                                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-5 rounded-xl border border-gray-200">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Nome do Item</h3>
+                                        <p className="text-2xl font-bold text-gray-900">{selectedItem.name}</p>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Tipo</h3>
+                                            <span className={`px-3 py-1.5 text-sm font-bold rounded-lg ${getTypeColor(selectedItem.type)}`}>
+                                                {getTypeIcon(selectedItem.type)} {getTypeName(selectedItem.type)}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Categoria</h3>
+                                            <p className="text-lg font-semibold text-gray-900">{selectedItem.category || 'Sem categoria'}</p>
+                                        </div>
+                                    </div>
 
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                <h3 className="font-semibold text-gray-800 mb-2">Descrição</h3>
-                                <p className="text-gray-700">{selectedItem.description}</p>
+                                    {selectedItem.description && (
+                                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                                            <h3 className="text-xs font-semibold text-blue-700 uppercase mb-2">Descrição</h3>
+                                            <p className="text-gray-700">{selectedItem.description}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Coluna 2: Preço e Status */}
+                                <div className="space-y-4">
+                                    <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-xl border-2 border-teal-200 shadow-lg">
+                                        <h3 className="text-xs font-semibold text-teal-700 uppercase mb-3">Valor Total</h3>
+                                        <p className="text-4xl font-bold text-teal-700 mb-2">
+                                            R$ {(() => {
+                                                // Calcular preço total do kit incluindo itens do banco frio
+                                                if (selectedItem.type === 'Kit' && kitDetalhes) {
+                                                    let total = 0;
+                                                    
+                                                    // Somar itens do estoque real
+                                                    if (kitDetalhes.items) {
+                                                        kitDetalhes.items.forEach((item: any) => {
+                                                            const precoVenda = item.material?.valorVenda || item.material?.preco || 0;
+                                                            total += (item.quantidade || 0) * precoVenda;
+                                                        });
+                                                    }
+                                                    
+                                                    // Somar itens do banco frio
+                                                    if (kitDetalhes.itensFaltantes && Array.isArray(kitDetalhes.itensFaltantes)) {
+                                                        kitDetalhes.itensFaltantes.forEach((item: any) => {
+                                                            const precoUnit = item.precoUnit || item.preco || item.valorUnitario || 0;
+                                                            total += (item.quantidade || 0) * precoUnit;
+                                                        });
+                                                    }
+                                                    
+                                                    return total > 0 ? total : selectedItem.price;
+                                                }
+                                                return selectedItem.price;
+                                            })().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                        <p className="text-xs text-teal-600">Preço total do kit</p>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Status</h3>
+                                        <span className={`px-4 py-2 text-sm font-bold rounded-lg inline-block ${
+                                            selectedItem.isActive 
+                                                ? 'bg-green-100 text-green-800 ring-2 ring-green-200' 
+                                                : 'bg-red-100 text-red-800 ring-2 ring-red-200'
+                                        }`}>
+                                            {selectedItem.isActive ? '✅ Ativo' : '❌ Inativo'}
+                                        </span>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Criado em</h3>
+                                        <p className="text-sm font-medium text-gray-900">{selectedItem.createdAt ? new Date(selectedItem.createdAt).toLocaleDateString('pt-BR') : 'Data não disponível'}</p>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Composição do Kit (se for um Kit) */}
                             {selectedItem.type === 'Kit' && (
-                                <div>
-                                    <h3 className="font-semibold text-gray-800 mb-4">Composição do Kit</h3>
+                                <div className="mt-6">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-1 h-8 bg-gradient-to-b from-teal-500 to-blue-500 rounded-full"></div>
+                                        <h3 className="text-2xl font-bold text-gray-900">Composição do Kit</h3>
+                                    </div>
+                                    
                                     {loadingKitDetalhes ? (
-                                        <div className="text-center py-8">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto"></div>
-                                            <p className="text-sm text-gray-600 mt-2">Carregando composição...</p>
+                                        <div className="text-center py-12">
+                                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+                                            <p className="text-sm text-gray-600 mt-3">Carregando composição...</p>
                                         </div>
                                     ) : kitDetalhes ? (
-                                        <div className="space-y-4">
-                                            {/* Itens do Estoque Real */}
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* Coluna 1: Itens do Estoque Real */}
                                             {kitDetalhes.items && kitDetalhes.items.length > 0 && (
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
-                                                        <span>✅</span> Itens do Estoque Real ({kitDetalhes.items.length})
-                                                    </h4>
-                                                    <div className="space-y-2">
-                                                        {kitDetalhes.items.map((item: any, index: number) => (
-                                                            <div key={index} className="bg-green-50 border border-green-200 p-3 rounded-lg">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div className="flex-1">
-                                                                        <p className="font-semibold text-gray-900 text-sm">
-                                                                            {item.material?.nome || item.material?.descricao || 'Material'}
-                                                                        </p>
-                                                                        <p className="text-xs text-gray-600 mt-1">
-                                                                            {item.quantidade} {item.material?.unidadeMedida || 'UN'} × R$ {(item.material?.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <p className="font-bold text-sm text-green-700">
-                                                                            R$ {((item.quantidade || 0) * (item.material?.preco || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                                        </p>
+                                                <div className="bg-white rounded-xl border-2 border-green-200 shadow-lg overflow-hidden">
+                                                    <div className="bg-gradient-to-r from-green-500 to-green-600 p-4">
+                                                        <h4 className="text-base font-bold text-white flex items-center gap-2">
+                                                            <span>✅</span> Itens do Estoque Real ({kitDetalhes.items.length})
+                                                        </h4>
+                                                    </div>
+                                                    <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+                                                        {kitDetalhes.items.map((item: any, index: number) => {
+                                                            const precoVenda = item.material?.valorVenda || item.material?.preco || 0;
+                                                            const subtotal = (item.quantidade || 0) * precoVenda;
+                                                            
+                                                            return (
+                                                                <div key={index} className="bg-green-50 border border-green-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                                                                    <div className="flex justify-between items-start gap-4">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="font-bold text-gray-900 text-sm mb-1">
+                                                                                {item.material?.nome || item.material?.descricao || 'Material'}
+                                                                            </p>
+                                                                            <div className="flex flex-wrap gap-2 items-center mt-2">
+                                                                                <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded">
+                                                                                    {item.quantidade} {item.material?.unidadeMedida || 'UN'}
+                                                                                </span>
+                                                                                <span className="text-xs text-gray-500">×</span>
+                                                                                <span className="text-xs font-semibold text-green-700">
+                                                                                    R$ {precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                                </span>
+                                                                                {item.material?.valorVenda && item.material?.valorVenda !== item.material?.preco && (
+                                                                                    <span className="text-xs text-gray-400 line-through">
+                                                                                        Compra: R$ {(item.material?.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right flex-shrink-0">
+                                                                            <p className="text-lg font-bold text-green-700">
+                                                                                R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}
 
-                                            {/* Itens do Banco Frio (Cotações) */}
+                                            {/* Coluna 2: Itens do Banco Frio */}
                                             {kitDetalhes.itensFaltantes && Array.isArray(kitDetalhes.itensFaltantes) && kitDetalhes.itensFaltantes.length > 0 && (
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
-                                                        <span>❄️</span> Itens do Banco Frio ({kitDetalhes.itensFaltantes.length})
-                                                    </h4>
-                                                    <div className="space-y-2">
-                                                        {kitDetalhes.itensFaltantes.map((item: any, index: number) => (
-                                                            <div key={index} className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div className="flex-1">
-                                                                        <p className="font-semibold text-gray-900 text-sm">
-                                                                            {item.nome}
-                                                                        </p>
-                                                                        <p className="text-xs text-gray-600 mt-1">
-                                                                            {item.quantidade} UN × R$ {(item.precoUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                                        </p>
-                                                                        {item.dataUltimaCotacao && (
-                                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
-                                                                                📅 Cotação: {(() => {
-                                                                                    const data = new Date(item.dataUltimaCotacao);
-                                                                                    return !isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : 'Sem data';
-                                                                                })()}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <p className="font-bold text-sm text-blue-700">
-                                                                            R$ {((item.quantidade || 0) * (item.precoUnit || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                                        </p>
+                                                <div className="bg-white rounded-xl border-2 border-blue-200 shadow-lg overflow-hidden">
+                                                    <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4">
+                                                        <h4 className="text-base font-bold text-white flex items-center gap-2">
+                                                            <span>❄️</span> Itens do Banco Frio ({kitDetalhes.itensFaltantes.length})
+                                                        </h4>
+                                                    </div>
+                                                    <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+                                                        {kitDetalhes.itensFaltantes.map((item: any, index: number) => {
+                                                            const nome = item.nome || item.materialNome || 'Item do Banco Frio';
+                                                            const quantidade = item.quantidade || 0;
+                                                            const precoUnit = item.precoUnit || item.preco || item.valorUnitario || 0;
+                                                            const subtotal = quantidade * precoUnit;
+                                                            const unidadeMedida = item.unidadeMedida || 'UN';
+                                                            const dataUltimaCotacao = item.dataUltimaCotacao || item.dataAtualizacao;
+                                                            
+                                                            return (
+                                                                <div key={index} className="bg-blue-50 border border-blue-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                                                                    <div className="flex justify-between items-start gap-4">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="font-bold text-gray-900 text-sm mb-1">
+                                                                                {nome}
+                                                                            </p>
+                                                                            <div className="flex flex-wrap gap-2 items-center mt-2">
+                                                                                <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded">
+                                                                                    {quantidade} {unidadeMedida}
+                                                                                </span>
+                                                                                <span className="text-xs text-gray-500">×</span>
+                                                                                <span className="text-xs font-semibold text-blue-700">
+                                                                                    R$ {precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                                </span>
+                                                                                {dataUltimaCotacao && (
+                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                                        📅 {(() => {
+                                                                                            try {
+                                                                                                const data = new Date(dataUltimaCotacao);
+                                                                                                return !isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : 'Sem data';
+                                                                                            } catch {
+                                                                                                return 'Sem data';
+                                                                                            }
+                                                                                        })()}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right flex-shrink-0">
+                                                                            <p className="text-lg font-bold text-blue-700">
+                                                                                R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
-                                                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                                                        <p className="text-xs text-orange-800 font-medium">
-                                                            ⚠️ Estes itens precisam ser comprados e adicionados ao estoque antes de usar o kit em obras
+                                                    <div className="p-4 bg-orange-50 border-t border-orange-200">
+                                                        <p className="text-xs text-orange-800 font-medium flex items-center gap-2">
+                                                            <span>⚠️</span>
+                                                            Estes itens precisam ser comprados e adicionados ao estoque antes de usar o kit em obras
                                                         </p>
                                                     </div>
                                                 </div>
@@ -897,57 +1100,73 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                             {/* Se não tem nenhum item */}
                                             {(!kitDetalhes.items || kitDetalhes.items.length === 0) && 
                                              (!kitDetalhes.itensFaltantes || kitDetalhes.itensFaltantes.length === 0) && (
-                                                <div className="text-center py-8 text-gray-500">
-                                                    Nenhum item na composição
+                                                <div className="col-span-2 text-center py-12 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
+                                                    <p className="text-lg font-medium">Nenhum item na composição</p>
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="text-center py-8 text-gray-500">
-                                            Erro ao carregar composição do kit
+                                        <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
+                                            <p className="text-lg font-medium">Erro ao carregar composição do kit</p>
+                                        </div>
+                                    )}
+
+                                    {/* Resumo do Valor Total - Full Width */}
+                                    {(kitDetalhes && ((kitDetalhes.items && kitDetalhes.items.length > 0) || 
+                                     (kitDetalhes.itensFaltantes && Array.isArray(kitDetalhes.itensFaltantes) && kitDetalhes.itensFaltantes.length > 0))) && (
+                                        <div className="mt-6 p-6 bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 rounded-xl shadow-xl">
+                                            <div className="flex justify-between items-center">
+                                                <h4 className="text-xl font-bold text-white">Valor Total do Kit:</h4>
+                                                <p className="text-4xl font-bold text-white">
+                                                    R$ {(() => {
+                                                        let total = 0;
+                                                        
+                                                        if (kitDetalhes.items) {
+                                                            kitDetalhes.items.forEach((item: any) => {
+                                                                const precoVenda = item.material?.valorVenda || item.material?.preco || 0;
+                                                                total += (item.quantidade || 0) * precoVenda;
+                                                            });
+                                                        }
+                                                        
+                                                        if (kitDetalhes.itensFaltantes && Array.isArray(kitDetalhes.itensFaltantes)) {
+                                                            kitDetalhes.itensFaltantes.forEach((item: any) => {
+                                                                const precoUnit = item.precoUnit || item.preco || item.valorUnitario || 0;
+                                                                total += (item.quantidade || 0) * precoUnit;
+                                                            });
+                                                        }
+                                                        
+                                                        return total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                                    })()}
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Criado em</h3>
-                                    <p className="text-gray-900">{new Date(selectedItem.createdAt).toLocaleDateString('pt-BR')}</p>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl">
-                                    <h3 className="font-semibold text-gray-800 mb-2">Status</h3>
-                                    <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${
-                                        selectedItem.isActive 
-                                            ? 'bg-green-100 text-green-800 ring-1 ring-green-200' 
-                                            : 'bg-red-100 text-red-800 ring-1 ring-red-200'
-                                    }`}>
-                                        {selectedItem.isActive ? '✅ Ativo' : '❌ Inativo'}
-                                    </span>
-                                </div>
-                            </div>
-
                             {/* Alertas de Estoque (para quadros elétricos) */}
                             {(selectedItem as any).statusEstoque === 'PENDENTE' && (selectedItem as any).itensFaltantes && (
-                                <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <span className="text-3xl">⚠️</span>
+                                <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-6 shadow-lg">
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center">
+                                            <span className="text-2xl">⚠️</span>
+                                        </div>
                                         <div>
-                                            <h3 className="font-bold text-yellow-900 text-lg">Itens Faltantes em Estoque</h3>
-                                            <p className="text-sm text-yellow-700">
+                                            <h3 className="font-bold text-yellow-900 text-xl">Itens Faltantes em Estoque</h3>
+                                            <p className="text-sm text-yellow-700 mt-1">
                                                 Este quadro possui itens que precisam ser comprados ou reabastecidos
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {JSON.parse(JSON.stringify((selectedItem as any).itensFaltantes || [])).map((item: any, idx: number) => (
-                                            <div key={idx} className="bg-white border border-yellow-200 rounded-lg p-3">
-                                                <p className="font-semibold text-gray-900 text-sm">{item.nome}</p>
-                                                <div className="flex justify-between items-center mt-1">
-                                                    <span className="text-xs text-gray-600">
+                                            <div key={idx} className="bg-white border border-yellow-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                                <p className="font-semibold text-gray-900 text-sm mb-2">{item.nome}</p>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs font-medium px-2 py-1 rounded bg-yellow-100 text-yellow-800">
                                                         {item.tipo === 'COTACAO' ? '❄️ Banco Frio' : '📦 Estoque Insuficiente'}
                                                     </span>
-                                                    <span className="text-xs font-bold text-yellow-700">
+                                                    <span className="text-sm font-bold text-yellow-700">
                                                         {item.quantidade} un necessária(s)
                                                     </span>
                                                 </div>
@@ -956,6 +1175,16 @@ const Catalogo: React.FC<CatalogoProps> = ({ toggleSidebar }) => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Footer fixo com botão de fechar */}
+                        <div className="flex justify-end p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+                            <button
+                                onClick={handleCloseViewModal}
+                                className="px-8 py-3 bg-gradient-to-r from-gray-600 to-gray-500 text-white rounded-xl hover:from-gray-700 hover:to-gray-600 transition-all shadow-md font-semibold"
+                            >
+                                Fechar
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -57,6 +57,7 @@ export class KitsService {
                                 descricao: true,
                                 unidadeMedida: true,
                                 preco: true,
+                                valorVenda: true,
                                 estoque: true,
                                 tipo: true,
                                 categoria: true
@@ -70,7 +71,30 @@ export class KitsService {
             }
         });
 
-        return kits;
+        // Processar itensFaltantes para cada kit (garantir que seja sempre um array)
+        return kits.map(kit => {
+            let itensFaltantesProcessados: any[] = [];
+            if (kit.itensFaltantes) {
+                if (typeof kit.itensFaltantes === 'string') {
+                    try {
+                        const parsed = JSON.parse(kit.itensFaltantes);
+                        itensFaltantesProcessados = Array.isArray(parsed) ? parsed : [parsed];
+                    } catch (e) {
+                        console.error('Erro ao fazer parse de itensFaltantes:', e);
+                        itensFaltantesProcessados = [];
+                    }
+                } else if (Array.isArray(kit.itensFaltantes)) {
+                    itensFaltantesProcessados = kit.itensFaltantes;
+                } else if (typeof kit.itensFaltantes === 'object' && kit.itensFaltantes !== null) {
+                    itensFaltantesProcessados = [kit.itensFaltantes];
+                }
+            }
+            
+            return {
+                ...kit,
+                itensFaltantes: itensFaltantesProcessados
+            };
+        });
     }
 
     /**
@@ -90,6 +114,7 @@ export class KitsService {
                                 descricao: true,
                                 unidadeMedida: true,
                                 preco: true,
+                                valorVenda: true,
                                 estoque: true,
                                 tipo: true,
                                 categoria: true
@@ -103,9 +128,39 @@ export class KitsService {
         if (kit) {
             console.log(`📦 Kit encontrado: ${kit.nome}`);
             console.log(`   - Items no estoque: ${kit.items.length}`);
-            console.log(`   - ItensFaltantes:`, kit.itensFaltantes);
+            console.log(`   - ItensFaltantes (raw):`, kit.itensFaltantes);
+            console.log(`   - ItensFaltantes (type):`, typeof kit.itensFaltantes);
             console.log(`   - temItensCotacao:`, kit.temItensCotacao);
             console.log(`   - statusEstoque:`, kit.statusEstoque);
+            
+            // Garantir que itensFaltantes seja sempre um array
+            // O Prisma retorna JSON como objeto JavaScript, mas pode ser null
+            let itensFaltantesProcessados: any[] = [];
+            if (kit.itensFaltantes) {
+                if (typeof kit.itensFaltantes === 'string') {
+                    try {
+                        const parsed = JSON.parse(kit.itensFaltantes);
+                        itensFaltantesProcessados = Array.isArray(parsed) ? parsed : [parsed];
+                    } catch (e) {
+                        console.error('Erro ao fazer parse de itensFaltantes:', e);
+                        itensFaltantesProcessados = [];
+                    }
+                } else if (Array.isArray(kit.itensFaltantes)) {
+                    itensFaltantesProcessados = kit.itensFaltantes;
+                } else if (typeof kit.itensFaltantes === 'object' && kit.itensFaltantes !== null) {
+                    // Se for um objeto único, converter para array
+                    itensFaltantesProcessados = [kit.itensFaltantes];
+                }
+            }
+            
+            console.log(`   - ItensFaltantes (processed):`, itensFaltantesProcessados);
+            console.log(`   - ItensFaltantes (length):`, itensFaltantesProcessados.length);
+            
+            // Retornar kit com itensFaltantes processado como array
+            return {
+                ...kit,
+                itensFaltantes: itensFaltantesProcessados
+            };
         }
 
         return kit;
@@ -124,6 +179,11 @@ export class KitsService {
             console.log(`   - Itens banco frio:`, itensBancoFrio);
         }
 
+        // IMPORTANTE: statusEstoque 'PENDENTE' é apenas informativo para kits com itens do banco frio
+        // Não deve impedir a criação/edição do kit. A validação de estoque só deve ocorrer ao iniciar obra.
+        const temItensBancoFrio = itensBancoFrio && itensBancoFrio.length > 0;
+        const statusEstoque = temItensBancoFrio ? 'PENDENTE' : 'COMPLETO';
+        
         const kit = await prisma.kit.create({
             data: {
                 nome,
@@ -132,8 +192,9 @@ export class KitsService {
                 preco,
                 temItensCotacao: temItensCotacao || false,
                 // Salvar itens do banco frio como JSON para referência
-                itensFaltantes: itensBancoFrio && itensBancoFrio.length > 0 ? itensBancoFrio : null,
-                statusEstoque: (itensBancoFrio && itensBancoFrio.length > 0) ? 'PENDENTE' : 'COMPLETO',
+                // Estes itens NÃO são "faltantes" no sentido de erro, são apenas do banco frio
+                itensFaltantes: temItensBancoFrio ? JSON.parse(JSON.stringify(itensBancoFrio)) : null,
+                statusEstoque: statusEstoque, // Apenas informativo, não bloqueia criação
                 items: {
                     create: items.map(item => ({
                         materialId: item.materialId,
@@ -152,6 +213,7 @@ export class KitsService {
                                 descricao: true,
                                 unidadeMedida: true,
                                 preco: true,
+                                valorVenda: true,
                                 estoque: true,
                                 tipo: true,
                                 categoria: true
@@ -194,9 +256,13 @@ export class KitsService {
                 ...(ativo !== undefined && { ativo }),
                 ...(temItensCotacao !== undefined && { temItensCotacao }),
                 ...(itensBancoFrio !== undefined && { 
-                    itensFaltantes: itensBancoFrio.length > 0 ? itensBancoFrio : null 
+                    // IMPORTANTE: itensFaltantes aqui armazena itens do banco frio
+                    // Não são "faltantes" no sentido de erro, são apenas do banco frio
+                    itensFaltantes: itensBancoFrio.length > 0 ? JSON.parse(JSON.stringify(itensBancoFrio)) : null 
                 }),
                 ...((itensBancoFrio !== undefined || items !== undefined) && {
+                    // statusEstoque 'PENDENTE' é apenas informativo para kits com itens do banco frio
+                    // Não deve impedir a atualização do kit. A validação de estoque só deve ocorrer ao iniciar obra.
                     statusEstoque: (itensBancoFrio && itensBancoFrio.length > 0) ? 'PENDENTE' : 'COMPLETO'
                 }),
                 ...(items !== undefined && {
@@ -219,6 +285,7 @@ export class KitsService {
                                 descricao: true,
                                 unidadeMedida: true,
                                 preco: true,
+                                valorVenda: true,
                                 estoque: true,
                                 tipo: true,
                                 categoria: true
@@ -263,6 +330,7 @@ export class KitsService {
                                 descricao: true,
                                 unidadeMedida: true,
                                 preco: true,
+                                valorVenda: true,
                                 estoque: true,
                                 tipo: true,
                                 categoria: true

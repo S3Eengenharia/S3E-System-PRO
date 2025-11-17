@@ -243,3 +243,106 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+/**
+ * Controller para solicitar recuperação de senha
+ * 
+ * POST /api/auth/forgot-password
+ * Body: { email: string }
+ */
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ error: 'Email é obrigatório' });
+      return;
+    }
+
+    // Gerar token de recuperação (o email será enviado automaticamente pelo serviço)
+    const token = await authService.generatePasswordResetToken(email);
+
+    // Retornar sucesso (por segurança, não revelar se o email existe ou não)
+    res.status(200).json({
+      success: true,
+      message: 'Se o email estiver cadastrado, você receberá instruções para redefinir sua senha',
+      // Em desenvolvimento, retornar o token para facilitar testes
+      ...(process.env.NODE_ENV === 'development' && { token })
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Erro ao processar solicitação';
+    
+    // Por segurança, sempre retornar sucesso mesmo se o email não existir
+    res.status(200).json({
+      success: true,
+      message: 'Se o email estiver cadastrado, você receberá instruções para redefinir sua senha'
+    });
+  }
+};
+
+/**
+ * Controller para validar token de recuperação
+ * 
+ * GET /api/auth/validate-reset-token?token=...
+ */
+export const validateResetToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.query;
+
+    if (!token || typeof token !== 'string') {
+      res.status(400).json({ valid: false, error: 'Token não fornecido' });
+      return;
+    }
+
+    const isValid = await authService.validatePasswordResetToken(token);
+
+    if (isValid) {
+      res.status(200).json({ valid: true });
+    } else {
+      res.status(400).json({ valid: false, error: 'Token inválido ou expirado' });
+    }
+  } catch (error) {
+    console.error('Erro ao validar token:', error);
+    res.status(400).json({ valid: false, error: 'Token inválido ou expirado' });
+  }
+};
+
+/**
+ * Controller para redefinir senha com token
+ * 
+ * POST /api/auth/reset-password
+ * Body: { token: string, password: string }
+ */
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      res.status(400).json({ error: 'Token e senha são obrigatórios' });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+      return;
+    }
+
+    // Redefinir senha
+    await authService.resetPasswordWithToken(token, password);
+
+    res.status(200).json({
+      success: true,
+      message: 'Senha redefinida com sucesso'
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Erro ao redefinir senha';
+    
+    if (errorMessage.includes('Token inválido') || errorMessage.includes('expirado')) {
+      res.status(400).json({ error: errorMessage });
+      return;
+    }
+
+    console.error('Erro ao redefinir senha:', error);
+    res.status(500).json({ error: 'Erro ao redefinir senha' });
+  }
+};
+

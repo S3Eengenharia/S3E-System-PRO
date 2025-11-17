@@ -36,6 +36,14 @@ router.get('/kanban', ObraController.getObrasKanban);
 router.get('/projeto/:projetoId', ObraController.getObraPorProjeto);
 
 /**
+
+ * @route GET /api/obras/verificar-estoque/:projetoId
+ * @desc Verifica disponibilidade de estoque antes de criar obra
+ * @access Authenticated
+ */
+router.get('/verificar-estoque/:projetoId', ObraController.verificarEstoque);
+
+/**
  * @route GET /api/obras/:id
  * @desc Busca uma obra específica por ID
  * @access Authenticated
@@ -62,6 +70,13 @@ router.put('/:id/iniciar-execucao', ObraController.iniciarExecucao);
  * @access Authenticated
  */
 router.get('/alocacao', ObraController.getAlocacaoEquipes);
+
+/**
+ * @route DELETE /api/obras/:id
+ * @desc Deleta uma obra (apenas admin e desenvolvedor)
+ * @access Admin/Desenvolvedor
+ */
+router.delete('/:id', authorize('admin', 'desenvolvedor'), ObraController.deleteObra);
 
 export default router;
 

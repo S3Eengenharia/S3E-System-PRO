@@ -26,7 +26,7 @@ model User {
 
   // Relacionamentos
   pdfTemplates        PDFTemplate[]
-  projetosResponsavel Projeto[]     @relation("ProjetoResponsavel")
+  projetosResponsavel Projeto[]      @relation("ProjetoResponsavel")
   auditLogs           AuditLog[]
   alocacoes           AlocacaoObra[] @relation("AlocacaoEletricista")
 
@@ -141,17 +141,20 @@ model Fornecedor {
 // ============================================
 
 model Material {
-  id                     String    @id @default(uuid())
-  nome                   String
-  sku                    String    @unique
-  tipo                   String // Tipo do material
-  categoria              String // MaterialEletrico, Insumo, Ferramenta
-  descricao              String?
-  estoque                Float     @default(0)
-  estoqueMinimo          Float     @default(5)
-  unidadeMedida          String    @default("un")
-  localizacao            String?
-  preco                  Float? // Preço de referência
+  id            String  @id @default(uuid())
+  nome          String
+  sku           String  @unique
+  tipo          String // Tipo do material
+  categoria     String // MaterialEletrico, Insumo, Ferramenta
+  descricao     String?
+  estoque       Float   @default(0)
+  estoqueMinimo Float   @default(5)
+  unidadeMedida String  @default("un")
+  localizacao   String?
+
+  preco                  Float? // Preço de custo (última compra)
+  valorVenda             Float? // Preço de venda (usado em orçamentos)
+  porcentagemLucro       Float? // Porcentagem de lucro ((valorVenda - preco) / preco * 100)
   ultimaAtualizacaoPreco DateTime? // Data da última atualização de preço
   fornecedorId           String?
   ativo                  Boolean   @default(true)
@@ -191,6 +194,7 @@ model Cotacao {
   nome            String
   ncm             String?
   valorUnitario   Float
+  valorVenda      Float? // Valor de venda (padrão: valorUnitario * 1.4 = 40% de margem)
   fornecedorId    String?
   fornecedorNome  String? // Nome do fornecedor (redundante para performance)
   dataAtualizacao DateTime @default(now()) // Data da última cotação
@@ -691,7 +695,7 @@ model Equipe {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  alocacoes AlocacaoObra[]
+  alocacoes        AlocacaoObra[]
   alocacoesTarefas AlocacaoEquipe[]
 
   @@map("equipes")
@@ -699,7 +703,7 @@ model Equipe {
 
 // Alocação de equipes em tarefas específicas (novo sistema)
 model AlocacaoEquipe {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   tarefaId    String
   obraId      String
   equipeId    String
@@ -707,8 +711,8 @@ model AlocacaoEquipe {
   dataFim     DateTime
   status      StatusAlocacao @default(PLANEJADA)
   observacoes String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   equipe Equipe @relation(fields: [equipeId], references: [id], onDelete: Cascade)
 
@@ -728,8 +732,8 @@ enum StatusAlocacao {
 
 model AlocacaoObra {
   id              String    @id @default(uuid())
-  equipeId        String?  // Opcional: pode ser alocação de equipe ou eletricista individual
-  eletricistaId   String?  // Opcional: ID do eletricista individual (se não for equipe)
+  equipeId        String? // Opcional: pode ser alocação de equipe ou eletricista individual
+  eletricistaId   String? // Opcional: ID do eletricista individual (se não for equipe)
   projetoId       String // Relacionado com Projeto (Obra)
   dataInicio      DateTime
   dataFimPrevisto DateTime
@@ -739,9 +743,9 @@ model AlocacaoObra {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  equipe      Equipe?  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
-  eletricista User?    @relation("AlocacaoEletricista", fields: [eletricistaId], references: [id], onDelete: Cascade)
-  projeto     Projeto  @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  equipe      Equipe? @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  eletricista User?   @relation("AlocacaoEletricista", fields: [eletricistaId], references: [id], onDelete: Cascade)
+  projeto     Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
   @@index([equipeId])
   @@index([eletricistaId])
