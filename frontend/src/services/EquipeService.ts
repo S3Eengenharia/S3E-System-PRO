@@ -65,7 +65,7 @@ class EquipeService {
 
   async deleteEquipe(id: string): Promise<ApiResponse<{ success: boolean }>> {
     const res = await axiosApiService.delete<any>(`/api/equipes/${id}`);
-<<<<<<< HEAD
+
     
     // Se a requisição falhou, retornar o erro diretamente
     if (!res.success) {
@@ -80,9 +80,6 @@ class EquipeService {
       success: true,
       data: { success: true }
     };
-=======
-    return this.unwrap<{ success: boolean }>(res);
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
   }
 }
 

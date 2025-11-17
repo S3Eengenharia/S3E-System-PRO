@@ -6,10 +6,8 @@ import { parseNFeXML, readFileAsText } from '../utils/xmlParser';
 import { comprasService } from '../services/comprasService';
 import ViewToggle from './ui/ViewToggle';
 import { loadViewMode, saveViewMode } from '../utils/viewModeStorage';
-<<<<<<< HEAD
+
 import { useEscapeKey } from '../hooks/useEscapeKey';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -304,7 +302,7 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
         resetForm();
     };
 
-<<<<<<< HEAD
+
     // Fechar modais com ESC
     useEscapeKey(isModalOpen, handleCloseModal);
     useEscapeKey(isXMLModalOpen, () => setIsXMLModalOpen(false));
@@ -315,8 +313,6 @@ const Compras: React.FC<ComprasProps> = ({ toggleSidebar }) => {
     useEscapeKey(!!purchaseToView, () => setPurchaseToView(null));
     useEscapeKey(!!purchaseToDelete, () => setPurchaseToDelete(null));
 
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleAddProduct = () => {
         if (!productToAdd.id || !productToAdd.quantity || !productToAdd.cost) {
             toast.error('Preencha todos os campos do produto');

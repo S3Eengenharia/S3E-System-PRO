@@ -92,7 +92,7 @@ export const buscarCotacao = async (req: Request, res: Response): Promise<void> 
  */
 export const criarCotacao = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { nome, ncm, valorUnitario, fornecedorId, fornecedorNome, observacoes } = req.body;
+    const { nome, ncm, valorUnitario, valorVenda, fornecedorId, fornecedorNome, observacoes } = req.body;
 
     // Validações
     if (!nome || valorUnitario === undefined) {
@@ -103,11 +103,17 @@ export const criarCotacao = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    // Calcular valorVenda padrão (40% de margem) se não fornecido
+    const valorVendaCalculado = valorVenda !== undefined 
+      ? parseFloat(valorVenda) 
+      : parseFloat(valorUnitario) * 1.4;
+
     const cotacao = await prisma.cotacao.create({
       data: {
         nome,
         ncm,
         valorUnitario: parseFloat(valorUnitario),
+        valorVenda: valorVendaCalculado,
         fornecedorId,
         fornecedorNome,
         observacoes,
@@ -138,20 +144,44 @@ export const criarCotacao = async (req: Request, res: Response): Promise<void> =
 export const atualizarCotacao = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { nome, ncm, valorUnitario, fornecedorId, fornecedorNome, observacoes, ativo } = req.body;
+    const { nome, ncm, valorUnitario, valorVenda, fornecedorId, fornecedorNome, observacoes, ativo, atualizarDataCotacao } = req.body;
+
+    // Se atualizarDataCotacao for false, não atualizar dataAtualizacao (usado quando apenas valorVenda muda)
+    const updateData: any = {
+      ...(nome && { nome }),
+      ...(ncm !== undefined && { ncm }),
+      ...(fornecedorId !== undefined && { fornecedorId }),
+      ...(fornecedorNome !== undefined && { fornecedorNome }),
+      ...(observacoes !== undefined && { observacoes }),
+      ...(ativo !== undefined && { ativo })
+    };
+
+    // Se valorUnitario mudou, atualizar dataAtualizacao e recalcular valorVenda se necessário
+    if (valorUnitario !== undefined) {
+      updateData.valorUnitario = parseFloat(valorUnitario);
+      // Se valorVenda não foi fornecido, recalcular com 40% de margem
+      if (valorVenda === undefined) {
+        updateData.valorVenda = parseFloat(valorUnitario) * 1.4;
+      }
+      updateData.dataAtualizacao = new Date();
+    }
+
+    // Se apenas valorVenda mudou, não atualizar dataAtualizacao
+    if (valorVenda !== undefined && valorUnitario === undefined) {
+      updateData.valorVenda = parseFloat(valorVenda);
+      // Não atualizar dataAtualizacao quando apenas valorVenda muda
+    } else if (valorVenda !== undefined) {
+      updateData.valorVenda = parseFloat(valorVenda);
+    }
+
+    // Atualizar dataAtualizacao apenas se atualizarDataCotacao não for false
+    if (atualizarDataCotacao !== false && (valorUnitario !== undefined || nome || ncm)) {
+      updateData.dataAtualizacao = new Date();
+    }
 
     const cotacao = await prisma.cotacao.update({
       where: { id },
-      data: {
-        ...(nome && { nome }),
-        ...(ncm !== undefined && { ncm }),
-        ...(valorUnitario !== undefined && { valorUnitario: parseFloat(valorUnitario) }),
-        ...(fornecedorId !== undefined && { fornecedorId }),
-        ...(fornecedorNome !== undefined && { fornecedorNome }),
-        ...(observacoes !== undefined && { observacoes }),
-        ...(ativo !== undefined && { ativo }),
-        dataAtualizacao: new Date()
-      },
+      data: updateData,
       include: {
         fornecedor: true
       }
@@ -199,7 +229,11 @@ export const deletarCotacao = async (req: Request, res: Response): Promise<void>
  * Importar cotações de JSON
  * POST /api/cotacoes/importar
  */
-export const importarCotacoes = async (req: Request, res: Response): Promise<void> => {
+/**
+ * Preview de importação (validação antes de salvar)
+ * POST /api/cotacoes/preview-importacao
+ */
+export const previewImportacao = async (req: Request, res: Response): Promise<void> => {
   try {
     const file = req.file;
 
@@ -211,7 +245,7 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    console.log('📥 Importando cotações do arquivo:', file.filename);
+    console.log('📥 Preview de importação do arquivo:', file.path);
 
     // Ler arquivo JSON
     const jsonContent = fs.readFileSync(file.path, 'utf-8');
@@ -219,14 +253,8 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
 
     // Remover wrapper se existir
     if (jsonData.success && jsonData.data) {
-      console.log('🧹 Detectado wrapper - Extraindo data...');
       jsonData = jsonData.data;
     }
-
-    console.log('📄 JSON parseado:', {
-      versao: jsonData.versao,
-      totalCotacoes: jsonData.cotacoes?.length || 0
-    });
 
     if (!jsonData.cotacoes || !Array.isArray(jsonData.cotacoes)) {
       res.status(400).json({
@@ -236,6 +264,79 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    // Processar cotações para preview (calcular valorVenda padrão)
+    const cotacoesPreview = jsonData.cotacoes.map((cotacao: any) => {
+      const valorUnitario = parseFloat(cotacao.valorUnitario) || 0;
+      const valorVenda = cotacao.valorVenda !== undefined 
+        ? parseFloat(cotacao.valorVenda) 
+        : valorUnitario * 1.4; // 40% de margem padrão
+
+      return {
+        nome: cotacao.nome,
+        ncm: cotacao.ncm || '',
+        valorUnitario,
+        valorVenda,
+        fornecedorNome: cotacao.fornecedorNome || '',
+        observacoes: cotacao.observacoes || ''
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total: cotacoesPreview.length,
+        cotacoes: cotacoesPreview
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao fazer preview de importação:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao fazer preview de importação'
+    });
+  }
+};
+
+export const importarCotacoes = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const file = req.file;
+    const { cotacoes } = req.body; // Receber cotações do frontend (com valorVenda editado)
+
+    if (!file && !cotacoes) {
+      res.status(400).json({
+        success: false,
+        error: 'Nenhum arquivo ou dados foram enviados'
+      });
+      return;
+    }
+
+    let cotacoesParaImportar: any[] = [];
+
+    if (cotacoes && Array.isArray(cotacoes)) {
+      // Se vier do modal de preview, usar os dados já processados
+      cotacoesParaImportar = cotacoes;
+    } else if (file) {
+      // Se vier direto do arquivo, processar normalmente
+      console.log('📥 Importando cotações do arquivo:', file.filename);
+
+      const jsonContent = fs.readFileSync(file.path, 'utf-8');
+      let jsonData = JSON.parse(jsonContent);
+
+      if (jsonData.success && jsonData.data) {
+        jsonData = jsonData.data;
+      }
+
+      if (!jsonData.cotacoes || !Array.isArray(jsonData.cotacoes)) {
+        res.status(400).json({
+          success: false,
+          error: 'Formato JSON inválido. Deve conter array "cotacoes"'
+        });
+        return;
+      }
+
+      cotacoesParaImportar = jsonData.cotacoes;
+    }
+
     // Processar cotações
     const resultados = {
       criados: 0,
@@ -243,8 +344,13 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
       erros: 0
     };
 
-    for (const cotacao of jsonData.cotacoes) {
+    for (const cotacao of cotacoesParaImportar) {
       try {
+        const valorUnitario = parseFloat(cotacao.valorUnitario);
+        const valorVenda = cotacao.valorVenda !== undefined 
+          ? parseFloat(cotacao.valorVenda) 
+          : valorUnitario * 1.4; // 40% de margem padrão
+
         // Verificar se já existe (por nome + fornecedor)
         const existente = await prisma.cotacao.findFirst({
           where: {
@@ -254,14 +360,16 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
         });
 
         if (existente) {
-          // Atualizar
+          // Atualizar - atualizar dataAtualizacao apenas se valorUnitario mudou
+          const valorUnitarioMudou = existente.valorUnitario !== valorUnitario;
           await prisma.cotacao.update({
             where: { id: existente.id },
             data: {
-              valorUnitario: parseFloat(cotacao.valorUnitario),
+              valorUnitario,
+              valorVenda,
               ncm: cotacao.ncm,
               observacoes: cotacao.observacoes,
-              dataAtualizacao: new Date()
+              ...(valorUnitarioMudou && { dataAtualizacao: new Date() })
             }
           });
           resultados.atualizados++;
@@ -271,7 +379,8 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
             data: {
               nome: cotacao.nome,
               ncm: cotacao.ncm,
-              valorUnitario: parseFloat(cotacao.valorUnitario),
+              valorUnitario,
+              valorVenda,
               fornecedorId: cotacao.fornecedorId,
               fornecedorNome: cotacao.fornecedorNome,
               observacoes: cotacao.observacoes,
@@ -286,8 +395,10 @@ export const importarCotacoes = async (req: Request, res: Response): Promise<voi
       }
     }
 
-    // Limpar arquivo temporário
-    fs.unlinkSync(file.path);
+    // Limpar arquivo temporário se existir
+    if (file && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
 
     console.log('✅ Importação concluída:', resultados);
 
@@ -367,6 +478,7 @@ export const exportarCotacoes = async (req: Request, res: Response): Promise<voi
         nome: c.nome,
         ncm: c.ncm,
         valorUnitario: c.valorUnitario,
+        valorVenda: c.valorVenda,
         fornecedorNome: c.fornecedorNome || c.fornecedor?.nome,
         dataAtualizacao: c.dataAtualizacao,
         observacoes: c.observacoes
@@ -380,6 +492,46 @@ export const exportarCotacoes = async (req: Request, res: Response): Promise<voi
     res.status(500).json({
       success: false,
       error: 'Erro ao exportar cotações'
+    });
+  }
+};
+
+/**
+ * Deletar múltiplas cotações
+ * DELETE /api/cotacoes/bulk
+ */
+export const deletarCotacoesEmLote = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Lista de IDs é obrigatória'
+      });
+      return;
+    }
+
+    const resultado = await prisma.cotacao.deleteMany({
+      where: {
+        id: {
+          in: ids
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        deletados: resultado.count
+      },
+      message: `${resultado.count} cotação(ões) deletada(s) com sucesso`
+    });
+  } catch (error) {
+    console.error('Erro ao deletar cotações em lote:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao deletar cotações'
     });
   }
 };

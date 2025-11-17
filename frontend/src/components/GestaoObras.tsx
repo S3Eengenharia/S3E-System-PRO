@@ -1,18 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ModalEquipesDeObra from './Obras/ModalEquipesDeObra';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
-<<<<<<< HEAD
 import EquipesGantt from './Obras/EquipesGantt';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { toast } from 'sonner';
-<<<<<<< HEAD
 import { useEscapeKey } from '../hooks/useEscapeKey';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 // Icons
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -110,13 +104,10 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-<<<<<<< HEAD
-=======
     // Estados para filtros de data na Timeline
     const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
     const [filtroDataFim, setFiltroDataFim] = useState<string>('');
     
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     // Estados para calendário
     const [mesCalendario, setMesCalendario] = useState(new Date().getMonth());
     const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
@@ -274,14 +265,19 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                 // O backend retorna { success: true, data: [...] }
                 let alocacoesArray: any[] = [];
                 
+                // Type guard para verificar se é array
                 if (Array.isArray(response.data)) {
                     alocacoesArray = response.data;
-                } else if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray(response.data.data)) {
-                    alocacoesArray = response.data.data;
                 } else if (response.data && typeof response.data === 'object') {
-                    // Pode ser um objeto único, não um array
-                    console.warn('⚠️ Resposta não é um array:', response.data);
-                    alocacoesArray = [];
+                    // Verificar se tem estrutura aninhada { data: [...] }
+                    const dataObj = response.data as any;
+                    if ('data' in dataObj && Array.isArray(dataObj.data)) {
+                        alocacoesArray = dataObj.data;
+                    } else {
+                        // Pode ser um objeto único, não um array
+                        console.warn('⚠️ Resposta não é um array:', response.data);
+                        alocacoesArray = [];
+                    }
                 }
                 
                 console.log('✅ Alocações carregadas:', alocacoesArray.length, 'alocações');
@@ -404,8 +400,6 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         }
     }, [mesCalendario, anoCalendario, activeTab, loadAlocacoes]);
 
-<<<<<<< HEAD
-=======
     // Filtrar alocações por data para Timeline (sempre executado, não condicional)
     const alocacoesFiltradas = useMemo(() => {
         let filtradas = alocacoes;
@@ -429,7 +423,6 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         return filtradas;
     }, [alocacoes, filtroDataInicio, filtroDataFim]);
 
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     // Carregar eletricistas do backend
     const loadEletricistas = async () => {
         try {
@@ -530,13 +523,10 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
         });
     };
 
-<<<<<<< HEAD
     // Fechar modais com ESC
     useEscapeKey(isModalOpen, handleCloseModal);
     useEscapeKey(isAlocacaoModalOpen, () => setIsAlocacaoModalOpen(false));
 
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -1307,17 +1297,15 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
             })()}
 
             {activeTab === 'gantt' && (
-<<<<<<< HEAD
-                <EquipesGantt
-                    equipes={equipes}
-                    obras={obras}
-                    alocacoes={alocacoes}
-                    onRefresh={async () => {
-                        await Promise.all([loadEquipes(), loadAlocacoes(false), loadObras()]);
-                    }}
-                />
-=======
                 <div className="space-y-6">
+                    <EquipesGantt
+                        equipes={equipes}
+                        obras={obras}
+                        alocacoes={alocacoes}
+                        onRefresh={async () => {
+                            await Promise.all([loadEquipes(), loadAlocacoes(false), loadObras()]);
+                        }}
+                    />
                     {/* Header */}
                     <div className="card-primary p-6 rounded-2xl shadow-soft border border-gray-100 dark:border-dark-border">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1660,7 +1648,6 @@ const GestaoObras: React.FC<GestaoObrasProps> = ({ toggleSidebar }) => {
                         </div>
                     </div>
                 </div>
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
             )}
 
         {/* Modal de Visualizar Membros da Equipe */}

@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { clientesService, type Cliente, type CreateClienteData } from '../services/clientesService';
-<<<<<<< HEAD
+
 import { useEscapeKey } from '../hooks/useEscapeKey';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 // ==================== ICONS ====================
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -178,13 +176,11 @@ const ClientesModerno: React.FC<ClientesProps> = ({ toggleSidebar }) => {
         }
     };
 
-<<<<<<< HEAD
+
     // Fechar modais com ESC
     useEscapeKey(isModalOpen, () => setIsModalOpen(false));
     useEscapeKey(!!clienteToDelete, () => setClienteToDelete(null));
 
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleDelete = async () => {
         if (!clienteToDelete) return;
         

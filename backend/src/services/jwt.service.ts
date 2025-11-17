@@ -35,7 +35,9 @@ export interface DecodedToken extends JwtPayload {
  * @param payload - Objeto contendo id e role do usuário
  * @param payload.id - ID único do usuário
  * @param payload.role - Role/perfil do usuário (admin, user, etc)
- * @returns Token JWT assinado válido por 7 dias
+ * @param expiration - Tempo de expiração (padrão: 7 dias)
+ * @param extraFields - Campos extras para incluir no payload
+ * @returns Token JWT assinado
  * 
  * @example
  * ```typescript
@@ -43,17 +45,22 @@ export interface DecodedToken extends JwtPayload {
  * // Retorna: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  * ```
  */
-export const generateToken = (payload: { id: string; role: string }): string => {
+export const generateToken = (
+  payload: { id: string; role: string },
+  expiration: string = JWT_EXPIRATION,
+  extraFields?: Record<string, any>
+): string => {
   try {
     // Criar payload padronizado (usando 'userId' para compatibilidade com código existente)
-    const tokenPayload: JwtPayload = {
+    const tokenPayload: any = {
       userId: payload.id,
-      role: payload.role
+      role: payload.role,
+      ...extraFields
     };
 
     // Gerar e retornar o token
     const token = jwt.sign(tokenPayload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRATION
+      expiresIn: expiration
     });
 
     return token;

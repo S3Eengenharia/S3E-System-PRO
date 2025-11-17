@@ -10,11 +10,17 @@ export interface ItemOrcamento {
   precoUnitario: number;
   subtotal: number;
   descricao?: string;
+  nome?: string;
+  materialNome?: string;
+  unidadeMedida?: string;
+  custoUnit?: number;
+  precoUnit?: number;
 }
 
 export interface Orcamento {
   id: string;
   numeroSequencial?: number;
+  numero?: string | number;
   clienteId: string;
   titulo: string;
   descricao?: string;
@@ -40,6 +46,7 @@ export interface Orcamento {
   // Datas
   createdAt: string;
   updatedAt: string;
+  dataCriacao?: string;
   aprovedAt?: string;
   recusadoAt?: string;
   motivoRecusa?: string;
@@ -50,6 +57,7 @@ export interface Orcamento {
     telefone?: string;
   };
   items?: ItemOrcamento[];
+  errosOrcamento?: string[];
 }
 
 export interface CreateOrcamentoData {

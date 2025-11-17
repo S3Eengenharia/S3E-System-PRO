@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { DEFAULT_LOGO_URL, COMPANY_NAME, SYSTEM_NAME } from '../config/constants';
 
@@ -136,17 +136,28 @@ const Login: React.FC = () => {
             </button>
           </form>
 
-          {/* Link de Esqueci a senha (placeholder) */}
+          {/* Link de Esqueci a senha */}
           <div className="mt-6 text-center">
-            <a href="#" className="text-sm text-[#0a1a2f] hover:underline">
+            <Link to="/forgot-password" className="text-sm text-[#0a1a2f] hover:underline">
               Esqueceu sua senha?
-            </a>
+            </Link>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-8 text-center text-blue-200 text-sm">
+        <div className="mt-8 text-center text-blue-200 text-sm space-y-2">
           <p>© {new Date().getFullYear()} {COMPANY_NAME}. Todos os direitos reservados.</p>
+          <p className="text-blue-300">
+            Desenvolvido com carinho por:{' '}
+            <a 
+              href="https://antonio-jdev.github.io/portfolio-01/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="font-semibold hover:text-white hover:underline transition-colors duration-200"
+            >
+              Dev Antonio Junio
+            </a>
+          </p>
         </div>
       </div>
     </div>

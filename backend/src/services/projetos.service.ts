@@ -286,21 +286,8 @@ export class ProjetosService {
 
       console.log('✅ Estoque validado - Permitindo execução');
 
-      // Garantir existência de registro de Obra/Alocação placeholder (sem equipe atribuída ainda)
-      const jaTemAlocacao = await prisma.alocacaoObra.findFirst({ where: { projetoId } });
-      if (!jaTemAlocacao) {
-        const hoje = new Date();
-        const fimPrevisto = new Date(hoje.getTime() + 20 * 24 * 60 * 60 * 1000);
-        await prisma.alocacaoObra.create({
-          data: {
-            projetoId,
-            equipeId: (await prisma.equipe.findFirst({ select: { id: true } }))?.id || (await this.criarEquipePlaceholder()),
-            dataInicio: hoje,
-            dataFimPrevisto: fimPrevisto,
-            status: 'Planejada'
-          }
-        });
-      }
+      // NÃO criar alocação automática - o usuário deve alocar equipe/eletricista manualmente
+      // A alocação será criada quando o usuário escolher uma equipe ou eletricista na página de Obras
 
       // "Gerar Alerta" de necessidade de alocação: persistimos como campo observacional em Etapa/Projeto
       await prisma.projeto.update({
@@ -312,17 +299,7 @@ export class ProjetosService {
     return atualizado;
   }
 
-  private async criarEquipePlaceholder() {
-    const equipe = await prisma.equipe.create({
-      data: {
-        nome: `Equipe Placeholder ${Math.floor(Math.random() * 1000)}`,
-        tipo: 'DISTINTA',
-        membros: []
-      },
-      select: { id: true }
-    });
-    return equipe.id;
-  }
+  // REMOVIDO: criarEquipePlaceholder - equipes devem ser criadas manualmente pelo usuário
 
   /** Lista projetos com filtros e, opcionalmente, formato kanban */
   async listarProjetos(filtros: any, modo: 'lista' | 'kanban' = 'lista') {

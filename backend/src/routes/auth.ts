@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getMe, getAllUsers } from '../controllers/authController.js';
+import { register, login, getMe, getAllUsers, forgotPassword, validateResetToken, resetPassword } from '../controllers/authController.js';
 import { authenticateToken } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import { loginSchema, registerSchema } from '../validators/auth.validator.js';
@@ -26,6 +26,11 @@ router.get('/me', authenticateToken, getMe);
 
 // Listar todos os usuários (protegido)
 router.get('/users', authenticateToken, getAllUsers);
+
+// Recuperação de senha (público)
+router.post('/forgot-password', forgotPassword);
+router.get('/validate-reset-token', validateResetToken);
+router.post('/reset-password', resetPassword);
 
 export default router;
 

@@ -1,8 +1,6 @@
 import { PrismaClient, StatusObra } from '@prisma/client';
-<<<<<<< HEAD
+
 import { EstoqueService } from './estoque.service';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 const prisma = new PrismaClient();
 
@@ -113,10 +111,8 @@ export class ObraService {
 
   /**
    * Gera uma Obra a partir de um Projeto aprovado
-<<<<<<< HEAD
+
    * Valida disponibilidade de estoque antes de criar a obra
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
    */
   async gerarObraAPartirDoProjeto(projetoId: string, nomeObra?: string) {
     try {
@@ -139,7 +135,7 @@ export class ObraService {
         throw new Error('Já existe uma obra para este projeto');
       }
 
-<<<<<<< HEAD
+
       // ✅ VALIDAÇÃO: Verificar disponibilidade de estoque antes de criar obra
       console.log('🔍 Verificando disponibilidade de estoque para o projeto...');
       const verificacaoEstoque = await EstoqueService.verificarDisponibilidadeProjeto(projetoId);
@@ -175,8 +171,6 @@ export class ObraService {
 
       console.log('✅ Validação de estoque passou. Todos os materiais estão disponíveis.');
 
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
       // Criar obra
       const obra = await prisma.obra.create({
         data: {
@@ -517,6 +511,74 @@ export class ObraService {
     } catch (error) {
       console.error('Erro ao buscar alocações:', error);
       throw new Error('Erro ao buscar alocações de equipes');
+    }
+  }
+
+  /**
+   * Deleta uma obra (apenas admin e desenvolvedor)
+   * Remove a obra e todas as suas tarefas e registros relacionados
+   */
+  async deletarObra(obraId: string) {
+    try {
+      // Verificar se a obra existe
+      const obra = await prisma.obra.findUnique({
+        where: { id: obraId },
+        include: {
+          tarefas: true,
+          projeto: true
+        }
+      });
+
+      if (!obra) {
+        throw new Error('Obra não encontrada');
+      }
+
+      // Verificar se há tarefas em andamento
+      const tarefasEmAndamento = obra.tarefas.filter(
+        t => t.status === 'EM_ANDAMENTO' || t.status === 'PENDENTE'
+      );
+
+      if (tarefasEmAndamento.length > 0) {
+        throw new Error(
+          `Não é possível excluir a obra. Existem ${tarefasEmAndamento.length} tarefa(s) em andamento ou pendente(s). Finalize ou cancele as tarefas antes de excluir.`
+        );
+      }
+
+      // Deletar alocações relacionadas ao projeto da obra (se houver)
+      if (obra.projetoId) {
+        await prisma.alocacaoObra.deleteMany({
+          where: {
+            projetoId: obra.projetoId
+          }
+        });
+      }
+
+      // Deletar todas as tarefas e seus registros (cascade)
+      // O Prisma já cuida disso com onDelete: Cascade no schema
+      // Mas vamos deletar explicitamente para garantir
+      await prisma.registroAtividade.deleteMany({
+        where: {
+          tarefa: {
+            obraId: obraId
+          }
+        }
+      });
+
+      await prisma.tarefaObra.deleteMany({
+        where: {
+          obraId: obraId
+        }
+      });
+
+      // Deletar a obra
+      await prisma.obra.delete({
+        where: { id: obraId }
+      });
+
+      return { success: true, message: 'Obra excluída com sucesso' };
+    } catch (error: any) {
+      console.error('Erro ao deletar obra:', error);
+      throw new Error(error.message || 'Erro ao deletar obra');
     }
   }
 }

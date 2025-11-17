@@ -91,31 +91,39 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                 setDescricaoKit(kitParaEditar.descricao || '');
                 setTipoKit(kitParaEditar.tipo || 'medidores');
                 
-                // Carregar itens do estoque real
-                const itensEstoque: ItemKit[] = (kitParaEditar.items || []).map((item: any) => ({
-                    materialId: item.material?.id || item.materialId,
-                    nome: item.material?.nome || 'Material',
-                    quantidade: item.quantidade,
-                    precoUnit: item.material?.preco || 0,
-                    subtotal: item.quantidade * (item.material?.preco || 0),
-                    unidadeMedida: item.material?.unidadeMedida || 'un',
-                    isCotacao: false
-                }));
+                // Carregar itens do estoque real - usar valorVenda se disponível
+                const itensEstoque: ItemKit[] = (kitParaEditar.items || []).map((item: any) => {
+                    // Usar valorVenda do material se disponível, senão usar preco
+                    const precoVenda = item.material?.valorVenda || item.material?.preco || 0;
+                    return {
+                        materialId: item.material?.id || item.materialId,
+                        nome: item.material?.nome || 'Material',
+                        quantidade: item.quantidade,
+                        precoUnit: precoVenda,
+                        subtotal: item.quantidade * precoVenda,
+                        unidadeMedida: item.material?.unidadeMedida || 'un',
+                        isCotacao: false
+                    };
+                });
                 
                 // Carregar itens do banco frio
-<<<<<<< HEAD
+
                 // Garantir que itensFaltantes seja um array
                 let itensFaltantesArray: any[] = [];
                 if (kitParaEditar.itensFaltantes) {
                     if (typeof kitParaEditar.itensFaltantes === 'string') {
                         try {
-                            itensFaltantesArray = JSON.parse(kitParaEditar.itensFaltantes);
+                            const parsed = JSON.parse(kitParaEditar.itensFaltantes);
+                            itensFaltantesArray = Array.isArray(parsed) ? parsed : [parsed];
                         } catch (e) {
                             console.error('Erro ao fazer parse de itensFaltantes:', e);
                             itensFaltantesArray = [];
                         }
                     } else if (Array.isArray(kitParaEditar.itensFaltantes)) {
                         itensFaltantesArray = kitParaEditar.itensFaltantes;
+                    } else if (typeof kitParaEditar.itensFaltantes === 'object') {
+                        // Se for um objeto único, converter para array
+                        itensFaltantesArray = [kitParaEditar.itensFaltantes];
                     }
                 }
                 
@@ -133,17 +141,6 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                     unidadeMedida: item.unidadeMedida || 'un',
                     isCotacao: true,
                     dataUltimaCotacao: item.dataUltimaCotacao || item.dataAtualizacao
-=======
-                const itensBancoFrio: ItemKit[] = (kitParaEditar.itensFaltantes || []).map((item: any) => ({
-                    materialId: `cotacao_${item.cotacaoId}`,
-                    nome: item.nome,
-                    quantidade: item.quantidade,
-                    precoUnit: item.precoUnit || 0,
-                    subtotal: item.quantidade * (item.precoUnit || 0),
-                    unidadeMedida: 'un',
-                    isCotacao: true,
-                    dataUltimaCotacao: item.dataUltimaCotacao
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                 }));
                 
                 setItensKit([...itensEstoque, ...itensBancoFrio]);
@@ -159,6 +156,29 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
         }
     }, [isOpen, kitParaEditar]);
 
+    // Atualizar preços dos itens do kit quando materiais forem recarregados
+    useEffect(() => {
+        if (materiais.length > 0 && itensKit.length > 0) {
+            // Atualizar preços dos itens que não são do banco frio
+            setItensKit(prev => prev.map(item => {
+                if (item.isCotacao) return item; // Não atualizar itens do banco frio
+                
+                // Buscar material atualizado
+                const materialAtualizado = materiais.find(m => m.id === item.materialId);
+                if (materialAtualizado) {
+                    // Usar valorVenda se disponível, senão usar preco
+                    const novoPreco = (materialAtualizado as any).valorVenda || materialAtualizado.preco || item.precoUnit;
+                    return {
+                        ...item,
+                        precoUnit: novoPreco,
+                        subtotal: item.quantidade * novoPreco
+                    };
+                }
+                return item;
+            }));
+        }
+    }, [materiais]);
+
     const loadMateriais = async () => {
         try {
             setLoading(true);
@@ -170,6 +190,7 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                     nome: m.nome || m.descricao,
                     descricao: m.descricao,
                     preco: m.preco || 0,
+                    valorVenda: m.valorVenda || null, // Incluir valorVenda para atualização dinâmica
                     estoque: m.estoque || 0,
                     unidadeMedida: m.unidadeMedida || m.unidade || 'un'
                 })));
@@ -257,12 +278,15 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
             return;
         }
 
+        // Usar valorVenda se disponível, senão usar preco (preço de compra)
+        const precoVenda = (material as any).valorVenda || material.preco || 0;
+        
         const novoItem: ItemKit = {
             materialId: material.id,
             nome: material.nome,
             quantidade: 1,
-            precoUnit: material.preco,
-            subtotal: material.preco,
+            precoUnit: precoVenda,
+            subtotal: precoVenda,
             unidadeMedida: material.unidadeMedida,
             isCotacao: material._isCotacao || false,
             dataUltimaCotacao: material._dataUltimaCotacao
@@ -567,8 +591,13 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                                                             </span>
                                                         )}
                                                         <span className="text-xs font-semibold text-teal-700">
-                                                            R$ {material.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            R$ {((material as any).valorVenda || material.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
+                                                        {!((material as any).valorVenda) && (
+                                                            <span className="text-xs text-orange-600">
+                                                                (Sem valor de venda - usando compra)
+                                                            </span>
+                                                        )}
                                                         {material._isCotacao && (
                                                             <>
                                                                 {material._dataUltimaCotacao && (
@@ -606,6 +635,11 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                         <div className="border border-gray-200 rounded-xl p-4 bg-gradient-to-br from-teal-50 to-blue-50">
                             <h3 className="font-semibold text-gray-800 mb-3">
                                 Composição do Kit ({itensKit.length} {itensKit.length === 1 ? 'item' : 'itens'})
+                                {itensKit.some(i => i.isCotacao) && (
+                                    <span className="ml-2 text-xs text-blue-600 font-normal">
+                                        ({itensKit.filter(i => i.isCotacao).length} do banco frio)
+                                    </span>
+                                )}
                             </h3>
                             
                             {itensKit.length === 0 ? (
@@ -619,16 +653,25 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                                     {itensKit.map((item, index) => (
                                         <div
                                             key={index}
-                                            className="bg-white p-3 rounded-lg border border-gray-200"
+                                            className={`p-3 rounded-lg border-2 ${
+                                                item.isCotacao 
+                                                    ? 'bg-blue-50 border-blue-300' 
+                                                    : 'bg-white border-gray-200'
+                                            }`}
                                         >
                                             <div className="flex justify-between items-start gap-2 mb-2">
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="font-medium text-gray-900 text-sm">
-                                                        {item.nome}
-                                                    </p>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        {item.isCotacao && (
+                                                            <span className="text-lg">❄️</span>
+                                                        )}
+                                                        <p className={`font-medium text-sm ${item.isCotacao ? 'text-blue-900' : 'text-gray-900'}`}>
+                                                            {item.nome}
+                                                        </p>
+                                                    </div>
                                                     {item.isCotacao && item.dataUltimaCotacao && (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
-                                                            ❄️ Banco Frio - {(() => {
+                                                            Banco Frio - Cotação: {(() => {
                                                                 const data = new Date(item.dataUltimaCotacao);
                                                                 return !isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : 'Sem data';
                                                             })()}
@@ -656,9 +699,9 @@ const CriacaoKitModal: React.FC<CriacaoKitModalProps> = ({ isOpen, onClose, onSa
                                                     <span className="text-xs text-gray-600">{item.unidadeMedida}</span>
                                                 </div>
                                                 <div className="text-right flex-1">
-                                                    <p className="text-xs text-gray-600">Subtotal:</p>
+                                                    <p className="text-xs text-gray-600">Unit.: R$ {item.precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                     <p className="text-sm font-bold text-teal-700">
-                                                        R$ {item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        Subtotal: R$ {item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </p>
                                                 </div>
                                             </div>

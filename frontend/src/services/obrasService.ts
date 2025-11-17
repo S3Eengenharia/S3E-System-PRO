@@ -139,6 +139,13 @@ class ObrasService {
       dataFim
     });
   }
+
+  /**
+   * Deleta uma obra (apenas admin e desenvolvedor)
+   */
+  async deletarObra(obraId: string) {
+    return axiosApiService.delete(`/api/obras/${obraId}`);
+  }
 }
 
 export const obrasService = new ObrasService();

@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import obraService from '../services/obra.service.js';
-<<<<<<< HEAD
+
 import { EstoqueService } from '../services/estoque.service.js';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
 const prisma = new PrismaClient();
 
@@ -476,7 +474,7 @@ export class ObraController {
   }
 
   /**
-<<<<<<< HEAD
+
    * GET /api/obras/verificar-estoque/:projetoId
    * Verifica disponibilidade de estoque antes de criar obra
    */
@@ -508,8 +506,6 @@ export class ObraController {
   }
 
   /**
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
    * GET /api/obras/projeto/:projetoId
    * Busca obra associada a um projeto
    */
@@ -544,6 +540,48 @@ export class ObraController {
       res.status(500).json({ 
         success: false, 
         message: 'Erro ao buscar obra', 
+        error: error.message 
+      });
+    }
+  }
+
+  /**
+   * DELETE /api/obras/:id
+   * Deleta uma obra (apenas admin e desenvolvedor)
+   */
+  static async deleteObra(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        res.status(400).json({ 
+          success: false, 
+          message: 'ID da obra é obrigatório' 
+        });
+        return;
+      }
+
+      const resultado = await obraService.deletarObra(id);
+
+      res.status(200).json({ 
+        success: true, 
+        message: resultado.message || 'Obra excluída com sucesso' 
+      });
+    } catch (error: any) {
+      console.error('Erro ao deletar obra:', error);
+      
+      // Se for erro de validação (tarefas em andamento), retornar 400
+      if (error.message.includes('Não é possível excluir') || error.message.includes('não encontrada')) {
+        res.status(400).json({ 
+          success: false, 
+          message: error.message 
+        });
+        return;
+      }
+
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao deletar obra', 
         error: error.message 
       });
     }

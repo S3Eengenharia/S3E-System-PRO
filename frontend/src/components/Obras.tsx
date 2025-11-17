@@ -1,12 +1,10 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { toast } from 'sonner';
 import ModalAlocacaoEquipe from './Obras/ModalAlocacaoEquipe';
 import { alocacaoObraService, type AlocacaoDTO } from '../services/AlocacaoObraService';
 import GanttChart, { type GanttItem } from './GanttChart';
-<<<<<<< HEAD
+
 import { useEscapeKey } from '../hooks/useEscapeKey';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 import { 
     ProjectStatus,
     type User, UserRole,
@@ -16,6 +14,7 @@ import { projetosService, type Projeto, type CreateProjetoData } from '../servic
 import { clientesService, type Cliente } from '../services/clientesService';
 import { obrasService } from '../services/obrasService';
 import { axiosApiService } from '../services/axiosApi';
+import { AuthContext } from '../contexts/AuthContext';
 
 // Tipos locais para obra
 type ProjectType = 'Instalacao' | 'Manutencao' | 'Retrofit' | 'Automacao';
@@ -119,6 +118,11 @@ interface ObrasProps {
 }
 
 const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, setProjects }) => {
+    const authContext = useContext(AuthContext);
+    const user = authContext?.user;
+    const userRole = user?.role?.toLowerCase();
+    const isAdminOrDev = userRole === 'admin' || userRole === 'desenvolvedor';
+    
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'Todos'>('Todos');
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -137,6 +141,25 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         projetoId: '',
         nomeObra: ''
     });
+
+    // Função para mapear status do backend para o frontend
+    const mapearStatusBackendParaFrontend = (statusBackend: string): ProjectStatus => {
+        const statusMap: Record<string, ProjectStatus> = {
+            'PROPOSTA': ProjectStatus.Planejamento,
+            'VALIDADO': ProjectStatus.Planejamento,
+            'APROVADO': ProjectStatus.Planejamento,
+            'EXECUCAO': ProjectStatus.EmExecucao,
+            'CONCLUIDO': ProjectStatus.Concluido,
+            'CANCELADO': ProjectStatus.Cancelado,
+            // Valores do frontend (caso já estejam mapeados)
+            'Planejamento': ProjectStatus.Planejamento,
+            'Em Execução': ProjectStatus.EmExecucao,
+            'Controle de Qualidade': ProjectStatus.ControleQualidade,
+            'Concluído': ProjectStatus.Concluido,
+            'Cancelado': ProjectStatus.Cancelado
+        };
+        return statusMap[statusBackend] || ProjectStatus.Planejamento;
+    };
 
     // Carregar projetos do backend
     useEffect(() => {
@@ -215,10 +238,10 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                             cpfCnpj: ''
                         } : { id: '', nome: 'Cliente não informado', cpfCnpj: '' },
                         tipo: proj.tipo as ProjectType,
-                        status: proj.status as ProjectStatus,
+                        status: mapearStatusBackendParaFrontend(proj.status as string), // Mapear status do backend
                         dataInicio: proj.dataInicio,
                         dataFim: proj.dataPrevisao,
-                        orcamento: proj.orcamento?.precoVenda || 0,
+                        orcamento: proj.orcamento?.precoVenda || proj.valorTotal || 0,
                         progresso: 0, // TODO: calcular progresso real
                         responsavel: proj.responsavel ? {
                             id: proj.responsavel.id,
@@ -232,6 +255,8 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                     }))
                     : [];
                 
+                console.log('📊 Projetos carregados:', projetosFormatados.length);
+                console.log('📊 Status dos projetos:', projetosFormatados.map(p => ({ titulo: p.titulo, status: p.status })));
                 setProjects(projetosFormatados);
             } else {
                 console.warn('Nenhum projeto encontrado ou erro na resposta:', response);
@@ -266,16 +291,22 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         return filtered;
     }, [projects, statusFilter, searchTerm]);
 
-    // Estatísticas
+    // Estatísticas - agora os projetos já têm status mapeado corretamente
     const stats = useMemo(() => {
         const total = projects.length;
         const planejamento = projects.filter(p => p.status === ProjectStatus.Planejamento).length;
         const execucao = projects.filter(p => p.status === ProjectStatus.EmExecucao).length;
-        const controleQualidade = projects.filter(p => p.status === ProjectStatus.ControleQualidade).length;
         const concluidos = projects.filter(p => p.status === ProjectStatus.Concluido).length;
-        const valorTotal = projects.reduce((acc, p) => acc + p.orcamento, 0);
+        const valorTotal = projects.reduce((acc, p) => acc + (p.orcamento || 0), 0);
 
-        return { total, planejamento, execucao, controleQualidade, concluidos, valorTotal };
+        console.log('📊 Estatísticas calculadas:', { total, planejamento, execucao, concluidos, valorTotal });
+        console.log('📊 Distribuição de status:', {
+            planejamento: projects.filter(p => p.status === ProjectStatus.Planejamento).map(p => p.titulo),
+            execucao: projects.filter(p => p.status === ProjectStatus.EmExecucao).map(p => p.titulo),
+            concluidos: projects.filter(p => p.status === ProjectStatus.Concluido).map(p => p.titulo)
+        });
+
+        return { total, planejamento, execucao, concluidos, valorTotal };
     }, [projects]);
 
     const getStatusClass = (status: ProjectStatus) => {
@@ -401,13 +432,11 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         setProjectToEdit(null);
     };
 
-<<<<<<< HEAD
+
     // Fechar modais com ESC
     useEscapeKey(isModalOpen, handleCloseModal);
     useEscapeKey(isAlocacaoModalOpen, () => setIsAlocacaoModalOpen(false));
 
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -445,6 +474,49 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
         }
     };
 
+    const handleDeleteObra = async (project: Project) => {
+        if (!isAdminOrDev) {
+            toast.error('Acesso negado', {
+                description: 'Apenas administradores e desenvolvedores podem excluir obras.'
+            });
+            return;
+        }
+
+        const confirmMessage = `Tem certeza que deseja excluir a obra "${project.titulo}"?\n\nEsta ação não pode ser desfeita e irá remover:\n- A obra\n- Todas as tarefas relacionadas\n- Todos os registros de atividade\n- Todas as alocações relacionadas`;
+        
+        if (!window.confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const response = await obrasService.deletarObra(project.id);
+            
+            if (response.success) {
+                toast.success('✅ Obra excluída com sucesso!', {
+                    description: `A obra "${project.titulo}" foi removida do sistema.`
+                });
+                // Remover da lista local
+                setProjects(prev => prev.filter(p => p.id !== project.id));
+                // Recarregar projetos do backend
+                await carregarProjetos();
+            } else {
+                const errorMsg = response.error || response.message || 'Erro desconhecido';
+                toast.error('Erro ao excluir obra', {
+                    description: errorMsg
+                });
+            }
+        } catch (error: any) {
+            console.error('Erro ao excluir obra:', error);
+            const errorMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erro ao excluir obra';
+            toast.error('Erro ao excluir obra', {
+                description: errorMsg
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen p-4 sm:p-8">
             {/* Header */}
@@ -468,7 +540,7 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
             </header>
 
             {/* Cards de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
                 <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/40 flex items-center justify-center">
@@ -501,18 +573,6 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                         <div>
                             <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Em Execução</p>
                             <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.execucao}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="card-primary border border-gray-100 dark:border-dark-border rounded-2xl p-6 shadow-soft hover:shadow-medium transition-all">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/40 dark:to-purple-800/40 flex items-center justify-center">
-                            <CheckBadgeIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-600 dark:text-dark-text-secondary">Controle Qualidade</p>
-                            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.controleQualidade}</p>
                         </div>
                     </div>
                 </div>
@@ -569,7 +629,6 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                             <option value="Todos">Todos os Status</option>
                             <option value={ProjectStatus.Planejamento}>Planejamento</option>
                             <option value={ProjectStatus.EmExecucao}>Em Execução</option>
-                            <option value={ProjectStatus.ControleQualidade}>Controle Qualidade</option>
                             <option value={ProjectStatus.Concluido}>Concluído</option>
                         </select>
                     </div>
@@ -700,6 +759,18 @@ const Obras: React.FC<ObrasProps> = ({ toggleSidebar, onViewProject, projects, s
                                 >
                                     📅 Alocar Equipe
                                 </button>
+                                {isAdminOrDev && (
+                                    <button
+                                        onClick={() => handleDeleteObra(project)}
+                                        disabled={loading}
+                                        className="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Excluir obra (apenas admin/desenvolvedor)"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}

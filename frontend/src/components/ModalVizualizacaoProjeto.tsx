@@ -3,10 +3,8 @@ import { toast } from 'sonner';
 import { axiosApiService } from '../services/axiosApi';
 import { ENDPOINTS } from '../config/api';
 import { etapasAdminService, type EtapaAdmin, type ListaEtapasResponse } from '../services/etapasAdminService';
-<<<<<<< HEAD
+
 import { useEscapeKey } from '../hooks/useEscapeKey';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 import {
   AlertDialog,
   AlertDialogAction,
@@ -450,15 +448,13 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     }
   }
 
-<<<<<<< HEAD
+
   // Fechar modais com ESC
   useEscapeKey(etapaModalOpen, () => setEtapaModalOpen(false));
   useEscapeKey(taskModalOpen, () => setTaskModalOpen(false));
   useEscapeKey(uploadModalOpen, () => setUploadModalOpen(false));
   useEscapeKey(clienteModalOpen, () => setClienteModalOpen(false));
 
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
   async function handleExcluirEtapa(etapa: EtapaAdmin) {
     setAlertConfig({
       title: '🗑️ Excluir Etapa',
@@ -654,7 +650,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
   }, [etapasResp, tasks, projeto.status]);
 
   async function handleIniciarObra() {
-<<<<<<< HEAD
+
     try {
       // ✅ Verificar disponibilidade de estoque antes de criar obra
       setLoadingAcao(true);
@@ -741,44 +737,6 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
     setAlertConfig({
       title: '🚀 Iniciar Obra',
       description: 'Todos os materiais estão disponíveis em estoque. Deseja iniciar a obra? Isso criará automaticamente uma nova entrada no Kanban de Obras na etapa Backlog.',
-=======
-    const materiaisProjeto = (orcamentoCompleto?.items || projeto.orcamento?.items || []) as OrcamentoItemRef[];
-    if (materiaisProjeto && materiaisProjeto.length > 0) {
-      const itensSemEstoque = materiaisProjeto.filter((item) => {
-        const quantidadeNecessaria = Number(item.quantidade ?? 0);
-        if (quantidadeNecessaria <= 0) return false;
-        const isBancoFrio = (item.tipo || '').toUpperCase() === 'COTACAO' || !!item.cotacao;
-        const possuiMaterialEstoque = !!item.material;
-        if (!isBancoFrio && !possuiMaterialEstoque) {
-          // Serviços, kits ou itens sem material associado não bloqueiam automaticamente
-          return false;
-        }
-        const estoqueDisponivel = Number(item.material?.estoque ?? 0);
-        return estoqueDisponivel < quantidadeNecessaria;
-      });
-
-      if (itensSemEstoque.length > 0) {
-        const resumoPendencias = itensSemEstoque
-          .slice(0, 4)
-          .map((pendente) => {
-            const nome = pendente.material?.nome || pendente.cotacao?.nome || pendente.kit?.nome || 'Item sem identificação';
-            const quantidade = Number(pendente.quantidade ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(Number(pendente.quantidade ?? 0)) ? 0 : 2 });
-            return `• ${nome} (Necessário: ${quantidade})`;
-          })
-          .join('\n');
-
-        toast.error('Materiais pendentes para iniciar a obra', {
-          description: `${resumoPendencias}${itensSemEstoque.length > 4 ? '\n• ...' : ''}\nRegularize o estoque para liberar a etapa de obras.`,
-        });
-        setActiveTab('Materiais');
-        return;
-      }
-    }
-
-    setAlertConfig({
-      title: '🚀 Iniciar Obra',
-      description: 'Deseja iniciar a obra? Isso criará automaticamente uma nova entrada no Kanban de Obras na etapa Backlog.',
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
       onConfirm: async () => {
         try {
           setLoadingAcao(true);
@@ -798,11 +756,8 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
             console.log('✅ Nenhuma obra existente, criando nova...');
           }
           
-<<<<<<< HEAD
+
           // Gerar obra automaticamente (backend já valida estoque novamente e atualiza status do projeto)
-=======
-          // Gerar obra automaticamente (backend já atualiza status do projeto)
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
           const obraData = {
             projetoId: projeto.id,
             nomeObra: projeto.titulo,
@@ -821,7 +776,7 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
         } catch (error: any) {
           console.error('❌ Erro ao iniciar obra:', error);
           const mensagem = error?.response?.data?.message || error?.message || 'Erro ao iniciar obra';
-<<<<<<< HEAD
+
           
           // Se o erro for relacionado a estoque, mostrar mensagem mais detalhada
           if (mensagem.includes('materiais estão faltando') || mensagem.includes('estoque')) {
@@ -832,9 +787,6 @@ const ModalVizualizacaoProjeto: React.FC<ModalVizualizacaoProjetoProps> = ({ pro
           } else {
             toast.error(`❌ ${mensagem}`);
           }
-=======
-          toast.error(`❌ ${mensagem}`);
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
         } finally {
           setLoadingAcao(false);
         }

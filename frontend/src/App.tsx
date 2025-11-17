@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 // Editor WYSIWYG Jodit
 import 'jodit/es2021/jodit.min.css';
 import Sidebar from './components/Sidebar';
@@ -265,6 +267,8 @@ const App: React.FC = () => {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/compras" element={
               <ProtectedRoute>
                 <StandalonePageWrapper>

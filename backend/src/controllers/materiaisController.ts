@@ -129,12 +129,42 @@ export const deleteMaterial = async (req: Request, res: Response): Promise<void>
   try {
     const { id } = req.params;
 
-    await prisma.material.delete({ where: { id } });
+    // Verificar se o material existe
+    const material = await prisma.material.findUnique({
+      where: { id },
+      include: {
+        compraItems: true,
+        orcamentoItems: true,
+        kitItems: true,
+        movimentacoes: true
+      }
+    });
 
-    res.json({ message: 'Material deletado com sucesso' });
+    if (!material) {
+      res.status(404).json({ success: false, error: 'Material não encontrado' });
+      return;
+    }
+
+    // Verificar se há registros relacionados em compras ou contas a pagar
+    // Mesmo que haja, vamos fazer soft delete (desativar) para manter histórico
+    // O material não será excluído fisicamente, apenas desativado
+    await prisma.material.update({
+      where: { id },
+      data: {
+        ativo: false,
+        updatedAt: new Date()
+      }
+    });
+
+    // Nota: O material permanece no banco de dados para manter histórico
+    // de compras, contas a pagar, orçamentos, etc.
+    res.json({ 
+      success: true,
+      message: 'Material desativado com sucesso. Ele permanecerá no histórico de compras e contas a pagar.' 
+    });
   } catch (error) {
     console.error('Erro ao deletar material:', error);
-    res.status(500).json({ error: 'Erro ao deletar material' });
+    res.status(500).json({ success: false, error: 'Erro ao deletar material' });
   }
 };
 
@@ -728,42 +758,33 @@ export const importarPrecos = async (req: Request, res: Response): Promise<void>
           continue;
         }
 
-        const precoNovo = parseFloat(precoFornecedor);
-        const precoAntigo = material.preco || 0;
+        const valorVendaNovo = parseFloat(precoFornecedor);
+        const valorVendaAntigo = material.valorVenda || 0;
         
-        // Atualizar preço e registrar histórico em transação
-        await prisma.$transaction([
-          // Atualizar material
-          prisma.material.update({
-            where: { id: material.id },
-            data: {
-              preco: precoNovo,
-              ultimaAtualizacaoPreco: new Date(),
-              updatedAt: new Date()
-            }
-          }),
-          // Registrar no histórico
-          prisma.historicoPreco.create({
-            data: {
-              materialId: material.id,
-              precoAntigo: precoAntigo,
-              precoNovo: precoNovo,
-              motivo: 'Importação de arquivo',
-              usuario: 'Sistema'
-            }
-          })
-        ]);
+        // Atualizar apenas valorVenda (preço de venda), não o preço de compra
+        // O preço de compra deve ser único a cada compra e não deve ser alterado
+        await prisma.material.update({
+          where: { id: material.id },
+          data: {
+            valorVenda: valorVendaNovo,
+            // Calcular porcentagem de lucro se tiver preço de compra
+            porcentagemLucro: material.preco && material.preco > 0 
+              ? ((valorVendaNovo - material.preco) / material.preco) * 100 
+              : null,
+            updatedAt: new Date()
+          }
+        });
 
         atualizados++;
         detalhes.push({
           sku,
           nome: material.nome,
-          precoAntigo: precoAntigo,
-          precoNovo: precoNovo,
+          valorVendaAntigo: valorVendaAntigo,
+          valorVendaNovo: valorVendaNovo,
           sucesso: true
         });
 
-        console.log(`✅ Material ${sku} atualizado: R$ ${precoAntigo} → R$ ${precoNovo}`);
+        console.log(`✅ Material ${sku} - Valor de venda atualizado: R$ ${valorVendaAntigo} → R$ ${valorVendaNovo}`);
 
       } catch (error) {
         erros++;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import ObraKanban from '../components/ObraKanban';
 import { obrasService } from '../services/obrasService';
@@ -71,13 +71,39 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
         nomeObra: ''
     });
 
+    // Estados para estatísticas
+    const [kanbanData, setKanbanData] = useState<any>({
+        BACKLOG: [],
+        A_FAZER: [],
+        ANDAMENTO: [],
+        CONCLUIDO: []
+    });
+    const [loadingStats, setLoadingStats] = useState(true);
+
     // Carregar dados ao montar o componente
     useEffect(() => {
         carregarDados();
     }, []);
 
     const carregarDados = async () => {
-        await carregarProjetosValidados();
+        await Promise.all([
+            carregarProjetosValidados(),
+            carregarObrasKanban()
+        ]);
+    };
+
+    const carregarObrasKanban = async () => {
+        try {
+            setLoadingStats(true);
+            const response = await obrasService.getObrasKanban();
+            if (response.success && response.data) {
+                setKanbanData(response.data);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar obras para estatísticas:', error);
+        } finally {
+            setLoadingStats(false);
+        }
     };
 
     const carregarProjetosValidados = async () => {
@@ -94,7 +120,37 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
 
     const handleRefresh = () => {
         setRefreshKey(prev => prev + 1);
+        carregarObrasKanban(); // Recarregar estatísticas também
     };
+
+    // Calcular estatísticas baseadas nas obras do Kanban
+    const stats = useMemo(() => {
+        const todasObras = [
+            ...kanbanData.BACKLOG || [],
+            ...kanbanData.A_FAZER || [],
+            ...kanbanData.ANDAMENTO || [],
+            ...kanbanData.CONCLUIDO || []
+        ];
+
+        const total = todasObras.length;
+        const planejamento = (kanbanData.BACKLOG?.length || 0) + (kanbanData.A_FAZER?.length || 0);
+        const execucao = kanbanData.ANDAMENTO?.length || 0;
+        const concluidos = kanbanData.CONCLUIDO?.length || 0;
+        
+        // Calcular valor total (precisamos buscar dos projetos)
+        // Por enquanto, vamos usar 0 pois as obras não têm valor direto
+        const valorTotal = 0;
+
+        console.log('📊 Estatísticas calculadas:', { total, planejamento, execucao, concluidos, valorTotal });
+        console.log('📊 Distribuição:', {
+            BACKLOG: kanbanData.BACKLOG?.length || 0,
+            A_FAZER: kanbanData.A_FAZER?.length || 0,
+            ANDAMENTO: kanbanData.ANDAMENTO?.length || 0,
+            CONCLUIDO: kanbanData.CONCLUIDO?.length || 0
+        });
+
+        return { total, planejamento, execucao, concluidos, valorTotal };
+    }, [kanbanData]);
 
     const handleOpenModal = () => {
         setFormState({
@@ -176,7 +232,7 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
             </header>
 
             {/* Cards de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all">
                     <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
@@ -184,19 +240,7 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
                         </div>
                         <div>
                             <p className="text-xs font-medium text-gray-600">Total de Obras</p>
-                            <p className="text-2xl font-bold text-orange-600">0</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                            <ClipboardDocumentCheckIcon className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-medium text-gray-600">Planejamento</p>
-                            <p className="text-2xl font-bold text-gray-600">0</p>
+                            <p className="text-2xl font-bold text-orange-600">{loadingStats ? '...' : stats.total}</p>
                         </div>
                     </div>
                 </div>
@@ -204,23 +248,23 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all">
                     <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                            <Cog6ToothIcon className="w-6 h-6 text-blue-600" />
+                            <ClipboardDocumentCheckIcon className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-xs font-medium text-gray-600">Em Execução</p>
-                            <p className="text-2xl font-bold text-blue-600">0</p>
+                            <p className="text-xs font-medium text-gray-600">Planejamento</p>
+                            <p className="text-2xl font-bold text-blue-600">{loadingStats ? '...' : stats.planejamento}</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
-                            <CheckBadgeIcon className="w-6 h-6 text-purple-600" />
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-100 to-yellow-200 flex items-center justify-center">
+                            <Cog6ToothIcon className="w-6 h-6 text-yellow-600" />
                         </div>
                         <div>
-                            <p className="text-xs font-medium text-gray-600">Controle Qualidade</p>
-                            <p className="text-2xl font-bold text-purple-600">0</p>
+                            <p className="text-xs font-medium text-gray-600">Em Execução</p>
+                            <p className="text-2xl font-bold text-yellow-600">{loadingStats ? '...' : stats.execucao}</p>
                         </div>
                     </div>
                 </div>
@@ -232,7 +276,7 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
                         </div>
                         <div>
                             <p className="text-xs font-medium text-gray-600">Concluídas</p>
-                            <p className="text-2xl font-bold text-green-600">0</p>
+                            <p className="text-2xl font-bold text-green-600">{loadingStats ? '...' : stats.concluidos}</p>
                         </div>
                     </div>
                 </div>
@@ -244,7 +288,9 @@ const ObrasKanbanPage: React.FC<ObrasKanbanProps> = ({ toggleSidebar, onNavigate
                         </div>
                         <div>
                             <p className="text-xs font-medium text-gray-600">Valor Total</p>
-                            <p className="text-xl font-bold text-emerald-600">R$ 0K</p>
+                            <p className="text-xl font-bold text-emerald-600">
+                                {loadingStats ? '...' : `R$ ${(stats.valorTotal / 1000).toFixed(0)}K`}
+                            </p>
                         </div>
                     </div>
                 </div>

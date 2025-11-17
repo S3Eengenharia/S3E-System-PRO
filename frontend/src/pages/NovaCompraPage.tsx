@@ -95,6 +95,7 @@ const NovaCompraPage: React.FC<NovaCompraPageProps> = ({ toggleSidebar }) => {
     const [buscaMaterial, setBuscaMaterial] = useState('');
     const [showMaterialSearch, setShowMaterialSearch] = useState(false);
     const [materialSelecionado, setMaterialSelecionado] = useState<any | null>(null);
+    const [isItemNovo, setIsItemNovo] = useState(false);
 
     // Carregar materiais do estoque
     useEffect(() => {
@@ -134,6 +135,14 @@ const NovaCompraPage: React.FC<NovaCompraPageProps> = ({ toggleSidebar }) => {
     }, [buscaMaterial, materiais]);
 
     // Handlers
+    const handleMarcarComoItemNovo = () => {
+        setIsItemNovo(true);
+        setMaterialSelecionado(null);
+        setBuscaMaterial('');
+        setShowMaterialSearch(false);
+        toast.info('💡 Item marcado como NOVO - será criado do zero no estoque');
+    };
+
     const handleAddProduct = () => {
         if (!productToAdd.name || !productToAdd.quantity || !productToAdd.cost) {
             toast.error('Preencha todos os campos do produto');
@@ -158,9 +167,12 @@ const NovaCompraPage: React.FC<NovaCompraPageProps> = ({ toggleSidebar }) => {
         setProductToAdd({ name: '', quantity: '1', cost: '', ncm: '', sku: '' });
         setMaterialSelecionado(null);
         setBuscaMaterial('');
+        setIsItemNovo(false);
         
         if (materialSelecionado) {
             toast.success(`✅ ${materialSelecionado.nome} adicionado e vinculado ao estoque`);
+        } else if (isItemNovo) {
+            toast.success(`✅ Item NOVO adicionado - será criado do zero no estoque após o recebimento`);
         } else {
             toast.success(`✅ Produto adicionado (será criado um novo item no estoque)`);
         }
@@ -580,59 +592,93 @@ const NovaCompraPage: React.FC<NovaCompraPageProps> = ({ toggleSidebar }) => {
                     <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border p-4 rounded-xl mb-4">
                         <h4 className="font-medium text-gray-800 dark:text-white mb-3">Adicionar Item</h4>
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={materialSelecionado ? materialSelecionado.nome : buscaMaterial}
-                                    onChange={(e) => {
-                                        setBuscaMaterial(e.target.value);
-                                        setMaterialSelecionado(null);
-                                        setShowMaterialSearch(true);
-                                        setProductToAdd({ ...productToAdd, name: e.target.value });
-                                    }}
-                                    onFocus={() => setShowMaterialSearch(true)}
-                                    placeholder="🔍 Buscar no estoque ou digite novo"
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white"
-                                />
-                                {showMaterialSearch && materiaisFiltrados.length > 0 && (
-                                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                        {materiaisFiltrados.map((material) => (
-                                            <button
-                                                key={material.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setMaterialSelecionado(material);
-                                                    setBuscaMaterial(material.nome);
-                                                    setProductToAdd({
-                                                        ...productToAdd,
-                                                        name: material.nome,
-                                                        cost: String(material.preco || ''),
-                                                        sku: material.sku || ''
-                                                    });
-                                                    setShowMaterialSearch(false);
-                                                }}
-                                                className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-dark-hover transition-colors border-b border-gray-100 dark:border-dark-border last:border-b-0"
-                                            >
-                                                <div className="font-semibold text-gray-900 dark:text-white text-sm">
-                                                    {material.nome}
-                                                </div>
-                                                <div className="text-xs text-gray-600 dark:text-gray-400 flex gap-3">
-                                                    <span>SKU: {material.sku}</span>
-                                                    <span>Estoque: {material.estoque}</span>
-                                                    <span className="text-green-600 dark:text-green-400 font-semibold">
-                                                        R$ {(material.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                    </span>
-                                                </div>
-                                            </button>
-                                        ))}
+                            <div className="relative md:col-span-2">
+                                <div className="flex gap-2">
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="text"
+                                            value={materialSelecionado ? materialSelecionado.nome : buscaMaterial}
+                                            onChange={(e) => {
+                                                setBuscaMaterial(e.target.value);
+                                                setMaterialSelecionado(null);
+                                                setIsItemNovo(false);
+                                                setShowMaterialSearch(true);
+                                                setProductToAdd({ ...productToAdd, name: e.target.value });
+                                            }}
+                                            onFocus={() => {
+                                                if (!isItemNovo) {
+                                                    setShowMaterialSearch(true);
+                                                }
+                                            }}
+                                            placeholder={isItemNovo ? "✨ Digite o nome do item novo" : "🔍 Buscar no estoque ou digite novo"}
+                                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 dark:bg-dark-bg dark:text-white ${
+                                                isItemNovo 
+                                                    ? 'border-purple-300 dark:border-purple-600 bg-purple-50 dark:bg-purple-900/20' 
+                                                    : 'border-gray-300 dark:border-dark-border'
+                                            }`}
+                                        />
+                                        {showMaterialSearch && materiaisFiltrados.length > 0 && !isItemNovo && (
+                                            <div className="absolute z-10 w-full mt-1 bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                                {materiaisFiltrados.map((material) => (
+                                                    <button
+                                                        key={material.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setMaterialSelecionado(material);
+                                                            setBuscaMaterial(material.nome);
+                                                            setIsItemNovo(false);
+                                                            setProductToAdd({
+                                                                ...productToAdd,
+                                                                name: material.nome,
+                                                                cost: String(material.preco || ''),
+                                                                sku: material.sku || ''
+                                                            });
+                                                            setShowMaterialSearch(false);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-dark-hover transition-colors border-b border-gray-100 dark:border-dark-border last:border-b-0"
+                                                    >
+                                                        <div className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                            {material.nome}
+                                                        </div>
+                                                        <div className="text-xs text-gray-600 dark:text-gray-400 flex gap-3">
+                                                            <span>SKU: {material.sku}</span>
+                                                            <span>Estoque: {material.estoque}</span>
+                                                            <span className="text-green-600 dark:text-green-400 font-semibold">
+                                                                R$ {(material.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                    <button
+                                        type="button"
+                                        onClick={handleMarcarComoItemNovo}
+                                        className={`px-4 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+                                            isItemNovo
+                                                ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-medium'
+                                                : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/40 border border-purple-300 dark:border-purple-700'
+                                        }`}
+                                        title="Marcar como item novo - será criado do zero no estoque"
+                                    >
+                                        {isItemNovo ? '✨ Item Novo' : '✨ Item Novo'}
+                                    </button>
+                                </div>
                                 {materialSelecionado && (
                                     <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
                                         Produto do estoque vinculado
+                                    </div>
+                                )}
+                                {isItemNovo && !materialSelecionado && (
+                                    <div className="mt-1 text-xs text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                        </svg>
+                                        Item NOVO - será criado do zero no estoque
                                     </div>
                                 )}
                             </div>

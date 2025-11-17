@@ -6,10 +6,8 @@ import { BudgetStatus } from '../types';
 import { vendasService, type Venda, type DashboardVendas } from '../services/vendasService';
 import { orcamentosService } from '../services/orcamentosService';
 import { clientesService } from '../services/clientesService';
-<<<<<<< HEAD
+
 import { useEscapeKey } from '../hooks/useEscapeKey';
-=======
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 import {
     generateExampleTemplate,
     exportToJSON,
@@ -211,7 +209,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
     const abrirModalVisualizarVenda = async (venda: Venda) => {
         setVendaParaVisualizar(venda);
         setModalVisualizarVenda(true);
-<<<<<<< HEAD
+
     };
 
     // Fechar modais com ESC
@@ -226,9 +224,6 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
         setModalVisualizarVenda(true);
         setLoadingDetalhes(true);
         setDetalhesVenda(null); // Limpar detalhes anteriores
-=======
-        setLoadingDetalhes(true);
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
 
         try {
             // Buscar detalhes completos da venda
@@ -255,7 +250,7 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                     orcamento: orcamentoCompleto
                 });
             } else {
-<<<<<<< HEAD
+
                 console.error('Erro na resposta do serviço:', vendaRes);
                 toast.error('Erro ao carregar detalhes da venda', {
                     description: vendaRes.error || 'Não foi possível carregar os detalhes'
@@ -267,14 +262,6 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
             toast.error('Erro ao carregar detalhes da venda', {
                 description: error?.message || 'Erro de conexão'
             });
-=======
-                toast.error('Erro ao carregar detalhes da venda');
-                setDetalhesVenda(null);
-            }
-        } catch (error) {
-            console.error('Erro ao buscar detalhes da venda:', error);
-            toast.error('Erro ao carregar detalhes da venda');
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
             setDetalhesVenda(null);
         } finally {
             setLoadingDetalhes(false);
@@ -447,8 +434,9 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                         unidadeMedida: item.unidadeMedida || item.material?.unidadeMedida || 'UN',
                         quantidade: item.quantidade || 1,
                         custoUnit: item.custoUnitario || item.custoUnit || item.material?.preco || 0,
-                        precoUnit: item.precoUnitario || item.precoUnit || item.precoUnitario || 0,
-                        subtotal: item.subtotal || (item.precoUnitario || item.precoUnit || 0) * (item.quantidade || 1),
+                        // Usar valorVenda do material se disponível, senão usar precoUnit do orçamento
+                        precoUnit: item.material?.valorVenda || item.precoUnitario || item.precoUnit || 0,
+                        subtotal: item.subtotal || ((item.material?.valorVenda || item.precoUnitario || item.precoUnit || 0) * (item.quantidade || 1)),
                     })) || [];
 
                     // Calcular valor total se não existir
@@ -946,11 +934,23 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                                         )}
                                                     </div>
                                                     <div className="col-span-2 text-right text-gray-900 font-semibold">
-                                                        R$ {(item.precoUnit || item.valorUnitario || item.precoUnitario || item.preco || item.custoUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        R$ {(() => {
+                                                            // Usar valorVenda do material se disponível, senão usar precoUnit do orçamento
+                                                            const valorVenda = item.material?.valorVenda;
+                                                            const precoVenda = valorVenda || item.precoUnit || item.valorUnitario || item.precoUnitario || item.preco || item.custoUnit || 0;
+                                                            return precoVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                                        })()}
                                                     </div>
                                                     <div className="col-span-3 text-right">
                                                         <span className="font-bold text-green-700 text-lg">
-                                                            R$ {(item.subtotal || ((item.quantidade || item.quantity || 0) * (item.precoUnit || item.valorUnitario || item.precoUnitario || item.preco || item.custoUnit || 0))).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                            R$ {(() => {
+                                                                // Usar valorVenda do material se disponível, senão usar precoUnit do orçamento
+                                                                const valorVenda = item.material?.valorVenda;
+                                                                const precoVenda = valorVenda || item.precoUnit || item.valorUnitario || item.precoUnitario || item.preco || item.custoUnit || 0;
+                                                                const quantidade = item.quantidade || item.quantity || 0;
+                                                                const subtotal = item.subtotal || (quantidade * precoVenda);
+                                                                return subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                                            })()}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1259,11 +1259,8 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                 </div>
                                 <div className="flex justify-end">
                                     <button
-<<<<<<< HEAD
+
                                         onClick={() => abrirModalVisualizarVendaCompleto(venda)}
-=======
-                                        onClick={() => abrirModalVisualizarVenda(venda)}
->>>>>>> 478241a18130cffdb1e72d234262f5f84b2e45a1
                                         className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold flex items-center gap-2"
                                         title="Visualizar detalhes da venda"
                                     >
@@ -1821,7 +1818,9 @@ const Vendas: React.FC<VendasProps> = ({ toggleSidebar }) => {
                                                     <tbody>
                                                         {detalhesVenda.orcamento.items.map((item: any, index: number) => {
                                                             const quantidade = item.quantidade || 0;
-                                                            const precoUnit = item.precoUnit || item.precoUnitario || (item.subtotal / (item.quantidade || 1)) || 0;
+                                                            // Usar valorVenda do material se disponível, senão usar precoUnit do orçamento
+                                                            const valorVenda = item.material?.valorVenda;
+                                                            const precoUnit = valorVenda || item.precoUnit || item.precoUnitario || (item.subtotal / (item.quantidade || 1)) || 0;
                                                             const valorTotal = item.subtotal || (quantidade * precoUnit);
                                                             return (
                                                                 <tr key={item.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">

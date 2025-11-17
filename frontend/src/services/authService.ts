@@ -63,6 +63,18 @@ class AuthService {
     return axiosApiService.put<{ message: string }>('/api/auth/change-password', data);
   }
 
+  async forgotPassword(email: string) {
+    return axiosApiService.post<{ message: string }>('/api/auth/forgot-password', { email });
+  }
+
+  async validateResetToken(token: string) {
+    return axiosApiService.get<{ valid: boolean }>(`/api/auth/validate-reset-token?token=${token}`);
+  }
+
+  async resetPassword(token: string, password: string) {
+    return axiosApiService.post<{ message: string }>('/api/auth/reset-password', { token, password });
+  }
+
   isAuthenticated(): boolean {
     return !!axiosApiService['token'];
   }
