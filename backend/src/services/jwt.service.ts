@@ -59,9 +59,9 @@ export const generateToken = (
     };
 
     // Gerar e retornar o token
-    const token = jwt.sign(tokenPayload, JWT_SECRET, {
+    const token = jwt.sign(tokenPayload, JWT_SECRET as string, {
       expiresIn: expiration
-    });
+    } as jwt.SignOptions);
 
     return token;
   } catch (error) {

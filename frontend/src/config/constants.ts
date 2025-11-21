@@ -1,7 +1,7 @@
 // Configurações do Sistema S3E
 
 // URL da API - Em produção, ajustar para o domínio real
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // URL padrão da logo da empresa
 export const DEFAULT_LOGO_URL = `${API_BASE_URL}/uploads/logos/logo-branca.png`;

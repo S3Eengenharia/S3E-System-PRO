@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient, ProjetoStatus } from '@prisma/client';
-import { projetosService } from '../services/projetos.service.js';
+import { projetosService } from '../services/projetos.service';
 
 const prisma = new PrismaClient();
 
@@ -288,7 +288,7 @@ export const updateProjeto = async (req: Request, res: Response): Promise<void> 
     }
 
     // Se projeto está concluído, não permitir alterações
-    if (projetoExistente.status === 'Concluido') {
+    if (projetoExistente.status === 'CONCLUIDO') {
       res.status(400).json({
         success: false,
         error: 'Não é possível alterar projeto concluído'

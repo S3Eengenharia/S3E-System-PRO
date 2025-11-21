@@ -8,14 +8,14 @@ import {
   deleteProjeto,
   criarProjetoDeOrcamento,
   listarProjetosAvancado
-} from '../controllers/projetosController.js';
+} from '../controllers/projetosController';
 import {
   getTasksByProjeto,
   createTask,
   updateTask,
   deleteTask
-} from '../controllers/tasksController.js';
-import { authenticate } from '../middlewares/auth.js';
+} from '../controllers/tasksController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

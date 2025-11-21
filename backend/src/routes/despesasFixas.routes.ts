@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { DespesasFixasController } from '../controllers/despesasFixasController';
-import { authenticate } from '../middlewares/auth.js';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

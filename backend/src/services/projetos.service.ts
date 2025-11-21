@@ -263,8 +263,14 @@ export class ProjetosService {
 
         // Verificar itens diretos de COTACAO
         if (item.tipo === 'COTACAO') {
+          // Buscar cotação se necessário
+          const cotacao = item.cotacaoId ? await prisma.cotacao.findUnique({
+            where: { id: item.cotacaoId },
+            select: { nome: true }
+          }) : null;
+          
           materiaisFaltantes.push({
-            nome: item.nome || 'Item de cotação',
+            nome: cotacao?.nome || item.descricao || 'Item de cotação',
             necessario: item.quantidade,
             disponivel: 0,
             falta: item.quantidade,

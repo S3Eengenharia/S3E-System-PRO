@@ -8,7 +8,8 @@ WORKDIR /app
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 COPY package*.json ./
-RUN npm ci
+# Use npm install if package-lock.json doesn't exist, otherwise use npm ci
+RUN (npm ci || npm install --legacy-peer-deps)
 
 # Development stage
 FROM base AS development
@@ -27,7 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build args with defaults
-ARG VITE_API_URL=http://localhost:3001
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the application
@@ -40,11 +41,11 @@ WORKDIR /usr/share/nginx/html
 # Install curl for healthcheck
 RUN apk add --no-cache curl
 
+# Remove default nginx config first
+RUN rm -f /etc/nginx/conf.d/default.conf
+
 # Copy nginx config
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy built files from builder
 COPY --from=builder /app/dist .

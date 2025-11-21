@@ -1,8 +1,13 @@
 node_modules
+!node_modules/.prisma
+!node_modules/@prisma
 npm-debug.log
 dist
 .env
+.env.*
 .env.production
+.env.production.local
+!.env.example
 *.log
 .git
 .gitignore
@@ -12,8 +17,8 @@ coverage
 .vscode
 .idea
 .DS_Store
-tsconfig.json
-tsconfig.*.json
+# tsconfig.json is needed for build - don't ignore it
+# tsconfig.*.json
 test/
 tests/
 *.test.ts

@@ -360,24 +360,6 @@ export class ComprasService {
         };
     }
 
-    /**
-     * Busca uma compra específica
-     */
-    static async buscarCompra(id: string) {
-        const compra = await prisma.compra.findUnique({
-            where: { id },
-            include: {
-                fornecedor: true,
-                items: true
-            }
-        });
-
-        if (!compra) {
-            throw new Error('Compra não encontrada');
-        }
-
-        return compra;
-    }
 
     /**
      * Atualiza status da compra
@@ -624,16 +606,7 @@ export class ComprasService {
 
                     if (projetosBloqueados.length > 0) {
                         console.log(`📢 Material ${item.nomeProduto} desbloqueou ${projetosBloqueados.length} projeto(s)!`);
-                        
-                        // Atualizar observações dos projetos para notificar
-                        for (const proj of projetosBloqueados) {
-                            await tx.projeto.update({
-                                where: { id: proj.id },
-                                data: {
-                                    observacoes: `${proj.observacoes || ''}\n\n✅ Material recebido: ${item.nomeProduto} - ${item.quantidade} unidades (${new Date().toLocaleDateString('pt-BR')})`
-                                }
-                            });
-                        }
+                        // Nota: Projeto não possui campo observacoes no schema
                     }
                 }
                 

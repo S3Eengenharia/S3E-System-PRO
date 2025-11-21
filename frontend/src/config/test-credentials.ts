@@ -8,7 +8,7 @@ export const TEST_CREDENTIALS = {
 
 // Configuração de API para desenvolvimento
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:3001',
+  BASE_URL: '',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
 };

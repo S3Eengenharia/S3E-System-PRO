@@ -19,7 +19,8 @@ RUN apk add --no-cache \
 # Install dependencies only when needed
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci
+# Try npm ci first, fallback to npm install if package-lock.json doesn't exist
+RUN (npm ci || npm install)
 
 # Development stage
 FROM base AS development
@@ -36,7 +37,10 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
+# Generate Prisma Client - retry logic for network issues
+ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+# Try to generate Prisma Client with retries, but fail if all attempts fail
+RUN (npx prisma generate || (sleep 5 && npx prisma generate) || (sleep 10 && npx prisma generate)) && echo "✅ Prisma Client generated successfully"
 RUN npm run build
 
 # Production stage
@@ -51,21 +55,23 @@ ENV CHROMIUM_PATH=/usr/bin/chromium-browser
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Copy node_modules from deps stage (includes all dependencies)
+COPY --from=deps /app/node_modules ./node_modules
 
 # Install tsx globally for running seed script
 RUN npm install -g tsx
 
 # Generate Prisma Client for production
 COPY prisma ./prisma
-RUN npx prisma generate
+# Copy Prisma binaries from builder stage (already downloaded there)
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Try to generate, but if it fails due to network, use cached binaries
+ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+RUN npx prisma generate || echo "⚠️ Prisma generate failed, using cached binaries from builder stage"
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
-
-# ✅ COPIA O SCRIPT DE INICIALIZAÇÃO
-COPY scripts/start.sh /app/scripts/start.sh
-RUN chmod +x /app/scripts/start.sh
 
 # Create uploads directories
 RUN mkdir -p /app/uploads/logos /app/uploads/pdf-customization /app/uploads/tarefas-obra /app/uploads/temp
@@ -84,5 +90,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
 
-# ✅ COMANDO CORRETO - Script de inicialização
-CMD ["/app/scripts/start.sh"]
+# ✅ COMANDO DE INICIALIZAÇÃO - Executa migrações, seed e inicia a aplicação
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/seed.ts && node dist/app.js"]

@@ -3,13 +3,10 @@ import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
 const prisma = new PrismaClient();
 
-// Obter __dirname equivalente em ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// No CommonJS, __dirname já está disponível automaticamente
 
 // Configuração do Multer para upload de imagens
 const storage = multer.diskStorage({

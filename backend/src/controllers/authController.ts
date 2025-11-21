@@ -129,7 +129,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     // Dados já validados pelo middleware de validação
-    const userData = req.body as RegisterInput;
+    const body = req.body as RegisterInput;
+    
+    // Garantir que campos obrigatórios estão presentes
+    const userData: authService.CreateUserData = {
+      email: body.email!,
+      password: body.password!,
+      name: body.name!,
+      role: body.role
+    };
 
     // Chamar service de registro
     const result = await authService.registerUser(userData);

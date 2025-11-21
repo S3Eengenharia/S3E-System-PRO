@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getCompras, getCompraById, createCompra, updateCompraStatus, receberRemessaParcial, receberComAssociacoes, parseXML } from '../controllers/comprasController.js';
-import { authenticate } from '../middlewares/auth.js';
+import { getCompras, getCompraById, createCompra, updateCompraStatus, receberRemessaParcial, receberComAssociacoes, parseXML } from '../controllers/comprasController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

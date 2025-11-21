@@ -300,7 +300,8 @@ export const previewImportacao = async (req: Request, res: Response): Promise<vo
 export const importarCotacoes = async (req: Request, res: Response): Promise<void> => {
   try {
     const file = req.file;
-    const { cotacoes } = req.body; // Receber cotações do frontend (com valorVenda editado)
+    // CORREÇÃO: Tornar o destructuring seguro (req.body pode ser undefined se não houver body parser)
+    const cotacoes = req.body?.cotacoes; // Usar optional chaining
 
     if (!file && !cotacoes) {
       res.status(400).json({

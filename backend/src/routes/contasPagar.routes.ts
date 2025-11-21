@@ -1,6 +1,6 @@
 import express from 'express';
 import { ContasPagarController } from '../controllers/contasPagarController';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = express.Router();
 

@@ -1,5 +1,19 @@
 version: '3.8'
 
+# ============================================
+# S3E System PRO - Docker Compose (PRODUÇÃO)
+# ============================================
+# ATENÇÃO: Este arquivo é para AMBIENTE DE PRODUÇÃO
+# 
+# Para usar em produção:
+# 1. Certifique-se de ter o arquivo .env.production configurado
+# 2. O .env.production contém credenciais REAIS de produção
+# 3. NUNCA commite o arquivo .env.production
+# 4. Execute: docker-compose -f docker-compose.prod.yml up -d
+#
+# Para desenvolvimento local, use: docker-compose.yml
+# ============================================
+
 services:
   # PostgreSQL Database - PRODUÇÃO
   postgres:
@@ -25,10 +39,7 @@ services:
 
   # Backend API - PRODUÇÃO
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
+    image: odev10antonio/s3e-backend:1.0.0
     container_name: s3e-backend-prod
     restart: unless-stopped
     environment:
@@ -37,9 +48,17 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-s3e_prod}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-s3e_producao}
       JWT_SECRET: ${JWT_SECRET}  
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:80}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL:-${CORS_ORIGIN}}
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      # Email/SMTP (Opcional)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@s3eengenharia.com.br}
     ports:
       - "3001:3001"
     volumes:
@@ -60,10 +79,7 @@ services:
 
   # Frontend React App - PRODUÇÃO
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: production
+    image: odev10antonio/s3e-frontend:1.0.0
     container_name: s3e-frontend-prod
     restart: unless-stopped
     ports:

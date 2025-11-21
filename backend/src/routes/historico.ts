@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { HistoricoController } from '../controllers/historicoController.js';
-import { authenticate } from '../middlewares/auth.js';
+import { HistoricoController } from '../controllers/historicoController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

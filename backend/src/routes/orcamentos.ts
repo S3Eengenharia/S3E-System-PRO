@@ -7,9 +7,9 @@ import {
   updateOrcamentoStatus,
   aprovarOrcamento,
   recusarOrcamento
-} from '../controllers/orcamentosController.js';
-import { PDFOrcamentoController } from '../controllers/pdfOrcamentoController.js';
-import { authenticate } from '../middlewares/auth.js';
+} from '../controllers/orcamentosController';
+import { PDFOrcamentoController } from '../controllers/pdfOrcamentoController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

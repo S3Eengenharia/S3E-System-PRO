@@ -141,8 +141,8 @@ const ResetPassword: React.FC = () => {
               crossOrigin="anonymous"
               onError={(e) => {
                 const target = e.currentTarget;
-                if (!target.src.includes('3001')) {
-                  target.src = 'http://localhost:3001/uploads/logos/logo-branca.png';
+                if (!target.src.includes('/api/uploads')) {
+                  target.src = '/api/uploads/logos/logo-branca.png';
                 } else {
                   target.style.display = 'none';
                   const fallback = document.createElement('div');

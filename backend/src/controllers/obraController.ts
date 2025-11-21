@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import obraService from '../services/obra.service.js';
+import obraService from '../services/obra.service';
 
-import { EstoqueService } from '../services/estoque.service.js';
+import { EstoqueService } from '../services/estoque.service';
 
 const prisma = new PrismaClient();
 

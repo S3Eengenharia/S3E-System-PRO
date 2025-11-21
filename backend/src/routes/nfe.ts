@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { NFeController } from '../controllers/nfeController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { NFeController } from '../controllers/nfeController';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 

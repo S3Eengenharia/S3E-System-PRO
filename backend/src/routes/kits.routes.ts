@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import * as kitsController from '../controllers/kitsController.js';
-import { authenticateToken } from '../middlewares/auth.js';
+import * as kitsController from '../controllers/kitsController';
+import { authenticateToken } from '../middlewares/auth';
 
 const router = Router();
 

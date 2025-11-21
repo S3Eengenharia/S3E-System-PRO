@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { VendasService, VendaPayload } from '../services/vendas.service';
-import { VendaStatus } from '../types';
+import { VendaStatus } from '../types/index';
 
 export class VendasController {
     /**

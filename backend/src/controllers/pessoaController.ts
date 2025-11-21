@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { FuncaoPessoa } from '@prisma/client';
-import { pessoaService } from '../services/pessoa.service.js';
+import { pessoaService } from '../services/pessoa.service';
 
 export class PessoaController {
   static async criar(req: Request, res: Response) {

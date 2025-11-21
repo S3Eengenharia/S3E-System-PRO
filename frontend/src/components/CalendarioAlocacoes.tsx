@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { alocacaoService, type AlocacaoEquipeDTO } from '../services/AlocacaoService';
+import { alocacaoService, type AlocacaoEquipeDTO } from '../services/alocacaoService';
 import { toast } from 'sonner';
 
 interface CalendarioAlocacoesProps {

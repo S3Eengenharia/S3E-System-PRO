@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 export interface EquipeData {
   nome: string;
-  tipo: 'MONTAGEM' | 'MANUTENCAO' | 'INSTALACAO' | 'CAMPO' | 'DISTINTA';
+  tipo: 'MONTAGEM' | 'CAMPO' | 'DISTINTA';
   descricao?: string;
   ativa?: boolean;
   membrosIds?: string[]; // IDs de Pessoa
@@ -20,7 +20,7 @@ export interface EquipeMembro {
 export interface EquipeComMembros {
   id: string;
   nome: string;
-  tipo: 'MONTAGEM' | 'MANUTENCAO' | 'INSTALACAO' | 'CAMPO' | 'DISTINTA';
+  tipo: 'MONTAGEM' | 'CAMPO' | 'DISTINTA';
   descricao: string | null;
   ativa: boolean;
   createdAt: Date;
@@ -28,7 +28,7 @@ export interface EquipeComMembros {
   membros: EquipeMembro[];
   alocacoes: {
     id: string;
-    obraId: string;
+    projetoId: string;
     dataInicio: Date;
     dataFimPrevisto: Date | null;
     status: string;
@@ -96,7 +96,14 @@ export class EquipesService {
 
       return {
         ...result.equipe,
-        membros: result.membros
+        membros: result.membros,
+        alocacoes: result.equipe.alocacoes.map(a => ({
+          id: a.id,
+          projetoId: a.projetoId,
+          dataInicio: a.dataInicio,
+          dataFimPrevisto: a.dataFimPrevisto,
+          status: a.status
+        }))
       };
 
     } catch (error) {
@@ -167,7 +174,17 @@ export class EquipesService {
           console.warn(`⚠️ Equipe "${equipe.nome}": ${idsNaoEncontrados.length} membros não encontrados na tabela User:`, idsNaoEncontrados);
         }
         
-        return { ...equipe, membros };
+        return { 
+          ...equipe, 
+          membros,
+          alocacoes: equipe.alocacoes.map(a => ({
+            id: a.id,
+            projetoId: a.projetoId,
+            dataInicio: a.dataInicio,
+            dataFimPrevisto: a.dataFimPrevisto,
+            status: a.status
+          }))
+        };
       });
 
     } catch (error) {
@@ -443,7 +460,7 @@ export class EquipesService {
           alocacoes: {
             select: {
               id: true,
-              obraId: true,
+              projetoId: true,
               dataInicio: true,
               dataFimPrevisto: true,
               status: true
@@ -469,7 +486,17 @@ export class EquipesService {
             funcao: (p as any).funcao as unknown as string,
             email: (p as any).email ?? null
           }));
-        return { ...equipe, membros };
+        return { 
+          ...equipe, 
+          membros,
+          alocacoes: equipe.alocacoes.map(a => ({
+            id: a.id,
+            projetoId: a.projetoId,
+            dataInicio: a.dataInicio,
+            dataFimPrevisto: a.dataFimPrevisto,
+            status: a.status
+          }))
+        };
       });
 
     } catch (error) {

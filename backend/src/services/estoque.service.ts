@@ -294,11 +294,11 @@ export class EstoqueService {
                     }
                 });
 
-                // Se não encontrou, tentar por NCM (se a cotação tiver NCM)
-                if (!materialEmEstoque && cotacao.ncm) {
+                // Se não encontrou, tentar por nome similar (Cotacao não possui campo sku)
+                if (!materialEmEstoque) {
                     materialEmEstoque = await prisma.material.findFirst({
                         where: {
-                            ncm: cotacao.ncm,
+                            nome: { contains: cotacao.nome, mode: 'insensitive' },
                             estoque: { gt: 0 }
                         }
                     });

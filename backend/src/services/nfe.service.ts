@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { createSign } from 'crypto';
-import * as xmlCrypto from 'xml-crypto';
-import * as soap from 'soap';
+// import { createSign } from 'crypto';
+// import * as xmlCrypto from 'xml-crypto';
+// import * as soap from 'soap';
 
 const prisma = new PrismaClient();
 

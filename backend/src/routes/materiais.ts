@@ -16,8 +16,8 @@ import {
   gerarTemplateImportacao,
   previewImportacao,
   getHistoricoPrecos
-} from '../controllers/materiaisController.js';
-import { authenticate } from '../middlewares/auth.js';
+} from '../controllers/materiaisController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

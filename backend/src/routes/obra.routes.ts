@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { ObraController } from '../controllers/obraController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { ObraController } from '../controllers/obraController';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 
