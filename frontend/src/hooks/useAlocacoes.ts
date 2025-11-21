@@ -56,7 +56,7 @@ export interface Estatisticas {
   alocacoesConcluidas: number;
 }
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 /**
  * Hook personalizado para gerenciar alocações de equipes

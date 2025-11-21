@@ -1,6 +1,6 @@
 import express from 'express';
-import { authenticate } from '../middlewares/auth.js';
-import { checkPermission, checkEletricista, checkDeletePermission } from '../middlewares/rbac.js';
+import { authenticate } from '../middlewares/auth';
+import { checkPermission, checkEletricista, checkDeletePermission } from '../middlewares/rbac';
 import {
   getTarefasEletricista,
   salvarResumoTarefa,
@@ -11,7 +11,7 @@ import {
   getTarefasPorObra,
   getRegistrosAtividade,
   uploadTarefaImages
-} from '../controllers/tarefasObraController.js';
+} from '../controllers/tarefasObraController';
 
 const router = express.Router();
 

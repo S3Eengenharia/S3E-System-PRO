@@ -54,10 +54,10 @@ const Login: React.FC = () => {
               onError={(e) => {
                 console.error('❌ Erro ao carregar logo:', DEFAULT_LOGO_URL);
                 console.log('Tentando URL alternativa...');
-                // Tentar URL direta com porta correta
+                // Tentar URL relativa através do proxy
                 const target = e.currentTarget;
-                if (!target.src.includes('3001')) {
-                  target.src = 'http://localhost:3001/uploads/logos/logo-branca.png';
+                if (!target.src.includes('/api/uploads')) {
+                  target.src = '/api/uploads/logos/logo-branca.png';
                 } else {
                   // Se ainda falhar, mostrar fallback
                   target.style.display = 'none';
@@ -155,7 +155,7 @@ const Login: React.FC = () => {
               rel="noopener noreferrer"
               className="font-semibold hover:text-white hover:underline transition-colors duration-200"
             >
-              Dev Antonio Junio
+              Dev Antonio Junior
             </a>
           </p>
         </div>

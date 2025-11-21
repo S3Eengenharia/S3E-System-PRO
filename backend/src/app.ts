@@ -2,80 +2,109 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import fs from 'fs';
 
 
 // Routes
-import authRoutes from './routes/auth.js';
-import materiaisRoutes from './routes/materiais.js';
-import comprasRoutes from './routes/compras.js';
-import orcamentosRoutes from './routes/orcamentos.js';
-import configFiscalRoutes from './routes/configFiscal.js';
-import vendasRoutes from './routes/vendas.routes.js';
-import contasPagarRoutes from './routes/contasPagar.routes.js';
-import relatoriosRoutes from './routes/relatorios.routes.js';
-import protectedRoutes from './routes/protected.routes.js';
-import alocacaoRoutes from './routes/alocacao.routes.js';
-import equipesRoutes from './routes/equipes.routes.js';
-import alocacoesEquipeRoutes from './routes/alocacoes.js';
-import etapasAdminRoutes from './routes/etapasAdmin.routes.js';
-import clientesRoutes from './routes/clientes.js';
-import fornecedoresRoutes from './routes/fornecedores.js';
-import projetosRoutes from './routes/projetos.js';
-import cotacoesRoutes from './routes/cotacoes.routes.js';
-import pessoasRoutes from './routes/pessoa.routes.js';
-import servicosRoutes from './routes/servicos.js';
-import movimentacoesRoutes from './routes/movimentacoes.js';
-import historicoRoutes from './routes/historico.js';
-import nfeRoutes from './routes/nfe.js';
-import empresasRoutes from './routes/empresas.js';
-import dashboardRoutes from './routes/dashboard.js';
-import quadrosRoutes from './routes/quadros.routes.js';
-import kitsRoutes from './routes/kits.routes.js';
-import configuracaoRoutes from './routes/configuracao.routes.js';
-import obraRoutes from './routes/obra.routes.js';
-import pdfCustomizationRoutes from './routes/pdfCustomization.routes.js';
-import funcionariosRoutes from './routes/funcionarios.routes.js';
-import valesRoutes from './routes/vales.routes.js';
-import veiculosRoutes from './routes/veiculos.routes.js';
-import gastosVeiculoRoutes from './routes/gastosVeiculo.routes.js';
-import planosRoutes from './routes/planos.routes.js';
-import despesasFixasRoutes from './routes/despesasFixas.routes.js';
-import logsRoutes from './routes/logs.js';
-import tarefasObraRoutes from './routes/tarefasObra.js';
-import { healthCheck } from './controllers/logsController.js';
+import authRoutes from './routes/auth';
+import materiaisRoutes from './routes/materiais';
+import comprasRoutes from './routes/compras';
+import orcamentosRoutes from './routes/orcamentos';
+import configFiscalRoutes from './routes/configFiscal';
+import vendasRoutes from './routes/vendas.routes';
+import contasPagarRoutes from './routes/contasPagar.routes';
+import relatoriosRoutes from './routes/relatorios.routes';
+import protectedRoutes from './routes/protected.routes';
+import alocacaoRoutes from './routes/alocacao.routes';
+import equipesRoutes from './routes/equipes.routes';
+import alocacoesEquipeRoutes from './routes/alocacoes';
+import etapasAdminRoutes from './routes/etapasAdmin.routes';
+import clientesRoutes from './routes/clientes';
+import fornecedoresRoutes from './routes/fornecedores';
+import projetosRoutes from './routes/projetos';
+import cotacoesRoutes from './routes/cotacoes.routes';
+import pessoasRoutes from './routes/pessoa.routes';
+import servicosRoutes from './routes/servicos';
+import movimentacoesRoutes from './routes/movimentacoes';
+import historicoRoutes from './routes/historico';
+import nfeRoutes from './routes/nfe';
+import empresasRoutes from './routes/empresas';
+import dashboardRoutes from './routes/dashboard';
+import quadrosRoutes from './routes/quadros.routes';
+import kitsRoutes from './routes/kits.routes';
+import configuracaoRoutes from './routes/configuracao.routes';
+import obraRoutes from './routes/obra.routes';
+import pdfCustomizationRoutes from './routes/pdfCustomization.routes';
+import funcionariosRoutes from './routes/funcionarios.routes';
+import valesRoutes from './routes/vales.routes';
+import veiculosRoutes from './routes/veiculos.routes';
+import gastosVeiculoRoutes from './routes/gastosVeiculo.routes';
+import planosRoutes from './routes/planos.routes';
+import despesasFixasRoutes from './routes/despesasFixas.routes';
+import logsRoutes from './routes/logs';
+import tarefasObraRoutes from './routes/tarefasObra';
+import { healthCheck } from './controllers/logsController';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Determinar origens permitidas para CORS
+const defaultOrigins = ['http://localhost', 'http://localhost:80', 'http://localhost:5173'];
+const envOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
+const corsOptions: CorsOptions = {
+  origin: (origin, callback) => {
+    // Browsers podem enviar origin undefined em requests como curl ou same-origin
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 
 // Middlewares
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors(corsOptions));
 app.use(morgan('dev'));
 
 // Servir arquivos estáticos (uploads) com CORS habilitado
-// Determinar caminho correto baseado em onde o servidor está rodando
+// No Docker, process.cwd() é /app, então /app/uploads
+// Em desenvolvimento local, pode ser backend/ ou raiz do projeto
 const cwd = process.cwd();
-const isBackendFolder = cwd.endsWith('backend');
-const uploadsPath = isBackendFolder 
-  ? path.join(cwd, 'uploads')
-  : path.join(cwd, 'backend', 'uploads');
+let uploadsPath = path.join(cwd, 'uploads');
+
+// Verificar se o diretório existe, se não, tentar alternativas
+if (!fs.existsSync(uploadsPath)) {
+  const altPath = path.join(cwd, 'backend', 'uploads');
+  if (fs.existsSync(altPath)) {
+    uploadsPath = altPath;
+  } else {
+    // Criar o diretório se não existir (Docker)
+    fs.mkdirSync(uploadsPath, { recursive: true });
+  }
+}
 
 console.log('📁 Servindo uploads de:', uploadsPath);
 
 // Middleware para adicionar headers CORS aos arquivos estáticos
 app.use('/uploads', (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || 'http://localhost:5173');
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -86,7 +115,7 @@ app.use('/uploads', (req, res, next) => {
 app.use('/uploads', express.static(uploadsPath));
 
 // EXCEÇÃO: Não aplicar body parsers em rotas com upload de arquivos (multer)
-// Lista de rotas que usam multipart/form-data
+// Lista de rotas que PODEM usar multipart/form-data
 const uploadRoutes = [
   '/api/materiais/preview-importacao',
   '/api/materiais/importar-precos',
@@ -95,23 +124,20 @@ const uploadRoutes = [
   '/api/obras/tarefas/resumo' // Rota de upload de fotos de tarefas
 ];
 
-// Body parsers COM EXCEÇÃO para rotas de upload
+// Body parsers COM EXCEÇÃO para rotas de upload (apenas se for multipart/form-data)
 app.use((req, res, next) => {
-  // Debug: ver qual é o path/url da requisição
-  if (req.url.includes('comparacao-precos') || req.url.includes('upload')) {
-    console.log(`🔍 DEBUG Upload - URL: ${req.url}, Path: ${req.path}, Method: ${req.method}`);
-  }
-  
-  // Se a rota está na lista de upload, pula os body parsers
-  // Usar req.url em vez de req.path pois req.path pode não incluir o prefixo completo
+  // Verificar se a rota está na lista de uploads
   const isUploadRoute = uploadRoutes.some(route => req.url.includes(route.split('/api')[1]));
   
-  if (isUploadRoute) {
-    console.log(`⚠️  PULANDO body parsers para rota de upload: ${req.url}`);
+  // Se for rota de upload E o Content-Type for multipart/form-data, pula body parsers
+  // Caso contrário, aplica body parsers normalmente (para JSON, etc)
+  const contentType = req.headers['content-type'] || '';
+  if (isUploadRoute && contentType.includes('multipart/form-data')) {
+    console.log(`⚠️  PULANDO body parsers para rota de upload (multipart): ${req.url}`);
     return next();
   }
   
-  // Aplica body parsers normalmente
+  // Aplica body parsers normalmente (para JSON e outros tipos)
   express.json({ limit: '50mb' })(req, res, (err) => {
     if (err) return next(err);
     express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);

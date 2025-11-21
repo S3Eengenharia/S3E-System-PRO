@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import {
   listarCotacoes,
   buscarCotacao,
@@ -12,15 +13,23 @@ import {
   gerarTemplate,
   exportarCotacoes,
   deletarCotacoesEmLote
-} from '../controllers/cotacoesController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+} from '../controllers/cotacoesController';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 
 // Configurar multer para upload de arquivos
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(process.cwd(), 'uploads', 'temp'));
+    // Criar diretório se não existir (igual aos outros controllers)
+    const uploadDir = path.join(process.cwd(), 'uploads', 'temp');
+    
+    // Criar diretório se não existir
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;

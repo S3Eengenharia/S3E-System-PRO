@@ -1,5 +1,19 @@
 version: '3.8'
 
+# ============================================
+# S3E System PRO - Docker Compose (Desenvolvimento)
+# ============================================
+# Este arquivo é para desenvolvimento local
+# 
+# Para usar:
+# 1. Copie .env.example para .env: cp .env.example .env
+# 2. Ajuste as variáveis no .env conforme necessário
+# 3. Execute: docker-compose up ou make dev
+#
+# Para produção, use: docker-compose -f docker-compose.prod.yml up
+# NUNCA commite o arquivo .env.production
+# ============================================
+
 services:
   # PostgreSQL Database
   postgres:
@@ -57,8 +71,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      # Email/SMTP (Opcional)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@s3eengenharia.com.br}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     volumes:

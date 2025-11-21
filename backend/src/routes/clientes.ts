@@ -6,8 +6,8 @@ import {
   updateCliente,
   deleteCliente,
   reativarCliente
-} from '../controllers/clientesController.js';
-import { authenticate } from '../middlewares/auth.js';
+} from '../controllers/clientesController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

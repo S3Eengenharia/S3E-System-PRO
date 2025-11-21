@@ -1,6 +1,6 @@
 import express from 'express';
 import { AlocacaoController } from '../controllers/alocacaoController';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = express.Router();
 

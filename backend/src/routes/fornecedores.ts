@@ -6,8 +6,8 @@ import {
   updateFornecedor,
   deleteFornecedor,
   reativarFornecedor
-} from '../controllers/fornecedoresController.js';
-import { authenticate } from '../middlewares/auth.js';
+} from '../controllers/fornecedoresController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

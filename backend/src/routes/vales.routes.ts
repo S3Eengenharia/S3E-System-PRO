@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ValesController } from '../controllers/valesController';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 

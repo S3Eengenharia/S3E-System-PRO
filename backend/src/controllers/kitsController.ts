@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { KitsService } from '../services/kits.service.js';
+import { KitsService } from '../services/kits.service';
 
 export const listarKits = async (req: Request, res: Response) => {
     try {

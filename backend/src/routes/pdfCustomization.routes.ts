@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { PDFCustomizationController, uploadWatermark, uploadCornerDesign } from '../controllers/pdfCustomizationController.js';
-import { authenticate } from '../middlewares/auth.js';
+import { PDFCustomizationController, uploadWatermark, uploadCornerDesign } from '../controllers/pdfCustomizationController';
+import { authenticate } from '../middlewares/auth';
 
 const router = Router();
 

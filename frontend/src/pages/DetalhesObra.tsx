@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { axiosApiService } from '../services/axiosApi';
 import { AuthContext } from '../contexts/AuthContext';
 import { equipeService, type EquipeDTO } from '../services/EquipeService';
-import { alocacaoService, type AlocacaoEquipeDTO } from '../services/AlocacaoService';
+import { alocacaoService, type AlocacaoEquipeDTO } from '../services/alocacaoService';
 import CalendarioAlocacoes from '../components/CalendarioAlocacoes';
 import ModalEquipesDeObra from '../components/Obras/ModalEquipesDeObra';
 
@@ -1283,7 +1283,7 @@ const DetalhesObra: React.FC<DetalhesObraProps> = ({ toggleSidebar, obraId, onNa
                         onClick={() => abrirModalImagens(registroSelecionado.imagens)}
                       >
                         <img
-                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}${imagem}`}
+                          src={`${import.meta.env.VITE_API_URL || ''}${imagem}`}
                           alt={`Foto ${index + 1}`}
                           className="w-full h-full object-cover"
                         />
@@ -1342,7 +1342,7 @@ const DetalhesObra: React.FC<DetalhesObraProps> = ({ toggleSidebar, obraId, onNa
 
           <div className="max-w-6xl max-h-[90vh] flex flex-col items-center">
             <img
-              src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}${imagensVisualizacao[imagemAtual]}`}
+              src={`${import.meta.env.VITE_API_URL || ''}${imagensVisualizacao[imagemAtual]}`}
               alt={`Imagem ${imagemAtual + 1}`}
               className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
             />

@@ -52,7 +52,7 @@ const AuthDebug: React.FC = () => {
       // Teste 4: Testar fetch manual
       if (localToken && localToken !== 'null') {
         try {
-          const response = await fetch('http://localhost:3001/api/auth/me', {
+          const response = await fetch('/api/auth/me', {
             headers: {
               'Authorization': `Bearer ${localToken}`,
               'Content-Type': 'application/json'

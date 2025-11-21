@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { QuadrosService } from '../services/quadros.service.js';
+import { QuadrosService } from '../services/quadros.service';
 
 const prisma = new PrismaClient();
 

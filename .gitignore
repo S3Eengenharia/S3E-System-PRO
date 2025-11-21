@@ -16,7 +16,11 @@ build/
 .env.production
 .env.producao
 .env.prod
+# Permitir apenas .env.example no repositório
 !.env.example
+# Garantir que .env.production nunca seja commitado
+.env.production
+.env.production.local
 
 # IDE
 .vscode/

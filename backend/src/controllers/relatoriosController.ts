@@ -4,10 +4,8 @@ import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// No CommonJS, __dirname já está disponível automaticamente
 
 export class RelatoriosController {
     /**
@@ -249,8 +247,10 @@ export class RelatoriosController {
             const logoPath = path.join(__dirname, '../../uploads/logos/logo-nome-azul.png');
             if (fs.existsSync(logoPath)) {
                 const logoBuffer = fs.readFileSync(logoPath);
+                // Convert to standard Buffer for ExcelJS compatibility
+                // Type assertion needed due to ExcelJS type definition incompatibility
                 const imageId = workbook.addImage({
-                    buffer: logoBuffer,
+                    buffer: logoBuffer as any,
                     extension: 'png',
                 });
                 

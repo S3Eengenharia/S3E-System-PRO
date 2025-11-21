@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
-import configuracaoService from '../services/configuracao.service.js';
+import configuracaoService from '../services/configuracao.service';
 
 const prisma = new PrismaClient();
 

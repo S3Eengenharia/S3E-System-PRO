@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { QuadrosController } from '../controllers/quadrosController.js';
-import { authenticateToken } from '../middlewares/auth.js';
+import { QuadrosController } from '../controllers/quadrosController';
+import { authenticateToken } from '../middlewares/auth';
 
 const router = Router();
 

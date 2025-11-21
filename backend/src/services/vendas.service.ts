@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { VendaStatus } from '../types';
+import { VendaStatus } from '../types/index';
 import { EstoqueService } from './estoque.service';
 
 const prisma = new PrismaClient();

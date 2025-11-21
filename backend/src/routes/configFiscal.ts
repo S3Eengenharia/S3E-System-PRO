@@ -5,8 +5,8 @@ import {
   createConfiguracao,
   updateConfiguracao,
   deleteConfiguracao
-} from '../controllers/configFiscalController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+} from '../controllers/configFiscalController';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 

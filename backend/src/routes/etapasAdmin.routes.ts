@@ -1,6 +1,6 @@
 import express from 'express';
 import { EtapasAdminController } from '../controllers/etapasAdminController';
-import { authenticate } from '../middlewares/auth.js';
+import { authenticate } from '../middlewares/auth';
 
 const router = express.Router();
 

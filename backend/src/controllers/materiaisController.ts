@@ -3,15 +3,12 @@ import { PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import multer from 'multer';
-import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
 
 const prisma = new PrismaClient();
 
-// Configuração do multer para upload de arquivos
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// No CommonJS, __dirname já está disponível automaticamente
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {

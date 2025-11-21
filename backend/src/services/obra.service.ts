@@ -100,7 +100,7 @@ export class ObraService {
       return {
         ...obra,
         clienteNome,
-        endereco: obra.endereco || obra.projeto?.endereco || '',
+        endereco: obra.endereco || '',
         descricao: obra.descricao || obra.projeto?.descricao || ''
       };
     } catch (error) {
@@ -533,9 +533,9 @@ export class ObraService {
         throw new Error('Obra não encontrada');
       }
 
-      // Verificar se há tarefas em andamento
+      // Verificar se há tarefas em andamento (tarefas não concluídas)
       const tarefasEmAndamento = obra.tarefas.filter(
-        t => t.status === 'EM_ANDAMENTO' || t.status === 'PENDENTE'
+        t => !t.dataConclusaoReal && t.progresso < 100
       );
 
       if (tarefasEmAndamento.length > 0) {

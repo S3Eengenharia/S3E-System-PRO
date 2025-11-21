@@ -286,7 +286,7 @@ export const generatePasswordResetToken = async (email: string): Promise<string>
 
   // Enviar email com o link de recuperação
   try {
-    const { sendPasswordResetEmail } = await import('./email.service.js');
+    const { sendPasswordResetEmail } = await import('./email.service');
     await sendPasswordResetEmail(user.email, token, user.name);
   } catch (error) {
     console.error('❌ Erro ao enviar email de recuperação:', error);

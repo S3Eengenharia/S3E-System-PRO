@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { VeiculosController } from '../controllers/veiculosController';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from '../middlewares/auth';
 
 const router = Router();
 

@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer';
 import handlebars from 'handlebars';
 import fs from 'fs';
 import path from 'path';
-import { PDFCustomization, OrcamentoPDFData } from '../types/pdfCustomization.js';
+import { PDFCustomization, OrcamentoPDFData } from '../types/pdfCustomization';
 
 export class DynamicPDFService {
     /**
@@ -387,7 +387,7 @@ export class DynamicPDFService {
 
             console.log('✅ PDF gerado com sucesso!');
 
-            return pdfBuffer;
+            return Buffer.from(pdfBuffer);
         } catch (error) {
             console.error('❌ Erro ao gerar PDF:', error);
             throw new Error('Erro ao gerar PDF personalizado');
